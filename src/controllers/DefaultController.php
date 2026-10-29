@@ -69,6 +69,7 @@ class DefaultController extends Controller
         // Audit Trail and Metrics
         $auditTrail = $storage->getAuditTrail(8);
         $perf = $antibot->getInspectionMetrics();
+        $selfTest = \larikmc\antibot\services\resilience\SelfTest::run($antibot);
 
         return $this->render('index', [
             'antibot' => $antibot,
@@ -83,6 +84,7 @@ class DefaultController extends Controller
             'simUa' => $simUa,
             'auditTrail' => $auditTrail,
             'perf' => $perf,
+            'selfTest' => $selfTest,
         ]);
     }
 

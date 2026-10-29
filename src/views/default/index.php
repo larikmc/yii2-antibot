@@ -305,6 +305,53 @@ $this->params['breadcrumbs'] = [
         </div>
     </div>
 
+    <!-- Self-Test Diagnostics Section -->
+    <?php if (!empty($selfTest)): ?>
+        <div class="card border-0 shadow-sm rounded-3 mb-4">
+            <div class="card-header bg-transparent border-0 pt-3 pb-2 d-flex justify-content-between align-items-center">
+                <h5 class="card-title fw-bold mb-0">🩺 Состояние системы и самодиагностика (Self-Test)</h5>
+                <?php
+                    $overallBadge = match ($selfTest['overall'] ?? 'ok') {
+                        'fail' => 'bg-danger',
+                        'warning' => 'bg-warning text-dark',
+                        default => 'bg-success',
+                    };
+                ?>
+                <span class="badge <?= $overallBadge ?> text-uppercase"><?= Html::encode($selfTest['overall'] ?? 'OK') ?></span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <?php foreach ($selfTest['checks'] ?? [] as $chk): ?>
+                        <?php
+                            $chkBadge = match ($chk['status'] ?? 'ok') {
+                                'fail' => 'text-danger',
+                                'warning' => 'text-warning',
+                                default => 'text-success',
+                            };
+                            $chkIcon = match ($chk['status'] ?? 'ok') {
+                                'fail' => '❌',
+                                'warning' => '⚠️',
+                                default => '✅',
+                            };
+                        ?>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 bg-light border h-100">
+                                <div class="d-flex align-items-center mb-1">
+                                    <span class="me-2"><?= $chkIcon ?></span>
+                                    <strong class="<?= $chkBadge ?>"><?= Html::encode($chk['name']) ?></strong>
+                                </div>
+                                <div class="small text-muted mb-1"><?= Html::encode($chk['message']) ?></div>
+                                <?php if (!empty($chk['recommendation'])): ?>
+                                    <div class="small text-danger">Совет: <?= Html::encode($chk['recommendation']) ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <!-- Live Event Feed Table -->
     <div class="card border-0 shadow-sm rounded-3">
         <div class="card-header bg-transparent border-0 pt-3 pb-2 d-flex justify-content-between align-items-center">

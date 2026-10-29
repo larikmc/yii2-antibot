@@ -79,6 +79,16 @@ class RateLimiter
      */
     public static function check(string $key, int $maxRequests = 60, int $window = 60, int $banDuration = 300): array
     {
-        return self::getAdapter()->check($key, $maxRequests, $window, $banDuration);
+        return \larikmc\antibot\services\resilience\CircuitBreaker::execute(
+            static fn() => self::getAdapter()->check($key, $maxRequests, $window, $banDuration),
+            static fn() => [
+                'exceeded' => false,
+                'current' => 0,
+                'remaining' => $maxRequests,
+                'reset' => time() + $window,
+                'retryAfter' => 0,
+            ],
+            'cache'
+        );
     }
 }

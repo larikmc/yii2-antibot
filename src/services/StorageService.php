@@ -262,36 +262,42 @@ class StorageService
      */
     public function logEvent(array $event): void
     {
-        try {
-            $file = $this->resolveEventsFile();
-            $dir = dirname($file);
+        \larikmc\antibot\services\resilience\CircuitBreaker::execute(
+            function () use ($event): void {
+                $file = $this->resolveEventsFile();
+                $dir = dirname($file);
 
-            if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
-                return;
-            }
+                if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+                    throw new \RuntimeException("Directory {$dir} not writable");
+                }
 
-            // Check migration from legacy .json if needed
-            $this->ensureMigration($file);
+                // Check migration from legacy .json if needed
+                $this->ensureMigration($file);
 
-            // Rotate if exceeded limit
-            if (file_exists($file) && filesize($file) > $this->maxLogSizeBytes) {
-                @rename($file, $file . '.1');
-            }
+                // Rotate if exceeded limit
+                if (file_exists($file) && filesize($file) > $this->maxLogSizeBytes) {
+                    @rename($file, $file . '.1');
+                }
 
-            $event['timestamp'] = $event['timestamp'] ?? time();
-            $event['date'] = date('Y-m-d H:i:s', $event['timestamp']);
+                $event['timestamp'] = $event['timestamp'] ?? time();
+                $event['date'] = date('Y-m-d H:i:s', $event['timestamp']);
 
-            // Sanitize URL to strip sensitive GET params like token, auth, password
-            if (isset($event['url']) && is_string($event['url'])) {
-                $event['url'] = $this->sanitizeUrl($event['url']);
-            }
+                // Sanitize URL to strip sensitive GET params like token, auth, password
+                if (isset($event['url']) && is_string($event['url'])) {
+                    $event['url'] = $this->sanitizeUrl($event['url']);
+                }
 
-            $line = json_encode($event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
-            @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
-        } catch (\Throwable $e) {
-            // Silently suppress log failure to ensure zero user-facing impact
-            Yii::warning('Antibot event log write failed: ' . $e->getMessage(), __METHOD__);
-        }
+                $line = json_encode($event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
+                $written = @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
+                if ($written === false) {
+                    throw new \RuntimeException("Failed to write to {$file}");
+                }
+            },
+            function (?Throwable $e): void {
+                // Fail-safe graceful degradation: no impact to client
+            },
+            'storage'
+        );
     }
 
     /**

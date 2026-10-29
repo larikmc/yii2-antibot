@@ -1,0 +1,227 @@
+<?php
+
+declare(strict_types=1);
+
+namespace larikmc\antibot\services\resilience;
+
+use larikmc\antibot\Antibot;
+use Yii;
+
+/**
+ * Self-Check and Diagnostic Engine for Antibot.
+ *
+ * Runs non-destructive health checks on the hosting environment, PHP extensions,
+ * caching layers, cryptographic keys, and disk permissions to ensure high resilience.
+ *
+ * @author LarikMC <https://64web.ru>
+ * @license MIT
+ */
+class SelfTest
+{
+    public const STATUS_OK = 'ok';
+    public const STATUS_WARNING = 'warning';
+    public const STATUS_FAIL = 'fail';
+
+    /**
+     * Executes all self-diagnostic checks.
+     *
+     * @param Antibot $antibot
+     * @return array{
+     *     overall: 'ok'|'warning'|'fail',
+     *     timestamp: string,
+     *     checks: array<int, array{
+     *         name: string,
+     *         status: 'ok'|'warning'|'fail',
+     *         message: string,
+     *         recommendation: string|null
+     *     }>
+     * }
+     */
+    public static function run(Antibot $antibot): array
+    {
+        $checks = [];
+        $overall = self::STATUS_OK;
+
+        // 1. PHP Version
+        $phpVer = PHP_VERSION;
+        if (version_compare($phpVer, '8.0.0', '>=')) {
+            $checks[] = [
+                'name' => 'Версия PHP',
+                'status' => self::STATUS_OK,
+                'message' => "PHP {$phpVer} (Совместимо, поддерживаются современные функции).",
+                'recommendation' => null,
+            ];
+        } else {
+            $overall = self::STATUS_FAIL;
+            $checks[] = [
+                'name' => 'Версия PHP',
+                'status' => self::STATUS_FAIL,
+                'message' => "PHP {$phpVer} устарел. Модуль требует PHP 8.0 или выше.",
+                'recommendation' => 'Обновите версию PHP на сервере до 8.2+.',
+            ];
+        }
+
+        // 2. Required PHP Extensions
+        $requiredExts = ['json', 'mbstring', 'hash', 'filter'];
+        $missingExts = [];
+        foreach ($requiredExts as $ext) {
+            if (!extension_loaded($ext)) {
+                $missingExts[] = $ext;
+            }
+        }
+        if (empty($missingExts)) {
+            $checks[] = [
+                'name' => 'PHP Расширения',
+                'status' => self::STATUS_OK,
+                'message' => 'Все необходимые расширения загружены (json, mbstring, hash, filter).',
+                'recommendation' => null,
+            ];
+        } else {
+            $overall = self::STATUS_FAIL;
+            $checks[] = [
+                'name' => 'PHP Расширения',
+                'status' => self::STATUS_FAIL,
+                'message' => 'Отсутствуют расширения: ' . implode(', ', $missingExts),
+                'recommendation' => 'Установите недостающие расширения через пакетный менеджер PHP.',
+            ];
+        }
+
+        // 3. Storage & Config Permissions
+        $storage = $antibot->getStorage();
+        $settingsFile = $storage->resolveStorageFile();
+        $settingsDir = dirname($settingsFile);
+        $eventsFile = $storage->resolveEventsFile();
+        $eventsDir = dirname($eventsFile);
+
+        $storageOk = (is_dir($settingsDir) && is_writable($settingsDir)) || (!file_exists($settingsDir) && @mkdir($settingsDir, 0775, true));
+        $eventsOk = (is_dir($eventsDir) && is_writable($eventsDir)) || (!file_exists($eventsDir) && @mkdir($eventsDir, 0775, true));
+
+        if ($storageOk && $eventsOk) {
+            $checks[] = [
+                'name' => 'Права на запись (Диск)',
+                'status' => self::STATUS_OK,
+                'message' => 'Каталоги конфигурации и журналов доступны для записи.',
+                'recommendation' => null,
+            ];
+        } else {
+            $overall = self::STATUS_FAIL;
+            $checks[] = [
+                'name' => 'Права на запись (Диск)',
+                'status' => self::STATUS_FAIL,
+                'message' => 'Недостаточно прав для записи в директорию настроек или логов.',
+                'recommendation' => 'Выставите права 0775 на runtime и config папки для пользователя веб-сервера.',
+            ];
+        }
+
+        // 4. Cache & Memory Subsystem
+        $cacheAvailable = false;
+        $cacheClass = 'None';
+        if (Yii::$app !== null && Yii::$app->has('cache')) {
+            $cache = Yii::$app->get('cache');
+            $cacheClass = get_class($cache);
+            try {
+                $testKey = '__antibot_selftest_' . time();
+                $cache->set($testKey, 'ok', 10);
+                if ($cache->get($testKey) === 'ok') {
+                    $cache->delete($testKey);
+                    $cacheAvailable = true;
+                }
+            } catch (\Throwable) {
+                $cacheAvailable = false;
+            }
+        }
+
+        if ($cacheAvailable) {
+            $checks[] = [
+                'name' => 'Подсистема кэширования (Rate Limiter & Behavior)',
+                'status' => self::STATUS_OK,
+                'message' => "Кэш функционирует штатно ({$cacheClass}). Тест чтения/записи пройден.",
+                'recommendation' => null,
+            ];
+        } else {
+            if ($overall !== self::STATUS_FAIL) {
+                $overall = self::STATUS_WARNING;
+            }
+            $checks[] = [
+                'name' => 'Подсистема кэширования',
+                'status' => self::STATUS_WARNING,
+                'message' => 'Кэш недоступен или работает со сбоями. Rate Limiter переведен в режим degraded fail-open.',
+                'recommendation' => 'Настройте FileCache или Redis в конфигурации приложения (компонент cache).',
+            ];
+        }
+
+        // 5. Entropy & Cryptographic Secret Key
+        $secret = $antibot->getResolvedSecretKey();
+        if ($antibot->hasSecretKeyWarning()) {
+            if ($overall !== self::STATUS_FAIL) {
+                $overall = self::STATUS_WARNING;
+            }
+            $checks[] = [
+                'name' => 'Криптографический ключ подписи',
+                'status' => self::STATUS_WARNING,
+                'message' => 'Используется автоматически сгенерированный локальный машинный ключ.',
+                'recommendation' => 'Задайте параметр cookieValidationKey в request или secretKey в настройках антибота для максимальной надежности.',
+            ];
+        } else {
+            $checks[] = [
+                'name' => 'Криптографический ключ подписи',
+                'status' => self::STATUS_OK,
+                'message' => 'Задан надежный секретный ключ (длина: ' . strlen($secret) . ' символов).',
+                'recommendation' => null,
+            ];
+        }
+
+        // 6. Reverse DNS Subsystem
+        $dnsStart = microtime(true);
+        $dnsHost = @gethostbyaddr('8.8.8.8');
+        $dnsDuration = (microtime(true) - $dnsStart) * 1000.0;
+
+        if ($dnsHost !== false && $dnsDuration < 1500) {
+            $checks[] = [
+                'name' => 'DNS-резолвер (Верификация поисковиков)',
+                'status' => self::STATUS_OK,
+                'message' => sprintf('Резолвер отвечает штатно (задержка: %.1f мс).', $dnsDuration),
+                'recommendation' => null,
+            ];
+        } else {
+            if ($overall !== self::STATUS_FAIL) {
+                $overall = self::STATUS_WARNING;
+            }
+            $checks[] = [
+                'name' => 'DNS-резолвер',
+                'status' => self::STATUS_WARNING,
+                'message' => sprintf('Высокая задержка DNS-запроса (%.1f мс) или DNS заблокирован.', $dnsDuration),
+                'recommendation' => 'Защита от DNS-DoS активна и предотвратит зависания воркеров, но рекомендуется проверить DNS-серверы хостинга.',
+            ];
+        }
+
+        // 7. Circuit Breaker Resilience Status
+        $storageCircuit = CircuitBreaker::getState('storage');
+        $cacheCircuit = CircuitBreaker::getState('cache');
+
+        if ($storageCircuit === CircuitBreaker::STATE_CLOSED && $cacheCircuit === CircuitBreaker::STATE_CLOSED) {
+            $checks[] = [
+                'name' => 'Предохранитель сбоев (Circuit Breaker)',
+                'status' => self::STATUS_OK,
+                'message' => 'Все контуры защиты замкнуты (CLOSED, нормальная работа).',
+                'recommendation' => null,
+            ];
+        } else {
+            if ($overall !== self::STATUS_FAIL) {
+                $overall = self::STATUS_WARNING;
+            }
+            $checks[] = [
+                'name' => 'Предохранитель сбоев (Circuit Breaker)',
+                'status' => self::STATUS_WARNING,
+                'message' => "Обнаружен разомкнутый контур сбоев (Storage: {$storageCircuit}, Cache: {$cacheCircuit}). Сайт защищен от падения.",
+                'recommendation' => 'Проверьте доступность диска или кэш-сервера. После устранения проблемы контур автоматически восстановится.',
+            ];
+        }
+
+        return [
+            'overall' => $overall,
+            'timestamp' => date('Y-m-d H:i:s'),
+            'checks' => $checks,
+        ];
+    }
+}

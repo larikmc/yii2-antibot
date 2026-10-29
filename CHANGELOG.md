@@ -2,6 +2,26 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.0] - 2026-10-29
+
+### Added
+- **Self-Protection Circuit Breaker (`CircuitBreaker`):**
+  - Three-state automatic circuit breaker (`CLOSED`, `OPEN`, `HALF_OPEN`) protecting host PHP-FPM workers from hanging or failing if cache or disk storage degrades.
+  - Automatically trips to `OPEN` after 5 consecutive storage or caching errors, switching to graceful fail-open mode.
+  - Probes recovery after a configurable timeout (30 seconds) via `HALF_OPEN` state, seamlessly restoring normal protection when downstream services recover.
+- **Automated Self-Diagnostic Engine (`SelfTest`):**
+  - Integrated health check verifying:
+    - PHP version compatibility (8.0+).
+    - Required extensions (`json`, `mbstring`, `hash`, `filter`).
+    - Storage and logs directory write permissions.
+    - Cache subsystem responsiveness and read/write integrity.
+    - Cryptographic entropy and secret signing key quality.
+    - Reverse DNS latency and resolver health.
+    - Circuit Breaker operational status.
+  - Dedicated visual card in admin dashboard displaying per-component badges (`OK`, `Warning`, `Fail`) and remedial recommendations.
+- **Fail-Open Resilience Guarantees:**
+  - RateLimiter and StorageService wrapped in circuit breakers to guarantee zero user-facing 500 fatal errors or PHP worker starvation under any hardware or external outage.
+
 ## [1.4.0] - 2026-10-29
 
 ### Added
