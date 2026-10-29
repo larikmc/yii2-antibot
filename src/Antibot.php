@@ -101,6 +101,26 @@ class Antibot extends Component implements BootstrapInterface
      */
     public array $routeWeights = [];
 
+    /**
+     * @var bool Whether Proof-of-Work (PoW) computation challenge is enabled.
+     */
+    public bool $powEnabled = false;
+
+    /**
+     * @var string Difficulty level for Proof-of-Work ('light', 'medium', 'strong').
+     */
+    public string $powDifficulty = \larikmc\antibot\services\pow\PowService::DIFFICULTY_MEDIUM;
+
+    /**
+     * @var bool Whether invisible Honey URL traps are enabled.
+     */
+    public bool $honeyTrapsEnabled = false;
+
+    /**
+     * @var string Relative route path for honey URL traps.
+     */
+    public string $trapRoute = 'antibot/trap';
+
     public ?string $storageFile = null;
     public ?string $eventsFile = null;
     public array $skipRoutes = ['assets', 'debug', 'gii'];
@@ -147,6 +167,10 @@ class Antibot extends Component implements BootstrapInterface
         $this->weightedRateLimitBudget = (int) ($settings['weightedRateLimitBudget'] ?? $this->weightedRateLimitBudget);
         $this->weightedRateLimitWindow = (int) ($settings['weightedRateLimitWindow'] ?? $this->weightedRateLimitWindow);
         $this->routeWeights = (array) ($settings['routeWeights'] ?? $this->routeWeights);
+        $this->powEnabled = (bool) ($settings['powEnabled'] ?? $this->powEnabled);
+        $this->powDifficulty = (string) ($settings['powDifficulty'] ?? $this->powDifficulty);
+        $this->honeyTrapsEnabled = (bool) ($settings['honeyTrapsEnabled'] ?? $this->honeyTrapsEnabled);
+        $this->trapRoute = (string) ($settings['trapRoute'] ?? $this->trapRoute);
         $this->customBlockMessage = (string) ($settings['customBlockMessage'] ?? $this->customBlockMessage);
 
         if (!empty($settings['secretKey'])) {
@@ -281,6 +305,18 @@ class Antibot extends Component implements BootstrapInterface
             return;
         }
 
+        // 1b. Check Proof-of-Work Challenge submission
+        if ($request->isPost && $request->post('antibot_pow_solve') === '1') {
+            $this->handlePowSubmission($ip, $ua);
+            return;
+        }
+
+        // 1c. Check Honey URL Trap access
+        if ($this->honeyTrapsEnabled && ($pathInfo === $this->trapRoute || $pathInfo === ltrim($this->trapRoute, '/'))) {
+            $this->handleTrapHit($ip, $ua);
+            return;
+        }
+
         // 2. Whitelist Check
         if (IpMatcher::match($ip, $this->whitelist)) {
             return;
@@ -412,7 +448,27 @@ class Antibot extends Component implements BootstrapInterface
             if (!empty($behavior['signals'])) {
                 $risk = $behavior['risk'];
                 if ($risk['level'] === 'high') {
-                    if ($this->mode === StorageService::MODE_STRICT && $this->jsChallengeEnabled) {
+                    if ($this->powEnabled && !$this->isMachineOrApiRequest()) {
+                        $pow = \larikmc\antibot\services\pow\PowService::generateChallenge($ip, $secretKey, $this->powDifficulty);
+                        $this->_storage->logEvent([
+                            'ip' => $ip,
+                            'userAgent' => $ua,
+                            'action' => 'challenged',
+                            'reason' => 'Proof-of-Work triggered by high risk score (' . $risk['score'] . ')',
+                            'url' => $url,
+                        ]);
+                        $html = \larikmc\antibot\services\pow\PowService::renderChallengeHtml(
+                            $pow['seed'],
+                            $pow['target'],
+                            $request->getAbsoluteUrl(),
+                            'Подозрительная активность. Проверка браузера...'
+                        );
+                        $response = Yii::$app->response;
+                        $response->format = Response::FORMAT_HTML;
+                        $response->content = $html;
+                        $response->send();
+                        exit(0);
+                    } elseif ($this->mode === StorageService::MODE_STRICT && $this->jsChallengeEnabled) {
                         if (!$this->isMachineOrApiRequest()) {
                             $this->renderChallengeScreen($ip, $ua, $secretKey);
                             exit(0);
@@ -665,6 +721,78 @@ class Antibot extends Component implements BootstrapInterface
         }
 
         $this->blockRequest('JS Challenge verification failed or replayed', $ip, $ua, $request->getAbsoluteUrl());
+    }
+
+    /**
+     * Handles client submission of solved Proof-of-Work challenge.
+     */
+    protected function handlePowSubmission(string $ip, string $ua): void
+    {
+        $request = Yii::$app->request;
+        $seed = (string) $request->post('seed', '');
+        $nonce = (string) $request->post('nonce', '');
+        $secretKey = $this->getResolvedSecretKey();
+        $cache = Yii::$app->has('cache') ? Yii::$app->get('cache') : null;
+
+        $res = \larikmc\antibot\services\pow\PowService::validateSolution($seed, $nonce, $ip, $secretKey, $cache);
+        if ($res['valid']) {
+            $token = TokenService::generateToken($ip, $ua, $secretKey);
+            $cookie = new \yii\web\Cookie([
+                'name' => TokenService::COOKIE_NAME,
+                'value' => $token,
+                'expire' => time() + TokenService::DEFAULT_TTL,
+                'httpOnly' => true,
+                'secure' => $request->isSecureConnection,
+                'sameSite' => 'Lax',
+            ]);
+            Yii::$app->response->cookies->add($cookie);
+
+            $this->_storage->logEvent([
+                'ip' => $ip,
+                'userAgent' => $ua,
+                'action' => 'pow_solved',
+                'reason' => 'Proof-of-Work Challenge Solved',
+                'url' => $request->getAbsoluteUrl(),
+            ]);
+
+            if ($cache !== null && $cache instanceof \yii\caching\CacheInterface) {
+                $count = (int) $cache->get('antibot_stat_pow_solved');
+                $cache->set('antibot_stat_pow_solved', $count + 1, 86400 * 30);
+            }
+
+            $response = Yii::$app->response;
+            if ($this->isMachineOrApiRequest()) {
+                $response->format = Response::FORMAT_JSON;
+                $response->data = ['success' => true, 'message' => 'PoW challenge solved'];
+                $response->send();
+                exit(0);
+            }
+
+            $cleanUrl = preg_replace('/[?&]antibot_pow_solve=[^&]*/', '', $request->getAbsoluteUrl());
+            $response->redirect($cleanUrl);
+            $response->send();
+            exit(0);
+        }
+
+        $this->blockRequest('PoW solution rejected: ' . ($res['error'] ?? 'invalid'), $ip, $ua, $request->getAbsoluteUrl());
+    }
+
+    /**
+     * Handles incoming access to the Honey URL Trap.
+     */
+    protected function handleTrapHit(string $ip, string $ua): void
+    {
+        $res = \larikmc\antibot\services\traps\HoneyUrlService::handleTrapHit($ip, $ua, $this);
+        if ($res['penalized']) {
+            \larikmc\antibot\services\behavior\BehaviorAnalyzer::recordViolation($ip);
+        }
+
+        $response = Yii::$app->response;
+        $response->statusCode = 200;
+        $response->format = Response::FORMAT_HTML;
+        $response->content = '<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Archive</title></head><body></body></html>';
+        $response->send();
+        exit(0);
     }
 
     private function findMatchingUriRule(string $pathInfo, string $method): ?array

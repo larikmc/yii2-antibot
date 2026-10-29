@@ -103,6 +103,14 @@ class StorageService
             'ipHeaders' => ['CF-Connecting-IP', 'X-Forwarded-For', 'X-Real-IP'],
             'aiCrawlerPolicies' => [],
             'routeRules' => [],
+            'behaviorAnalysisEnabled' => true,
+            'weightedRateLimitEnabled' => false,
+            'weightedRateLimitBudget' => 150,
+            'weightedRateLimitWindow' => 60,
+            'powEnabled' => false,
+            'powDifficulty' => 'medium',
+            'honeyTrapsEnabled' => false,
+            'trapRoute' => 'antibot/trap',
             'customBlockMessage' => 'Access Denied: Automated bot activity detected.',
         ];
 
@@ -283,6 +291,8 @@ class StorageService
             'challenged' => 0,
             'throttled' => 0,
             'searchBots' => 0,
+            'powSolved' => 0,
+            'trapHits' => 0,
             'last24h' => ['blocked' => 0, 'total' => 0],
             'last7d' => ['blocked' => 0, 'total' => 0],
             'topIps' => [],
@@ -311,6 +321,11 @@ class StorageService
                 $isBlocked = true;
             } elseif ($action === 'allowed_search_bot') {
                 $stats['searchBots']++;
+            } elseif ($action === 'pow_solved') {
+                $stats['powSolved']++;
+            } elseif ($action === 'honey_trap_hit' || $action === 'honeypot_triggered') {
+                $stats['trapHits']++;
+                $isBlocked = true;
             }
 
             // Time windows

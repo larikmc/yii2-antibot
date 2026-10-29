@@ -286,12 +286,52 @@ $aiPolicies = (array) ($settings['aiCrawlerPolicies'] ?? []);
                 <!-- 7. Сообщение блокировки -->
                 <div class="card border-0 shadow-sm rounded-3 mb-4">
                     <div class="card-header bg-transparent border-0 pt-3">
-                        <h5 class="fw-bold mb-0">7. Кастомизация</h5>
+                        <h5 class="fw-bold mb-0">8. Кастомизация</h5>
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Текст на экране блокировки:</label>
                             <textarea name="AntibotSetting[customBlockMessage]" class="form-control" rows="2"><?= Html::encode($settings['customBlockMessage'] ?? '') ?></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 9. Локальный Proof-of-Work (Active Challenge) -->
+                <div class="card border-0 shadow-sm rounded-3 mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3">
+                        <h5 class="fw-bold mb-0">9. Proof-of-Work (Вычислительный челлендж)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[powEnabled]" value="1" id="powSwitch" <?= !empty($settings['powEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="powSwitch">Включить локальный Proof-of-Work</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Сложность вычислений (SHA-256 target):</label>
+                            <select name="AntibotSetting[powDifficulty]" class="form-select form-select-sm">
+                                <option value="light" <?= ($settings['powDifficulty'] ?? 'medium') === 'light' ? 'selected' : '' ?>>Light (3 нуля, ~50-100 мс — базовая защита)</option>
+                                <option value="medium" <?= ($settings['powDifficulty'] ?? 'medium') === 'medium' ? 'selected' : '' ?>>Medium (4 нуля, ~300-800 мс — рекомендуется)</option>
+                                <option value="strong" <?= ($settings['powDifficulty'] ?? 'medium') === 'strong' ? 'selected' : '' ?>>Strong (5 нулей, ~2-4 с — против упорных ботов)</option>
+                            </select>
+                            <div class="form-text">Работает локально через Web Crypto API в браузере. Без сторонних облаков и капч.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 10. Ловушки (Honey URLs) -->
+                <div class="card border-0 shadow-sm rounded-3 mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3">
+                        <h5 class="fw-bold mb-0">10. Невидимые ссылки-ловушки (Honey URLs)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[honeyTrapsEnabled]" value="1" id="honeySwitch" <?= !empty($settings['honeyTrapsEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="honeySwitch">Активировать перехват ловушек</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Маршрут ловушки:</label>
+                            <input type="text" name="AntibotSetting[trapRoute]" class="form-control" value="<?= Html::encode($settings['trapRoute'] ?? 'antibot/trap') ?>">
+                            <div class="form-text">Краулеры, перешедшие по скрытой ссылке, фиксируются и пенализируются. Верифицированные поисковики защищены от блокировки.</div>
                         </div>
                     </div>
                 </div>

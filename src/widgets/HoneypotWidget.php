@@ -127,6 +127,8 @@ class HoneypotWidget extends Widget
 
         $elapsed = time() - $timestamp;
         if ($elapsed < $minSeconds) {
+            // Log automated form submission attempt
+            self::logHoneypotViolation('Форма отправлена слишком быстро (' . $elapsed . 's)');
             return [
                 'valid' => false,
                 'error' => 'Форма отправлена слишком быстро. Пожалуйста, попробуйте еще раз.',
@@ -145,5 +147,41 @@ class HoneypotWidget extends Widget
             'valid' => true,
             'error' => null,
         ];
+    }
+
+    /**
+     * Inspects current request POST data using Honeypot rules.
+     *
+     * @return array{valid: bool, error: string|null}
+     */
+    public static function inspect(?\yii\web\Request $request = null): array
+    {
+        $req = $request ?? (Yii::$app !== null ? Yii::$app->request : null);
+        if ($req === null || !$req->isPost) {
+            return ['valid' => true, 'error' => null];
+        }
+
+        return self::validate($req->post());
+    }
+
+    private static function logHoneypotViolation(string $reason): void
+    {
+        if (Yii::$app !== null && Yii::$app->has('antibot')) {
+            /** @var \larikmc\antibot\Antibot $antibot */
+            $antibot = Yii::$app->get('antibot');
+            $url = '';
+            try {
+                $url = Yii::$app->request->getAbsoluteUrl();
+            } catch (\Throwable) {
+                $url = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+            }
+            $antibot->getStorage()->logEvent([
+                'ip' => $antibot->resolveClientIp(),
+                'userAgent' => Yii::$app->request->getUserAgent() ?? '',
+                'action' => 'honeypot_triggered',
+                'reason' => $reason,
+                'url' => $url,
+            ]);
+        }
     }
 }

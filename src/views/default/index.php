@@ -129,6 +129,30 @@ $this->params['breadcrumbs'] = [
                 <div class="small text-muted mt-2">Адаптер: <code><?= Html::encode($antibot->rateLimitAdapter) ?></code></div>
             </div>
         </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold">PoW решено</div>
+                        <h2 class="display-6 fw-bold mb-0 text-info"><?= (int) ($stats['powSolved'] ?? 0) ?></h2>
+                    </div>
+                    <div class="fs-1 text-info opacity-50">🛡️</div>
+                </div>
+                <div class="small text-muted mt-2">Proof-of-Work: <?= Html::encode($antibot->powDifficulty) ?></div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold">Срабатываний ловушек</div>
+                        <h2 class="display-6 fw-bold mb-0 text-danger"><?= (int) ($stats['trapHits'] ?? 0) ?></h2>
+                    </div>
+                    <div class="fs-1 text-danger opacity-50">🍯</div>
+                </div>
+                <div class="small text-muted mt-2">Honey URLs & Формы</div>
+            </div>
+        </div>
     </div>
 
     <!-- Top Blocked & Reasons Section -->

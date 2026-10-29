@@ -2,6 +2,31 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.3.0] - 2026-10-29
+
+### Added
+- **Local Proof-of-Work Challenge (`PowService`):**
+  - 100% on-premise, zero-cloud client computational challenge forcing automated bots and scrapers to expend CPU cycles solving SHA-256 partial collisions.
+  - Three configurable difficulty levels:
+    - `light`: target "000" (~4,096 iterations, 50-100ms in modern JS).
+    - `medium`: target "0000" (~65,536 iterations, 300-800ms).
+    - `strong`: target "00000" (~1,048,576 iterations, 2-4s).
+  - Cryptographically HMAC-signed seed with client IP subnet binding and 120s TTL.
+  - Cache-backed replay attack prevention.
+  - Dependency-free standalone HTML challenge page utilizing native browser `crypto.subtle.digest()`.
+  - Never triggered on machine/API requests (returns clean JSON 403 or 429) or verified search engines.
+- **Invisible Honey URL Traps (`HoneyUrlService` & `HoneyTrapWidget`):**
+  - Hidden links (`position:absolute;left:-9999px;opacity:0;rel=nofollow`) that human users never see, but aggressive parsers follow.
+  - Cryptographically HMAC-signed trap URL tokens with timestamp expiration.
+  - Strict SEO protection: verified search crawlers (Googlebot, YandexBot) are automatically identified and never penalized.
+  - Scrapers following honey traps receive immediate behavioral penalties (`honey_trap_hit`, +50 risk score) and quarantine.
+- **Enhanced Form Protection (`HoneypotWidget`):**
+  - Cryptographic HMAC signature and time-delta checks preventing sub-second automated spam submissions.
+  - Automatic event logging to `.jsonl` audit log.
+- **Admin Dashboard & Settings Telemetry:**
+  - Dedicated KPI cards in dashboard for PoW Challenges Solved and Honey Trap Hits.
+  - Settings UI for enabling/disabling PoW, difficulty configuration, and custom Honey URL routes.
+
 ## [1.2.0] - 2026-10-29
 
 ### Added
