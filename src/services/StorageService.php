@@ -135,12 +135,13 @@ class StorageService
     }
 
     /**
-     * Saves settings to JSON file.
+     * Saves settings to JSON file and records an audit log entry.
      *
      * @param array<string, mixed> $settings
+     * @param string|null $adminIp
      * @return bool
      */
-    public function saveSettings(array $settings): bool
+    public function saveSettings(array $settings, ?string $adminIp = null): bool
     {
         $file = $this->resolveStorageFile();
         $dir = dirname($file);
@@ -150,12 +151,98 @@ class StorageService
         }
 
         $current = $this->loadSettings();
+        $changedKeys = [];
+        foreach ($settings as $k => $v) {
+            if (!array_key_exists($k, $current) || $current[$k] !== $v) {
+                $changedKeys[] = $k;
+            }
+        }
+
         $merged = array_merge($current, $settings);
         $merged['updatedAt'] = date('c');
 
         $json = Json::encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $saved = file_put_contents($file, $json, LOCK_EX) !== false;
 
-        return file_put_contents($file, $json, LOCK_EX) !== false;
+        if ($saved && !empty($changedKeys)) {
+            $this->recordAudit($changedKeys, $adminIp);
+        }
+
+        return $saved;
+    }
+
+    /**
+     * Resolves the full path to the settings audit log file.
+     */
+    public function resolveAuditFile(): string
+    {
+        if (Yii::$app !== null && Yii::getAlias('@common', false) !== false) {
+            $sharedDir = Yii::getAlias('@common/runtime/logs');
+            if (!is_dir($sharedDir)) {
+                @mkdir($sharedDir, 0775, true);
+            }
+            return $sharedDir . '/antibot_audit.jsonl';
+        }
+
+        return Yii::getAlias('@runtime/logs/antibot_audit.jsonl');
+    }
+
+    /**
+     * Records an audit log entry for modified configuration settings.
+     *
+     * @param array<int, string> $changedKeys
+     * @param string|null $adminIp
+     * @return bool
+     */
+    public function recordAudit(array $changedKeys, ?string $adminIp = null): bool
+    {
+        if (empty($changedKeys)) {
+            return true;
+        }
+
+        $file = $this->resolveAuditFile();
+        $entry = [
+            'timestamp' => time(),
+            'datetime' => date('Y-m-d H:i:s'),
+            'adminIp' => $adminIp ?? ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
+            'changedKeys' => $changedKeys,
+        ];
+
+        return (bool) @file_put_contents($file, Json::encode($entry) . "\n", FILE_APPEND | LOCK_EX);
+    }
+
+    /**
+     * Retrieves recent settings audit log history.
+     *
+     * @param int $limit
+     * @return array<int, array<string, mixed>>
+     */
+    public function getAuditTrail(int $limit = 20): array
+    {
+        $file = $this->resolveAuditFile();
+        if (!file_exists($file)) {
+            return [];
+        }
+
+        $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines === false || empty($lines)) {
+            return [];
+        }
+
+        $recent = array_slice($lines, -$limit);
+        $entries = [];
+        foreach ($recent as $line) {
+            try {
+                $decoded = Json::decode($line);
+                if (is_array($decoded)) {
+                    $entries[] = $decoded;
+                }
+            } catch (\Throwable) {
+                // Ignore corrupted lines
+            }
+        }
+
+        return array_reverse($entries);
     }
 
     /**

@@ -1,7 +1,7 @@
 # Yii2 Antibot (`larikmc/yii2-antibot`)
 
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE.md)
-[![Latest Version](https://img.shields.io/badge/release-v1.3.0-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.3.0)
+[![Latest Version](https://img.shields.io/badge/release-v1.4.0-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.4.0)
 [![PHP](https://img.shields.io/badge/PHP-8.0%20|%208.1%20|%208.2%20|%208.3%20|%208.4%20|%208.5-blue)](https://php.net)
 [![Yii2](https://img.shields.io/badge/Yii2-2.0.x-orange.svg)](https://yiiframework.com)
 

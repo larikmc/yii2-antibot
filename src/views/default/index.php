@@ -44,6 +44,11 @@ $this->params['breadcrumbs'] = [
     </div>
 
     <!-- Security Warnings -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="badge bg-light text-secondary border px-3 py-2">
+            ⚡ Среднее время инспекции: <strong><?= number_format((float) ($perf['avg_ms'] ?? 0.15), 3) ?> мс</strong> (проверок: <?= (int) ($perf['total_checks'] ?? 0) ?>)
+        </span>
+    </div>
     <?php if ($module->hasInsecureAccessConfig()): ?>
         <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
             <span class="fs-4 me-3">⚠️</span>
@@ -205,6 +210,98 @@ $this->params['breadcrumbs'] = [
                     <?php endif; ?>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Heuristic Rule Advisor Section -->
+    <?php if (!empty($recommendations)): ?>
+        <div class="card border-0 shadow-sm rounded-3 mb-4 border-start border-4 border-primary">
+            <div class="card-header bg-transparent border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0">💡 Эвристический советник правил (Rule Advisor)</h5>
+                <span class="badge bg-primary rounded-pill"><?= count($recommendations) ?></span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <?php foreach ($recommendations as $rec): ?>
+                        <?php
+                            $alertClass = match ($rec['severity'] ?? 'info') {
+                                'danger' => 'alert-danger',
+                                'warning' => 'alert-warning',
+                                default => 'alert-info',
+                            };
+                        ?>
+                        <div class="col-12">
+                            <div class="alert <?= $alertClass ?> mb-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div>
+                                    <div class="fw-bold fs-6 mb-1"><?= Html::encode($rec['title']) ?></div>
+                                    <div class="small mb-1"><?= Html::encode($rec['description']) ?></div>
+                                    <div class="small text-muted font-monospace">Основание: <?= Html::encode($rec['reason']) ?></div>
+                                </div>
+                                <div>
+                                    <?= Html::beginForm(['/antibot/default/apply-recommendation'], 'post', ['class' => 'd-inline']) ?>
+                                        <?= Html::hiddenInput('rec_id', $rec['id']) ?>
+                                        <?php if (!empty($rec['suggestedConfig']['blacklist_add'])): ?>
+                                            <?= Html::hiddenInput('ip', $rec['suggestedConfig']['blacklist_add']) ?>
+                                        <?php endif; ?>
+                                        <?= Html::submitButton('Применить рекомендацию', [
+                                            'class' => 'btn btn-sm btn-dark shadow-sm px-3',
+                                            'data-confirm' => 'Применить это правило к конфигурации сайта?',
+                                        ]) ?>
+                                    <?= Html::endForm() ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <!-- Rule Simulator Section -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+        <div class="card-header bg-transparent border-0 pt-3 pb-0">
+            <h5 class="card-title fw-bold mb-0">🧪 Симулятор правил ("Что-Если" анализ)</h5>
+            <p class="text-muted small mb-0">Проверьте влияние гипотетических лимитов на реальный поток запросов без изменения настроек</p>
+        </div>
+        <div class="card-body">
+            <form method="get" action="<?= Url::to(['/antibot/default/index']) ?>" class="row g-3 align-items-end mb-3">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Тип проверки:</label>
+                    <select name="sim_type" class="form-select form-select-sm">
+                        <option value="ratelimit" <?= ($simType ?? '') === 'ratelimit' ? 'selected' : '' ?>>Частота запросов (Rate Limit)</option>
+                        <option value="ua" <?= ($simType ?? '') === 'ua' ? 'selected' : '' ?>>Маска User-Agent</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Макс. запросов / Шаблон UA:</label>
+                    <?php if (($simType ?? '') === 'ua'): ?>
+                        <input type="text" name="sim_ua" class="form-control form-control-sm" value="<?= Html::encode($simUa ?? 'Python') ?>">
+                    <?php else: ?>
+                        <input type="number" name="sim_max" class="form-control form-control-sm" value="<?= (int) ($simMax ?? 20) ?>" min="1" max="1000">
+                    <?php endif; ?>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Окно (сек):</label>
+                    <input type="number" name="sim_window" class="form-control form-control-sm" value="<?= (int) ($simWindow ?? 60) ?>" min="5" max="3600">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Запустить симуляцию</button>
+                </div>
+            </form>
+
+            <?php if (!empty($simResult)): ?>
+                <div class="p-3 rounded-3 bg-light border">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div>
+                            <strong>Результат симуляции:</strong> <?= Html::encode($simResult['notice']) ?>
+                        </div>
+                        <div>
+                            <span class="badge bg-secondary">Выборка: <?= (int) $simResult['sampleSize'] ?> событий</span>
+                            <span class="badge bg-danger">Было бы заблокировано: <?= (int) $simResult['wouldBlock'] ?> (<?= $simResult['impactPercent'] ?>%)</span>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 

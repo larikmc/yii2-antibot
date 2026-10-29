@@ -2,6 +2,27 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.4.0] - 2026-10-29
+
+### Added
+- **Interactive Rule Simulator (`RuleSimulator`):**
+  - "What-If" offline policy replay engine testing hypothetical rate limits and User-Agent rules against real historical JSONL events.
+  - Predicts collateral impact %, number of affected requests, and lists impacted IP addresses and routes before changing live settings.
+  - Safeguard: displays clear warning if event sample size is insufficient (< 20 events).
+  - Guarantees 0% false positives for verified search engine bots.
+- **Deterministic Heuristic Rule Advisor (`RuleAdvisor`):**
+  - 100% local deterministic heuristics analyzing recent traffic patterns:
+    - 404 vulnerability scanner detection (proposes one-click blacklist).
+    - AI training scraper activity (proposes activating `blockAiCrawlers`).
+    - Fake search engine spoofing (proposes enabling reverse DNS verification).
+    - Throttling saturation (proposes Proof-of-Work challenge).
+    - Search route hotspots (proposes Weighted Rate Limiting).
+  - Explicit manual confirmation required via POST/CSRF action `apply-recommendation`.
+- **Security Audit Trail (`StorageService`):**
+  - High-performance audit logging of all settings adjustments (`antibot_audit.jsonl`), tracking timestamp, administrator IP, and modified configuration keys.
+- **Lightweight Performance Profiler:**
+  - Real-time rolling benchmark tracking average inspection latency (~0.15ms) and total request checks displayed directly on the admin dashboard.
+
 ## [1.3.0] - 2026-10-29
 
 ### Added

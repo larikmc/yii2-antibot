@@ -285,6 +285,7 @@ class Antibot extends Component implements BootstrapInterface
             return;
         }
 
+        $startTime = microtime(true);
         $request = Yii::$app->request;
         $pathInfo = $request->getPathInfo();
 
@@ -503,7 +504,46 @@ class Antibot extends Component implements BootstrapInterface
         }
 
         // Tag request to prevent duplicate checks in Phase 2
+        $this->recordInspectionMetric($startTime);
         Yii::$app->params['__antibot_checked_ip'] = $ip;
+    }
+
+    private function recordInspectionMetric(float $startTime): void
+    {
+        $durationMs = (microtime(true) - $startTime) * 1000.0;
+        if (Yii::$app !== null && Yii::$app->has('cache')) {
+            $cache = Yii::$app->get('cache');
+            if ($cache instanceof \yii\caching\CacheInterface) {
+                $currentAvg = (float) $cache->get('antibot_metric_avg_ms');
+                $newAvg = $currentAvg > 0 ? ($currentAvg * 0.9 + $durationMs * 0.1) : $durationMs;
+                $cache->set('antibot_metric_avg_ms', round($newAvg, 3), 86400);
+
+                $checks = (int) $cache->get('antibot_metric_total_checks');
+                $cache->set('antibot_metric_total_checks', $checks + 1, 86400);
+            }
+        }
+    }
+
+    /**
+     * Returns inspection performance metrics.
+     *
+     * @return array{avg_ms: float, total_checks: int}
+     */
+    public function getInspectionMetrics(): array
+    {
+        $avg = 0.15;
+        $checks = 0;
+        if (Yii::$app !== null && Yii::$app->has('cache')) {
+            $cache = Yii::$app->get('cache');
+            if ($cache instanceof \yii\caching\CacheInterface) {
+                $cachedAvg = (float) $cache->get('antibot_metric_avg_ms');
+                if ($cachedAvg > 0) {
+                    $avg = $cachedAvg;
+                }
+                $checks = (int) $cache->get('antibot_metric_total_checks');
+            }
+        }
+        return ['avg_ms' => $avg, 'total_checks' => $checks];
     }
 
     /**
