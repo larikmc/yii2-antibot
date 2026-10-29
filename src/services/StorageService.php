@@ -135,6 +135,33 @@ class StorageService
     }
 
     /**
+     * Retrieves or generates a cryptographically secure random persistent secret key.
+     */
+    public function getOrCreateAutoSecret(): string
+    {
+        $settings = $this->loadSettings();
+        if (!empty($settings['autoSecretKey']) && is_string($settings['autoSecretKey']) && strlen($settings['autoSecretKey']) >= 32) {
+            return $settings['autoSecretKey'];
+        }
+
+        try {
+            $newSecret = bin2hex(random_bytes(32));
+        } catch (\Throwable) {
+            $newSecret = hash('sha256', uniqid((string) mt_rand(), true) . microtime(true));
+        }
+
+        // Try to persist it so it remains identical across requests
+        try {
+            $settings['autoSecretKey'] = $newSecret;
+            $this->saveSettings($settings, 'system');
+        } catch (\Throwable) {
+            // Read-only storage fallback
+        }
+
+        return $newSecret;
+    }
+
+    /**
      * Saves settings to JSON file and records an audit log entry.
      *
      * @param array<string, mixed> $settings

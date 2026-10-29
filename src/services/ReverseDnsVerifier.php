@@ -141,10 +141,11 @@ class ReverseDnsVerifier
 
         $hostnameLower = strtolower($hostname);
 
-        // 2. Check if hostname ends with an authorized domain suffix
+        // 2. Check if hostname ends with an authorized domain suffix (strict boundary matching)
         $suffixMatched = false;
         foreach ($allowedSuffixes as $suffix) {
-            if (str_ends_with($hostnameLower, $suffix)) {
+            $cleanSuffix = ltrim($suffix, '.');
+            if ($hostnameLower === $cleanSuffix || str_ends_with($hostnameLower, '.' . $cleanSuffix)) {
                 $suffixMatched = true;
                 break;
             }
@@ -157,14 +158,44 @@ class ReverseDnsVerifier
         }
 
         // 3. Forward DNS (Hostname -> IPs) to prevent PTR spoofing
-        $resolvedIps = @gethostbynamel($hostname);
-        if (!is_array($resolvedIps) || empty($resolvedIps)) {
-            // Forward DNS failed (temporary DNS error)
+        // Supports both IPv4 (A records) and IPv6 (AAAA records)
+        $forwardIps = [];
+        if (function_exists('dns_get_record')) {
+            $records = @dns_get_record($hostname, DNS_A + DNS_AAAA);
+            if (is_array($records)) {
+                foreach ($records as $r) {
+                    if (isset($r['ip'])) {
+                        $forwardIps[] = (string) $r['ip'];
+                    }
+                    if (isset($r['ipv6'])) {
+                        $forwardIps[] = (string) $r['ipv6'];
+                    }
+                }
+            }
+        }
+
+        if (empty($forwardIps)) {
+            $v4 = @gethostbynamel($hostname);
+            if (is_array($v4)) {
+                $forwardIps = $v4;
+            }
+        }
+
+        if (empty($forwardIps)) {
+            // Forward DNS failed (temporary DNS lookup failure)
             return self::STATUS_UNKNOWN;
         }
 
-        if (in_array($ip, $resolvedIps, true)) {
-            return self::STATUS_VERIFIED;
+        // Normalize IPv4 & IPv6 for comparison
+        $packedClientIp = @inet_pton($ip);
+        foreach ($forwardIps as $resolved) {
+            if ($resolved === $ip) {
+                return self::STATUS_VERIFIED;
+            }
+            $packedResolved = @inet_pton($resolved);
+            if ($packedClientIp !== false && $packedResolved !== false && $packedClientIp === $packedResolved) {
+                return self::STATUS_VERIFIED;
+            }
         }
 
         // Hostname resolved to other IPs, but not the caller IP -> Spoof detected!
@@ -176,19 +207,37 @@ class ReverseDnsVerifier
      */
     protected static function acquireDnsBudget(): bool
     {
+        static $processBudget = 0;
+        static $processWindow = 0;
+
+        $now = time();
+        if ($now - $processWindow > 60) {
+            $processWindow = $now;
+            $processBudget = 0;
+        }
+
+        if ($processBudget >= self::$maxDnsLookupsPerMinute) {
+            return false;
+        }
+        $processBudget++;
+
         if (Yii::$app === null || !Yii::$app->has('cache') || Yii::$app->cache === null) {
             return true;
         }
 
-        $budgetKey = 'antibot_dns_budget_' . (int) (time() / 60);
-        $count = Yii::$app->cache->get($budgetKey);
-        $count = is_int($count) ? $count : 0;
+        try {
+            $budgetKey = 'antibot_dns_budget_' . (int) ($now / 60);
+            $count = Yii::$app->cache->get($budgetKey);
+            $count = is_int($count) ? $count : 0;
 
-        if ($count >= self::$maxDnsLookupsPerMinute) {
-            return false;
+            if ($count >= self::$maxDnsLookupsPerMinute) {
+                return false;
+            }
+
+            Yii::$app->cache->set($budgetKey, $count + 1, 70);
+            return true;
+        } catch (\Throwable) {
+            return $processBudget <= 10;
         }
-
-        Yii::$app->cache->set($budgetKey, $count + 1, 65);
-        return true;
     }
 }

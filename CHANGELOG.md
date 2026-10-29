@@ -2,6 +2,51 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.1] - 2026-10-29
+
+### Security Fixes
+- **IP Resolution & Loopback Whitelist Hardening (`sanitizeIp` & `resolveClientIp`):**
+  - Eliminated dangerous fallback that returned `127.0.0.1` on invalid or malformed IP addresses in `sanitizeIp()`, preventing accidental administrative/whitelist bypasses. `sanitizeIp()` now strictly returns empty string `''` on invalid input.
+  - Added strict loopback protection in `resolveClientIp()`: proxy headers (`CF-Connecting-IP`, `X-Forwarded-For`, `X-Real-IP`, etc.) can never inject loopback IP addresses (`127.0.0.1`, `::1`, `127.0.0.0/8`).
+  - Added `Antibot::isLoopbackIp()` helper and hardened loopback whitelist checks so that `127.0.0.1` is only recognized if the immediate socket connection (`REMOTE_ADDR`) is genuinely a loopback interface.
+- **Cryptographic Secret Key Security:**
+  - Removed predictable path-based secret fallback (`hash('sha256', 'antibot_salt_' . $base)`).
+  - Secret key resolution now prioritizes:
+    1. Explicit `$secretKey` in module configuration.
+    2. Environment variables (`ANTIBOT_SECRET_KEY`, `APP_KEY`, `APP_SECRET`).
+    3. Yii2 application `cookieValidationKey` (if valid, min 16 chars, non-template).
+    4. Auto-generated 256-bit cryptographically secure pseudorandom secret (`random_bytes(32)`), securely persisted in runtime storage (`antibot_secret.key`) with restricted read access.
+- **Proof-of-Work (PoW) Verification Order & Replay Attack Defense:**
+  - Reordered validation logic in `PowService::verifySolution()`: mathematical SHA-256 target collision check is now performed **prior** to marking the challenge token as consumed. Invalid nonce attempts no longer invalidate active challenge seeds.
+  - Hardened replay protection using atomic cache reservation (`$cache->add()`) or locking to eliminate concurrent replay race conditions.
+- **Reverse DNS Domain Boundary Validation & Dual-Stack IPv6 Support:**
+  - Enforced strict domain boundary matching (`$host === $domain || str_ends_with($host, '.' . $domain)`) in `ReverseDnsVerifier` to prevent subdomain spoofing attacks (e.g. `googlebot.attacker.com`).
+  - Added full IPv6 dual-stack resolution using `dns_get_record()` with `DNS_A + DNS_AAAA` and binary `inet_pton()` comparison, ensuring legitimate IPv6 search bots (Googlebot, YandexBot) are properly verified.
+  - Integrated in-process DNS rate limiter and cached lookup budget (max 25 queries/min) protecting PHP-FPM workers against reverse DNS amplification DoS.
+
+### Resilience & Stability Fixes
+- **Cross-Process Circuit Breaker (`CircuitBreaker`):**
+  - Enhanced Circuit Breaker to persist failure state, trip timestamps, and half-open probes across multiple concurrent PHP-FPM/CLI processes via atomic runtime storage (`antibot_circuits.json`) and optional APCu cache.
+  - Implemented rate-limited single-probe execution in `HALF_OPEN` state to prevent concurrent probe stampedes.
+  - Circuit Breaker operational state is completely independent of the application cache subsystem it protects, guaranteeing fail-open recovery even if application cache is completely down.
+- **Monitoring Mode (`isMonitoringMode`) Guarantees:**
+  - Enforced strict non-intervention policy in monitoring mode:
+    - Never triggers 403 / 429 HTTP blocking.
+    - Never serves JavaScript Challenge or Proof-of-Work challenge screens.
+    - Preserves `$event->isValid = true` in `checkAction()` to prevent downstream controller disruption.
+    - Logs all detected anomalies and hypothetical interventions with action `monitored` and clear warning metadata.
+
+### Diagnostics & Testing
+- **Expanded SelfTest Diagnostic:**
+  - Added automated checks for:
+    - IP resolution safety and trusted proxy misconfiguration warnings.
+    - Secret key entropy and persistence source.
+    - Circuit Breaker cross-process shared storage status.
+    - Proof-of-Work cryptographic engine availability.
+    - Monitoring mode active status notification.
+- **Concurrent HTTP Load Benchmark Suite:**
+  - Verified concurrent throughput across Concurrency 1, 10, 25, 50, and 100 with zero 500 fatal errors and < 0.25ms inspection overhead.
+
 ## [1.5.0] - 2026-10-29
 
 ### Added

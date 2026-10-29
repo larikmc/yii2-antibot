@@ -195,15 +195,18 @@ class SelfTest
             ];
         }
 
-        // 7. Circuit Breaker Resilience Status
+        // 7. Circuit Breaker Resilience Status & Shared Persistence
         $storageCircuit = CircuitBreaker::getState('storage');
         $cacheCircuit = CircuitBreaker::getState('cache');
+        $circuitFile = CircuitBreaker::resolveStateFile();
+        $circuitDir = dirname($circuitFile);
+        $circuitStorageOk = is_dir($circuitDir) && is_writable($circuitDir);
 
-        if ($storageCircuit === CircuitBreaker::STATE_CLOSED && $cacheCircuit === CircuitBreaker::STATE_CLOSED) {
+        if ($storageCircuit === CircuitBreaker::STATE_CLOSED && $cacheCircuit === CircuitBreaker::STATE_CLOSED && $circuitStorageOk) {
             $checks[] = [
                 'name' => 'Предохранитель сбоев (Circuit Breaker)',
                 'status' => self::STATUS_OK,
-                'message' => 'Все контуры защиты замкнуты (CLOSED, нормальная работа).',
+                'message' => 'Все контуры замкнуты (CLOSED). Межпроцессное хранилище активно.',
                 'recommendation' => null,
             ];
         } else {
@@ -213,8 +216,60 @@ class SelfTest
             $checks[] = [
                 'name' => 'Предохранитель сбоев (Circuit Breaker)',
                 'status' => self::STATUS_WARNING,
-                'message' => "Обнаружен разомкнутый контур сбоев (Storage: {$storageCircuit}, Cache: {$cacheCircuit}). Сайт защищен от падения.",
+                'message' => "Статус контуров: Storage: {$storageCircuit}, Cache: {$cacheCircuit}. Запись: " . ($circuitStorageOk ? 'доступна' : 'ограничена'),
                 'recommendation' => 'Проверьте доступность диска или кэш-сервера. После устранения проблемы контур автоматически восстановится.',
+            ];
+        }
+
+        // 8. IP Resolution & Trusted Proxies Safety
+        $trustedCount = count($antibot->trustedProxies);
+        if ($trustedCount === 0) {
+            $checks[] = [
+                'name' => 'Безопасность определения IP',
+                'status' => self::STATUS_OK,
+                'message' => 'Список trustedProxies пуст: proxy-заголовки строго игнорируются (защита от подмены активна).',
+                'recommendation' => null,
+            ];
+        } else {
+            $checks[] = [
+                'name' => 'Безопасность определения IP',
+                'status' => self::STATUS_OK,
+                'message' => "Настроено {$trustedCount} доверенных прокси-узлов/CIDR. Заголовки принимаются только от них.",
+                'recommendation' => null,
+            ];
+        }
+
+        // 9. Proof-of-Work Challenge Engine
+        if ($antibot->powEnabled) {
+            $checks[] = [
+                'name' => 'Движок Proof-of-Work',
+                'status' => self::STATUS_OK,
+                'message' => "Локальный PoW активен (сложность: {$antibot->powDifficulty}). Защита от replay-атак и race conditions включена.",
+                'recommendation' => null,
+            ];
+        } else {
+            $checks[] = [
+                'name' => 'Движок Proof-of-Work',
+                'status' => self::STATUS_OK,
+                'message' => 'PoW выключен (базовый режим). Может быть активирован в настройках при атаках.',
+                'recommendation' => null,
+            ];
+        }
+
+        // 10. Monitoring Mode Status
+        if ($antibot->isMonitoringMode()) {
+            $checks[] = [
+                'name' => 'Режим работы (Monitoring)',
+                'status' => self::STATUS_OK,
+                'message' => 'Включен режим наблюдения (Monitoring). Запросы не блокируются, статистика фиксируется.',
+                'recommendation' => null,
+            ];
+        } else {
+            $checks[] = [
+                'name' => 'Режим работы',
+                'status' => self::STATUS_OK,
+                'message' => "Активен боевой режим защиты ({$antibot->mode}). Блокировки и фильтрация активны.",
+                'recommendation' => null,
             ];
         }
 

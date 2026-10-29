@@ -204,19 +204,26 @@ class Antibot extends Component implements BootstrapInterface
     /**
      * Safely resolves the client IP address.
      * Prevents IP spoofing by validating $_SERVER['REMOTE_ADDR'] against $trustedProxies.
+     * Rejects invalid IPs and prevents header-spoofed loopback addresses.
      */
     public function resolveClientIp(): string
     {
-        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $rawRemoteAddr = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+        $remoteAddr = $this->sanitizeIp($rawRemoteAddr);
 
-        // Strict: If no trusted proxies configured, never trust proxy headers
+        // If REMOTE_ADDR is missing or invalid, treat client as invalid/unknown, NEVER 127.0.0.1
+        if ($remoteAddr === '') {
+            return '0.0.0.0';
+        }
+
+        // Strict: If no trusted proxies configured, or REMOTE_ADDR is not trusted, ONLY use REMOTE_ADDR
         if (empty($this->trustedProxies) || !IpMatcher::match($remoteAddr, $this->trustedProxies)) {
-            return $this->sanitizeIp($remoteAddr);
+            return $remoteAddr;
         }
 
         $request = Yii::$app !== null ? Yii::$app->request : null;
         if ($request === null) {
-            return $this->sanitizeIp($remoteAddr);
+            return $remoteAddr;
         }
 
         foreach ($this->ipHeaders as $header) {
@@ -225,35 +232,56 @@ class Antibot extends Component implements BootstrapInterface
                 $ips = array_map('trim', explode(',', $val));
                 // Walk from right to left to find the first untrusted client IP
                 for ($i = count($ips) - 1; $i >= 0; $i--) {
-                    $cand = $ips[$i];
+                    $cand = $this->sanitizeIp($ips[$i]);
+                    // Skip invalid IPs in the chain; NEVER convert them to loopback!
+                    if ($cand === '') {
+                        continue;
+                    }
+                    // A client cannot claim loopback/localhost via a proxy header
+                    if (self::isLoopbackIp($cand)) {
+                        continue;
+                    }
                     if (!IpMatcher::match($cand, $this->trustedProxies)) {
-                        $sanitized = $this->sanitizeIp($cand);
-                        if ($sanitized !== '') {
-                            return $sanitized;
-                        }
+                        return $cand;
                     }
                 }
-                $sanitized = $this->sanitizeIp($ips[0]);
-                if ($sanitized !== '') {
-                    return $sanitized;
+                // If all in chain were trusted proxies, check leftmost valid candidate
+                $leftmost = $this->sanitizeIp($ips[0]);
+                if ($leftmost !== '' && !self::isLoopbackIp($leftmost)) {
+                    return $leftmost;
                 }
             }
         }
 
-        return $this->sanitizeIp($remoteAddr);
+        return $remoteAddr;
     }
 
-    private function sanitizeIp(string $ip): string
+    /**
+     * Sanitizes and validates an IP address string.
+     * Returns an empty string if the IP is invalid. NEVER defaults to 127.0.0.1.
+     */
+    public function sanitizeIp(string $ip): string
     {
         $ip = trim($ip);
         if (filter_var($ip, FILTER_VALIDATE_IP)) {
             return $ip;
         }
-        return '127.0.0.1';
+        return '';
     }
 
     /**
-     * Resolves the encryption key used for signing cookies and tokens.
+     * Checks if an IP is a loopback address (IPv4 127.0.0.0/8 or IPv6 ::1).
+     */
+    public static function isLoopbackIp(string $ip): bool
+    {
+        $ip = trim($ip);
+        return $ip === '127.0.0.1' || $ip === '::1' || str_starts_with($ip, '127.');
+    }
+
+    /**
+     * Resolves the encryption key used for signing cookies, PoW and tokens.
+     * Prioritizes configured keys and environment variables over auto-generated random keys.
+     * Eliminates predictable path-based fallbacks.
      */
     public function getResolvedSecretKey(): string
     {
@@ -261,14 +289,32 @@ class Antibot extends Component implements BootstrapInterface
             return $this->secretKey;
         }
 
-        if (Yii::$app !== null && !empty(Yii::$app->request->cookieValidationKey)) {
+        $envSecret = getenv('ANTIBOT_SECRET_KEY');
+        if ($envSecret !== false && trim($envSecret) !== '') {
+            return trim($envSecret);
+        }
+        if (!empty($_ENV['ANTIBOT_SECRET_KEY'])) {
+            return trim((string) $_ENV['ANTIBOT_SECRET_KEY']);
+        }
+        if (!empty($_SERVER['ANTIBOT_SECRET_KEY'])) {
+            return trim((string) $_SERVER['ANTIBOT_SECRET_KEY']);
+        }
+
+        if (Yii::$app !== null && !empty(Yii::$app->request->cookieValidationKey) && strlen(Yii::$app->request->cookieValidationKey) >= 16) {
             return Yii::$app->request->cookieValidationKey;
         }
 
-        // Safe deterministic machine-local fallback (different for every server installation)
+        // Cryptographically secure persistent auto-secret (never predictable from directory path!)
         $this->_hasSecretKeyWarning = true;
-        $base = Yii::$app !== null ? Yii::$app->getBasePath() : __DIR__;
-        return hash('sha256', 'antibot_salt_' . $base);
+        return $this->_storage->getOrCreateAutoSecret();
+    }
+
+    /**
+     * Checks whether the module is currently operating in Monitoring mode.
+     */
+    public function isMonitoringMode(): bool
+    {
+        return $this->mode === StorageService::MODE_MONITORING;
     }
 
     public function hasSecretKeyWarning(): bool
@@ -300,6 +346,12 @@ class Antibot extends Component implements BootstrapInterface
         $ua = $request->getUserAgent() ?? '';
         $url = $request->getAbsoluteUrl();
 
+        // If client IP is invalid or 0.0.0.0, deny access (never whitelist)
+        if ($ip === '0.0.0.0' || $ip === '') {
+            $this->blockRequest('Malformed or unresolvable client IP address', $ip, $ua, $url);
+            return;
+        }
+
         // 1. Check JS Challenge verification submission
         if ($request->isPost && $request->post('antibot_challenge_verify') === '1') {
             $this->handleChallengeSubmission($ip, $ua);
@@ -320,6 +372,14 @@ class Antibot extends Component implements BootstrapInterface
 
         // 2. Whitelist Check
         if (IpMatcher::match($ip, $this->whitelist)) {
+            // Strict loopback verification: if whitelisted IP is loopback, direct connection must also be loopback
+            if (self::isLoopbackIp($ip)) {
+                $rawRemote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+                if (!self::isLoopbackIp($rawRemote)) {
+                    $this->blockRequest('Spoofed localhost loopback via header', $ip, $ua, $url);
+                    return;
+                }
+            }
             return;
         }
 
@@ -449,7 +509,15 @@ class Antibot extends Component implements BootstrapInterface
             if (!empty($behavior['signals'])) {
                 $risk = $behavior['risk'];
                 if ($risk['level'] === 'high') {
-                    if ($this->powEnabled && !$this->isMachineOrApiRequest()) {
+                    if ($this->isMonitoringMode()) {
+                        $this->_storage->logEvent([
+                            'ip' => $ip,
+                            'userAgent' => $ua,
+                            'action' => 'monitored',
+                            'reason' => 'High risk score (' . $risk['score'] . ') [monitored]: ' . implode(', ', $behavior['signals']),
+                            'url' => $url,
+                        ]);
+                    } elseif ($this->powEnabled && !$this->isMachineOrApiRequest()) {
                         $pow = \larikmc\antibot\services\pow\PowService::generateChallenge($ip, $secretKey, $this->powDifficulty);
                         $this->_storage->logEvent([
                             'ip' => $ip,
@@ -495,8 +563,8 @@ class Antibot extends Component implements BootstrapInterface
             }
         }
 
-        // 13. Strict Mode Challenge
-        if ($this->mode === StorageService::MODE_STRICT && !$isVerifiedVisitor && $this->jsChallengeEnabled) {
+        // 13. Strict Mode Challenge (disabled in Monitoring mode)
+        if ($this->mode === StorageService::MODE_STRICT && !$isVerifiedVisitor && $this->jsChallengeEnabled && !$this->isMonitoringMode()) {
             if (!$this->isMachineOrApiRequest()) {
                 $this->renderChallengeScreen($ip, $ua, $secretKey);
                 exit(0);
@@ -572,6 +640,17 @@ class Antibot extends Component implements BootstrapInterface
 
         $limitResult = RateLimiter::check($key, $maxReq, $win, $this->rateLimitBanDuration);
         if ($limitResult['exceeded']) {
+            if ($this->isMonitoringMode()) {
+                $this->_storage->logEvent([
+                    'ip' => $ip,
+                    'userAgent' => $request->getUserAgent() ?? '',
+                    'action' => 'monitored',
+                    'reason' => sprintf('Action rate limit exceeded on "%s" [monitored]', $route),
+                    'url' => $request->getAbsoluteUrl(),
+                ]);
+                return; // Do NOT set $event->isValid = false in monitoring mode!
+            }
+
             if ($actionType === 'block') {
                 $this->blockRequest(
                     sprintf('Route rule blocked on "%s"', $route),

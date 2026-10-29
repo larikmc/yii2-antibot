@@ -125,21 +125,30 @@ class PowService
             return ['valid' => false, 'error' => 'Invalid challenge signature'];
         }
 
-        // 4. Check for replay attacks using cache
-        if ($cache !== null) {
-            $replayKey = 'antibot_pow_used_' . md5($packedSeed);
-            if ($cache->get($replayKey) !== false) {
-                return ['valid' => false, 'error' => 'Replay attack detected: challenge already used'];
-            }
-            $cache->set($replayKey, 1, self::MAX_AGE_SECONDS);
-        }
-
-        // 5. Verify the mathematical hash collision
+        // 4. Verify the mathematical hash collision FIRST
+        // An incorrect nonce must NEVER invalidate or consume a legitimate challenge seed!
         $targetPrefix = self::resolveTarget($difficulty);
         $computedHash = hash('sha256', $packedSeed . '|' . $nonce);
 
         if (!str_starts_with($computedHash, $targetPrefix)) {
             return ['valid' => false, 'error' => 'Incorrect nonce solution'];
+        }
+
+        // 5. Mark challenge as used and protect against replay attacks ONLY upon successful solution
+        if ($cache !== null) {
+            $replayKey = 'antibot_pow_used_' . md5($packedSeed);
+            if (method_exists($cache, 'add')) {
+                // Atomic check-and-set prevents concurrent parallel race-condition solves
+                $added = $cache->add($replayKey, 1, self::MAX_AGE_SECONDS);
+                if (!$added) {
+                    return ['valid' => false, 'error' => 'Replay attack detected: challenge already used'];
+                }
+            } else {
+                if ($cache->get($replayKey) !== false) {
+                    return ['valid' => false, 'error' => 'Replay attack detected: challenge already used'];
+                }
+                $cache->set($replayKey, 1, self::MAX_AGE_SECONDS);
+            }
         }
 
         return ['valid' => true, 'error' => null];
