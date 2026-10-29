@@ -2,6 +2,25 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.2.0] - 2026-10-29
+
+### Added
+- **Behavior Intelligence (`BehaviorAnalyzer`):**
+  - Lightweight sliding window tracking (max 15 requests, 300s TTL per IP/subnet) stored in application cache without database overhead.
+  - Anomaly detectors: rapid sequential navigation (< 250ms interval), high URL diversity (>80% distinct routes), search query bursts (>4 searches within window), repetitive 4xx/5xx error bursts (>3 consecutive errors), and history of recent security violations.
+- **Deterministic Risk Scoring Engine (`RiskEngine`):**
+  - 0–100 deterministic risk score mapping weighted signals into actionable mitigation tiers:
+    - Low Risk (`< 40`): Allow without intervention.
+    - Medium Risk (`40–69`): Elevated monitoring and priority throttling.
+    - High Risk (`>= 70`): Active challenge or drop.
+- **Weighted Rate Limiting / Load-Budget Limiter (`WeightedRateLimiter`):**
+  - Route cost budgeting algorithm: instead of counting raw HTTP requests, charges points proportional to backend workload (Default 150 points / 60 seconds).
+  - Default route weights: Homepage = 1 pt, Categories = 2 pts, Search = 5 pts, Faceted Filters = 8 pts, Heavy API = 10 pts.
+  - Fully configurable `$routeWeights` map.
+  - Dynamic programmatic cost deduction: `Antibot::chargeCost(int $points, ?string $reason = null)` to bill resource-heavy controller actions (e.g., PDF generation, complex aggregation).
+- **Admin Settings Extension:**
+  - Visual controls in Settings to enable/disable Behavior Intelligence and Weighted Rate Limiting, adjust load budgets and inspection windows.
+
 ## [1.1.0] - 2026-10-29
 
 ### Added

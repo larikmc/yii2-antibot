@@ -76,6 +76,31 @@ class Antibot extends Component implements BootstrapInterface
      */
     public array $routeRules = [];
 
+    /**
+     * @var bool Enables local behavioral pattern analyzer.
+     */
+    public bool $behaviorAnalysisEnabled = false;
+
+    /**
+     * @var bool Enables weighted load budget rate limiter.
+     */
+    public bool $weightedRateLimitEnabled = false;
+
+    /**
+     * @var int Total points budget per client window.
+     */
+    public int $weightedRateLimitBudget = 150;
+
+    /**
+     * @var int Budget window in seconds.
+     */
+    public int $weightedRateLimitWindow = 60;
+
+    /**
+     * @var array<string, int> Route cost weights mapping (pattern => points).
+     */
+    public array $routeWeights = [];
+
     public ?string $storageFile = null;
     public ?string $eventsFile = null;
     public array $skipRoutes = ['assets', 'debug', 'gii'];
@@ -117,6 +142,11 @@ class Antibot extends Component implements BootstrapInterface
         $this->ipHeaders = (array) ($settings['ipHeaders'] ?? $this->ipHeaders);
         $this->aiCrawlerPolicies = (array) ($settings['aiCrawlerPolicies'] ?? $this->aiCrawlerPolicies);
         $this->routeRules = (array) ($settings['routeRules'] ?? $this->routeRules);
+        $this->behaviorAnalysisEnabled = (bool) ($settings['behaviorAnalysisEnabled'] ?? $this->behaviorAnalysisEnabled);
+        $this->weightedRateLimitEnabled = (bool) ($settings['weightedRateLimitEnabled'] ?? $this->weightedRateLimitEnabled);
+        $this->weightedRateLimitBudget = (int) ($settings['weightedRateLimitBudget'] ?? $this->weightedRateLimitBudget);
+        $this->weightedRateLimitWindow = (int) ($settings['weightedRateLimitWindow'] ?? $this->weightedRateLimitWindow);
+        $this->routeWeights = (array) ($settings['routeWeights'] ?? $this->routeWeights);
         $this->customBlockMessage = (string) ($settings['customBlockMessage'] ?? $this->customBlockMessage);
 
         if (!empty($settings['secretKey'])) {
@@ -359,7 +389,56 @@ class Antibot extends Component implements BootstrapInterface
             }
         }
 
-        // 11. Strict Mode Challenge
+        // 11. Weighted Load-Budget Limiting
+        if ($this->weightedRateLimitEnabled) {
+            $cost = \larikmc\antibot\services\limiter\WeightedRateLimiter::resolveCost($pathInfo, $this->routeWeights);
+            $budgetRes = \larikmc\antibot\services\limiter\WeightedRateLimiter::check($ip, $cost, $this->weightedRateLimitBudget, $this->weightedRateLimitWindow);
+
+            if ($budgetRes['exceeded']) {
+                $this->throttleRequest(
+                    sprintf('Load budget exceeded (%d/%d pts in %ds)', $budgetRes['current'], $this->weightedRateLimitBudget, $this->weightedRateLimitWindow),
+                    $ip,
+                    $budgetRes['retryAfter']
+                );
+                return;
+            }
+        }
+
+        // 12. Behavioral Intelligence Analysis
+        if ($this->behaviorAnalysisEnabled && !$isVerifiedVisitor) {
+            $isSearch = str_contains($pathInfo, 'search') || $request->get('q') !== null || $request->get('query') !== null;
+            $behavior = \larikmc\antibot\services\behavior\BehaviorAnalyzer::analyze($ip, $pathInfo, $isSearch);
+
+            if (!empty($behavior['signals'])) {
+                $risk = $behavior['risk'];
+                if ($risk['level'] === 'high') {
+                    if ($this->mode === StorageService::MODE_STRICT && $this->jsChallengeEnabled) {
+                        if (!$this->isMachineOrApiRequest()) {
+                            $this->renderChallengeScreen($ip, $ua, $secretKey);
+                            exit(0);
+                        }
+                    } else {
+                        $this->_storage->logEvent([
+                            'ip' => $ip,
+                            'userAgent' => $ua,
+                            'action' => 'monitored',
+                            'reason' => 'Behavior Anomaly: ' . implode(', ', $behavior['signals']) . ' (Risk: ' . $risk['score'] . ')',
+                            'url' => $url,
+                        ]);
+                    }
+                } elseif ($risk['level'] === 'medium') {
+                    $this->_storage->logEvent([
+                        'ip' => $ip,
+                        'userAgent' => $ua,
+                        'action' => 'monitored',
+                        'reason' => 'Suspicious Behavior: ' . implode(', ', $behavior['signals']),
+                        'url' => $url,
+                    ]);
+                }
+            }
+        }
+
+        // 13. Strict Mode Challenge
         if ($this->mode === StorageService::MODE_STRICT && !$isVerifiedVisitor && $this->jsChallengeEnabled) {
             if (!$this->isMachineOrApiRequest()) {
                 $this->renderChallengeScreen($ip, $ua, $secretKey);
@@ -440,6 +519,8 @@ class Antibot extends Component implements BootstrapInterface
             'url' => $url,
         ]);
 
+        \larikmc\antibot\services\behavior\BehaviorAnalyzer::recordViolation($ip);
+
         if (Yii::$app === null) {
             http_response_code(403);
             exit(0);
@@ -490,6 +571,8 @@ class Antibot extends Component implements BootstrapInterface
             'reason' => $reason,
             'url' => Yii::$app->request->getAbsoluteUrl(),
         ]);
+
+        \larikmc\antibot\services\behavior\BehaviorAnalyzer::recordViolation($ip);
 
         $response = Yii::$app->response;
         $response->statusCode = 429;
@@ -616,6 +699,25 @@ class Antibot extends Component implements BootstrapInterface
             }
         }
         return null;
+    }
+
+    /**
+     * Charges cost points against client load budget dynamically from application code.
+     */
+    public static function chargeCost(int $points, ?string $reason = null): void
+    {
+        if (Yii::$app !== null && Yii::$app->has('antibot')) {
+            $comp = Yii::$app->get('antibot');
+            if ($comp instanceof self && $comp->weightedRateLimitEnabled) {
+                $ip = $comp->resolveClientIp();
+                \larikmc\antibot\services\limiter\WeightedRateLimiter::check(
+                    $ip,
+                    max(1, $points),
+                    $comp->weightedRateLimitBudget,
+                    $comp->weightedRateLimitWindow
+                );
+            }
+        }
     }
 
     public function getStorage(): StorageService

@@ -187,6 +187,22 @@ $aiPolicies = (array) ($settings['aiCrawlerPolicies'] ?? []);
                         </div>
                     </div>
                 </div>
+
+                <!-- 5. Поведенческий анализ (Behavior Intelligence) -->
+                <div class="card border-0 shadow-sm rounded-3 mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3">
+                        <h5 class="fw-bold mb-0">5. Поведенческий анализ (Behavior Intelligence)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[behaviorAnalysisEnabled]" value="1" id="bhSwitch" <?= !empty($settings['behaviorAnalysisEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="bhSwitch">Включить поведенческий анализ активности</label>
+                            <div class="form-text">
+                                Оценивает последовательность запросов, интервалы между кликами, аномальное разнообразие URL (парсинг всех ссылок), частый поиск и всплески ошибок. Включает эвристический RiskEngine.
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Right Column: Rate Limiter & Proxies -->
@@ -229,10 +245,32 @@ $aiPolicies = (array) ($settings['aiCrawlerPolicies'] ?? []);
                     </div>
                 </div>
 
-                <!-- 6. Доверенные прокси (Trusted Proxies) -->
+                <!-- 6. Бюджет нагрузки (Weighted Rate Limiter) -->
                 <div class="card border-0 shadow-sm rounded-3 mb-4">
                     <div class="card-header bg-transparent border-0 pt-3">
-                        <h5 class="fw-bold mb-0">6. Доверенные прокси (Trusted Proxies)</h5>
+                        <h5 class="fw-bold mb-0">6. Бюджет нагрузки (Weighted Limiter)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[weightedRateLimitEnabled]" value="1" id="wrlSwitch" <?= !empty($settings['weightedRateLimitEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="wrlSwitch">Учитывать вес операций (баллы)</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Лимит баллов (бюджет на окно):</label>
+                            <input type="number" name="AntibotSetting[weightedRateLimitBudget]" class="form-control" value="<?= (int) ($settings['weightedRateLimitBudget'] ?? 150) ?>" min="10" max="10000">
+                            <div class="form-text">Обычная страница: 1 балл, каталог: 2 балла, поиск: 5 баллов, тяжелый фильтр/API: 8-10 баллов.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Окно бюджета (секунды):</label>
+                            <input type="number" name="AntibotSetting[weightedRateLimitWindow]" class="form-control" value="<?= (int) ($settings['weightedRateLimitWindow'] ?? 60) ?>" min="5" max="3600">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. Доверенные прокси (Trusted Proxies) -->
+                <div class="card border-0 shadow-sm rounded-3 mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3">
+                        <h5 class="fw-bold mb-0">7. Доверенные прокси (Trusted Proxies)</h5>
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
