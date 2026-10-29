@@ -1,32 +1,40 @@
 # Yii2 Antibot (`larikmc/yii2-antibot`)
 
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE.md)
+[![Latest Version](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.1.0)
 [![PHP](https://img.shields.io/badge/PHP-8.0%20|%208.1%20|%208.2%20|%208.3%20|%208.4%20|%208.5-blue)](https://php.net)
 [![Yii2](https://img.shields.io/badge/Yii2-2.0.x-orange.svg)](https://yiiframework.com)
 
 **Высокопроизводительный автономный модуль антибот-защиты для Yii2 с визуальной панелью управления.**  
-Обеспечивает комплексную защиту веб-сайта от парсеров, AI-краулеров, фейковых поисковиков, спам-ботов и HTTP-флуда со временем проверки **менее 0.5 мс**.
+Обеспечивает комплексную защиту веб-сайта от парсеров, AI-краулеров, фейковых поисковиков, спам-ботов и HTTP-флуда со временем проверки **менее 0.3 мс**.
 
 ---
 
-## ⚡ Главные преимущества
+## ⚡ Главные преимущества v1.1.0
 
-1. **Безопасность для SEO (Reverse DNS PTR)**:  
-   Настоящие поисковые роботы (Яндекс, Google, Bing, Mail.ru) **никогда не блокируются**. Подлинность проверяется через двусторонний DNS-запрос (PTR + прямой lookup) с кэшированием на 24 часа.
+1. **Безопасность для SEO (Reverse DNS PTR + Anti-DNS-DoS)**:  
+   Настоящие поисковые роботы (Яндекс, Google, Bing, Mail.ru) **никогда не блокируются**. Подлинность проверяется через двусторонний DNS-запрос (PTR + прямой lookup) с кэшированием на 24 часа.  
+   *Защита от DNS DoS:* встроен лимит одновременных DNS-запросов и дифференцированное кэширование (успех — 24ч, фейк — 15м, таймаут — 5м).
 2. **Отсечение фейковых поисковиков**:  
-   Любые боты, отправляющие заголовок `User-Agent: YandexBot` или `Googlebot` с посторонних хостингов или прокси, мгновенно вычисляются и блокируются.
-3. **Блокировка AI-краулеров**:  
-   Защита контента от выкачивания нейросетями для обучения моделей: `GPTBot`, `ChatGPT-User`, `ClaudeBot`, `Bytespider` (TikTok), `CCBot`, `PerplexityBot`.
+   Любые боты, отправляющие заголовок `User-Agent: YandexBot` или `Googlebot` с посторонних хостингов или прокси, мгновенно вычисляются и блокируются. Ошибки DNS трактуются безопасно как `unknown` и не приводят к ложным блокировкам.
+3. **Гранулярное управление ИИ-краулерами (AI Bots)**:  
+   Четкое разделение на:
+   - **Поисковые ИИ-боты:** `OAI-SearchBot`, `ChatGPT-User`, `PerplexityBot` (по умолчанию разрешены для сохранения поискового трафика).
+   - **Скраперы для обучения:** `GPTBot`, `ClaudeBot`, `Bytespider` (TikTok), `CCBot`, `Google-Extended` (блокируются).
+   - Индивидуальные политики для каждого бота: *Разрешить (Allow), Мониторить (Monitor), Ограничивать (Throttle), Блокировать (Block)*.
 4. **Блокировка парсеров и CLI-инструментов**:  
    Отсечение `cURL`, `Wget`, `python-requests`, `aiohttp`, `Scrapy`, `GuzzleHttp`, `Go-http-client`, а также коммерческих агрегаторов (`AhrefsBot`, `SemrushBot`, `MJ12bot`).
-5. **Бесшовный JS-челлендж (0 капч для людей)**:  
-   Проверка признаков реального браузера (`navigator.webdriver`, плагины, экран, события) и выдача криптографически подписанной куки без раздражающих картинок и капч.
-6. **Honeypot-защита форм**:  
-   Встроенный виджет невидимых полей-ловушек и криптографический тайминг отправки формы для защиты обратной связи, заказов и комментариев.
-7. **Rate Limiter (Защита от флуда)**:  
-   Ограничение частоты запросов с одного IP (sliding window) для предотвращения сканирования и спама.
-8. **Визуальная панель управления**:  
-   Дашборд со сводкой трафика, живой лентой событий, топом заблокированных IP и управлением белыми/черными списками (включая CIDR-подсети).
+5. **Безопасное определение IP (Trusted Proxies)**:  
+   Защита от подмены IP: заголовки `CF-Connecting-IP`, `X-Forwarded-For` и `X-Real-IP` принимаются **только** если непосредственный адрес сервера входит в явный список `trustedProxies` (поддерживается CIDR).
+6. **Адаптивный Rate Limiter (Защита от флуда)**:  
+   - `CacheLimiter` (по умолчанию): неблокирующий dual-bucket алгоритм. Предотвращает исчерпание воркеров PHP-FPM под нагрузкой. Безопасно деградирует (fail-open) при сбое кеша.
+   - `RedisLimiter`: атомарный sliding-window алгоритм на Lua-скриптах Redis.
+7. **Безопасность для API и AJAX**:  
+   Автоматическое распознавание AJAX, Fetch, REST API и вебхуков: при блокировке или ограничении частоты клиенты получают чистый JSON со статусом `403` или `429` (`Retry-After`), без HTML-страниц и капч.
+8. **JSON Lines (`.jsonl`) логгирование**:  
+   Атомарная append-only запись событий за 0.001 мс без постоянного чтения и перезаписи всего JSON-файла. Автоматическая ротация (5 МБ) и безопасная миграция со старого формата.
+9. **Защищенная панель управления**:  
+   Интеграция с RBAC (`antibot.manage`), ограничение ролей (по умолчанию `admin`), защита всех изменяющих действий через CSRF и метод POST.
 
 ---
 
@@ -41,7 +49,7 @@ composer require larikmc/yii2-antibot
 ```json
 {
     "require": {
-        "larikmc/yii2-antibot": "^1.0.0"
+        "larikmc/yii2-antibot": "^1.1.0"
     }
 }
 ```
@@ -56,7 +64,12 @@ composer require larikmc/yii2-antibot
 'components' => [
     'antibot' => [
         'class' => \larikmc\antibot\Antibot::class,
+        // Если сайт работает за Cloudflare или Nginx:
+        // 'trustedProxies' => ['127.0.0.1', '173.245.48.0/20', '103.21.244.0/22'],
     ],
+],
+'bootstrap' => [
+    'antibot',
 ],
 ```
 
@@ -66,12 +79,13 @@ composer require larikmc/yii2-antibot
 'modules' => [
     'antibot' => [
         'class' => \larikmc\antibot\Module::class,
-        'accessRoles' => ['@'], // доступ только для авторизованных администраторов
+        'accessRoles' => ['admin'],
+        'accessPermission' => 'antibot.manage', // Опционально при использовании RBAC
     ],
 ],
 ```
 
-Добавьте пункт в меню админки (например, в `larikmc/yii2-admin`):
+Добавьте пункт меню в `larikmc/yii2-admin`:
 
 ```php
 [
@@ -81,89 +95,82 @@ composer require larikmc/yii2-antibot
 ],
 ```
 
-Панель управления будет доступна по адресу: `/admin/antibot`.
+### Шаг 3. Подключите виджет в разметку (`frontend/views/layouts/main.php`)
 
-### Шаг 3. Подключите клиентский виджет (`frontend/views/layouts/main.php`)
-
-В секцию `<head>` или перед `</body>`:
+Внутри секции `<head>`:
 
 ```php
 <?= \larikmc\antibot\widgets\AntibotWidget::widget() ?>
 ```
 
-Готово! Весь трафик автоматически фильтруется и защищается.
-
 ---
 
-## 🍯 Защита форм от спама (Honeypot)
+## 🛡️ Защита веб-форм (Honeypot)
 
-В представлении формы (например, обратной связи):
+Для защиты форм обратной связи, комментариев и оформления заказов:
 
 ```php
 <?php $form = ActiveForm::begin(); ?>
 
-    <?= $form->field($model, 'name')->textInput() ?>
-    <?= $form->field($model, 'email')->textInput() ?>
-    <?= $form->field($model, 'message')->textarea() ?>
-
-    <!-- Невидимый виджет защиты от спам-ботов -->
     <?= \larikmc\antibot\widgets\HoneypotWidget::widget() ?>
 
-    <button type="submit" class="btn btn-primary">Отправить</button>
-
+    <?= $form->field($model, 'name') ?>
+    <?= $form->field($model, 'email') ?>
+    ...
 <?php ActiveForm::end(); ?>
 ```
 
-В контроллере при обработке отправки:
+В контроллере:
 
 ```php
-if ($this->request->isPost) {
-    $check = \larikmc\antibot\widgets\HoneypotWidget::validate($this->request->post());
-    if (!$check['valid']) {
-        Yii::$app->session->setFlash('error', $check['error']);
-        return $this->refresh();
-    }
-
-    if ($model->load($this->request->post()) && $model->save()) {
-        // ...
+if (Yii::$app->request->isPost) {
+    if (!\larikmc\antibot\widgets\HoneypotWidget::validateSubmission()) {
+        throw new \yii\web\ForbiddenHttpException('Спам-активность отклонена.');
     }
 }
 ```
 
 ---
 
-## 🎛️ Режимы работы (Modes)
+## ⚙️ Тонкая настройка маршрутов (Action Filter)
 
-1. **`monitoring` (Мониторинг)**:  
-   Рекомендуется для первого запуска. Модуль анализирует трафик и пишет в лог подозрительных ботов, но не блокирует запросы. Позволяет оценить реальную картину трафика.
-2. **`standard` (Стандартный)**:  
-   Рекомендуемый режим. Блокирует явных ботов, AI-краулеры, поддельные поисковики и флудеров. Живые пользователи заходят на сайт мгновенно без каких-либо экранов проверки.
-3. **`strict` (Строгий)**:  
-   При первом посещении сайта каждый неизвестный клиент проходит быструю фоновую проверку браузера (JS-челлендж за 0.5 сек). Парсеры без JavaScript отсекаются на 100%.
+Для ограничения частоты на критичных экшенах (авторизация, поиск):
+
+```php
+public function behaviors(): array
+{
+    return [
+        'antibot' => [
+            'class' => \larikmc\antibot\filters\AntibotFilter::class,
+            'maxRequests' => 5,
+            'window' => 60,
+            'only' => ['login', 'signup'],
+        ],
+    ];
+}
+```
 
 ---
 
-## ⚙️ Справочник параметров конфигурации
+## 🌐 Рекомендуемая конфигурация Nginx (Раннее отсечение флуда)
 
-| Параметр | Тип | По умолчанию | Описание |
-|---|---|---|---|
-| `enabled` | `bool` | `true` | Включение / выключение модуля |
-| `mode` | `string` | `'standard'` | Режим: `'monitoring'`, `'standard'`, `'strict'` |
-| `blockAiCrawlers` | `bool` | `true` | Блокировка GPTBot, ClaudeBot, Bytespider и др. |
-| `blockCommercialScrapers` | `bool` | `true` | Блокировка Ahrefs, Semrush, MJ12bot и др. |
-| `blockCliAndLibraries` | `bool` | `true` | Блокировка cURL, Wget, Python, Scrapy, Guzzle |
-| `verifySearchBots` | `bool` | `true` | Проверка подлинности поисковиков (Reverse DNS) |
-| `blockFakeSearchBots` | `bool` | `true` | Мгновенная блокировка фейковых поисковых ботов |
-| `rateLimitEnabled` | `bool` | `true` | Ограничение частоты запросов |
-| `rateLimitMax` | `int` | `60` | Максимальное число запросов за интервал |
-| `rateLimitWindow` | `int` | `60` | Интервал окна в секундах |
-| `whitelist` | `array` | `['127.0.0.1', '::1']` | Доверенные IP или подсети (CIDR: `1.2.3.0/24`) |
-| `blacklist` | `array` | `[]` | Заблокированные IP или подсети |
-| `customBlockMessage` | `string` | `'Access Denied...'` | Текст сообщения на 403 экране |
-| `storageFile` | `string\|null` | `null` | Путь к файлу настроек (по умолч. `@common/config/antibot.json`) |
+Для максимальной производительности при массированном HTTP-флуде рекомендуется настроить лимит Nginx перед PHP-FPM:
+
+```nginx
+# В секции http:
+limit_req_zone $binary_remote_addr zone=anti_flood:10m rate=30r/s;
+limit_req_status 429;
+
+# В секции server / location:
+location / {
+    limit_req zone=anti_flood burst=50 nodelay;
+    try_files $uri $uri/ /index.php?$args;
+}
+```
 
 ---
 
 ## 📄 Лицензия
 
-MIT License. Автор: [LarikMC](https://64web.ru)
+MIT License. Свободное использование в коммерческих и некоммерческих проектах.  
+Автор: **LarikMC** ([64web.ru](https://64web.ru))

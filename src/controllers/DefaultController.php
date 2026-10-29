@@ -6,6 +6,7 @@ namespace larikmc\antibot\controllers;
 
 use larikmc\antibot\Module;
 use Yii;
+use yii\filters\VerbFilter;
 use yii\web\Controller;
 use yii\web\Response;
 
@@ -20,6 +21,23 @@ use yii\web\Response;
 class DefaultController extends Controller
 {
     /**
+     * {@inheritdoc}
+     */
+    public function behaviors(): array
+    {
+        $behaviors = parent::behaviors();
+        $behaviors['verbs'] = [
+            'class' => VerbFilter::class,
+            'actions' => [
+                'quick-block' => ['POST'],
+                'quick-whitelist' => ['POST'],
+                'clear-events' => ['POST'],
+            ],
+        ];
+        return $behaviors;
+    }
+
+    /**
      * Dashboard page showing traffic metrics and real-time blocked bot logs.
      *
      * @return Response|string
@@ -29,11 +47,12 @@ class DefaultController extends Controller
         $antibot = $this->module->getAntibot();
         $storage = $antibot->getStorage();
 
-        $stats = $storage->getStatistics();
+        $stats = $storage->getStatistics(1000);
         $events = $storage->getRecentEvents(50);
 
         return $this->render('index', [
             'antibot' => $antibot,
+            'module' => $this->module,
             'stats' => $stats,
             'events' => $events,
         ]);
@@ -42,21 +61,23 @@ class DefaultController extends Controller
     /**
      * Quick action to add an IP directly to the blacklist.
      *
-     * @param string $ip
      * @return Response
      */
-    public function actionQuickBlock(string $ip): Response
+    public function actionQuickBlock(): Response
     {
-        $antibot = $this->module->getAntibot();
-        $storage = $antibot->getStorage();
-        $settings = $storage->loadSettings();
+        $ip = trim((string) $this->request->post('ip', ''));
+        if ($ip !== '') {
+            $antibot = $this->module->getAntibot();
+            $storage = $antibot->getStorage();
+            $settings = $storage->loadSettings();
 
-        $blacklist = (array) ($settings['blacklist'] ?? []);
-        if (!in_array($ip, $blacklist, true)) {
-            $blacklist[] = $ip;
-            $settings['blacklist'] = array_values(array_unique($blacklist));
-            $storage->saveSettings($settings);
-            Yii::$app->session->setFlash('success', "IP {$ip} успешно добавлен в черный список.");
+            $blacklist = (array) ($settings['blacklist'] ?? []);
+            if (!in_array($ip, $blacklist, true)) {
+                $blacklist[] = $ip;
+                $settings['blacklist'] = array_values(array_unique($blacklist));
+                $storage->saveSettings($settings);
+                Yii::$app->session->setFlash('success', "IP {$ip} успешно добавлен в черный список.");
+            }
         }
 
         return $this->redirect(['index']);
@@ -65,23 +86,38 @@ class DefaultController extends Controller
     /**
      * Quick action to add an IP directly to the whitelist.
      *
-     * @param string $ip
      * @return Response
      */
-    public function actionQuickWhitelist(string $ip): Response
+    public function actionQuickWhitelist(): Response
     {
-        $antibot = $this->module->getAntibot();
-        $storage = $antibot->getStorage();
-        $settings = $storage->loadSettings();
+        $ip = trim((string) $this->request->post('ip', ''));
+        if ($ip !== '') {
+            $antibot = $this->module->getAntibot();
+            $storage = $antibot->getStorage();
+            $settings = $storage->loadSettings();
 
-        $whitelist = (array) ($settings['whitelist'] ?? []);
-        if (!in_array($ip, $whitelist, true)) {
-            $whitelist[] = $ip;
-            $settings['whitelist'] = array_values(array_unique($whitelist));
-            $storage->saveSettings($settings);
-            Yii::$app->session->setFlash('success', "IP {$ip} успешно добавлен в белый список.");
+            $whitelist = (array) ($settings['whitelist'] ?? []);
+            if (!in_array($ip, $whitelist, true)) {
+                $whitelist[] = $ip;
+                $settings['whitelist'] = array_values(array_unique($whitelist));
+                $storage->saveSettings($settings);
+                Yii::$app->session->setFlash('success', "IP {$ip} успешно добавлен в белый список.");
+            }
         }
 
+        return $this->redirect(['index']);
+    }
+
+    /**
+     * Clears all recorded security events.
+     *
+     * @return Response
+     */
+    public function actionClearEvents(): Response
+    {
+        $antibot = $this->module->getAntibot();
+        $antibot->getStorage()->clearEvents();
+        Yii::$app->session->setFlash('success', 'Журнал событий успешно очищен.');
         return $this->redirect(['index']);
     }
 }

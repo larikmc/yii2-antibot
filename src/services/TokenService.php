@@ -140,6 +140,15 @@ class TokenService
             return false;
         }
 
+        // Prevent token replay within validity window
+        if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
+            $replayKey = 'antibot_seed_' . md5($seed);
+            if (Yii::$app->cache->get($replayKey) !== false) {
+                return false;
+            }
+            Yii::$app->cache->set($replayKey, 1, $maxAge);
+        }
+
         $expectedTarget = hash_hmac('sha256', $seed, $secretKey);
 
         return hash_equals($expectedTarget, $answer);
@@ -148,7 +157,7 @@ class TokenService
     /**
      * Extracts /24 prefix for IPv4 or /48 prefix for IPv6 to allow minor dynamic IP shifts.
      */
-    protected static function extractIpPrefix(string $ip): string
+    public static function extractIpPrefix(string $ip): string
     {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
             $parts = explode('.', $ip);
@@ -156,8 +165,11 @@ class TokenService
         }
 
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            $parts = explode(':', $ip);
-            return count($parts) >= 3 ? sprintf('%s:%s:%s', $parts[0], $parts[1], $parts[2]) : $ip;
+            $packed = @inet_pton($ip);
+            if ($packed !== false && strlen($packed) === 16) {
+                // First 6 bytes = 48-bit prefix
+                return bin2hex(substr($packed, 0, 6));
+            }
         }
 
         return $ip;

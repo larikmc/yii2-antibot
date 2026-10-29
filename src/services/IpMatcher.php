@@ -119,4 +119,36 @@ class IpMatcher
 
         return false;
     }
+
+    /**
+     * Validates whether a string is a valid IPv4, IPv6, or CIDR notation.
+     */
+    public static function isValidIpOrCidr(string $entry): bool
+    {
+        $entry = trim($entry);
+        if ($entry === '') {
+            return false;
+        }
+
+        if (str_contains($entry, '/')) {
+            $parts = explode('/', $entry, 2);
+            if (count($parts) !== 2) {
+                return false;
+            }
+            [$ip, $mask] = $parts;
+            if (!is_numeric($mask)) {
+                return false;
+            }
+            $mask = (int) $mask;
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                return $mask >= 0 && $mask <= 32;
+            }
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                return $mask >= 0 && $mask <= 128;
+            }
+            return false;
+        }
+
+        return (bool) filter_var($entry, FILTER_VALIDATE_IP);
+    }
 }

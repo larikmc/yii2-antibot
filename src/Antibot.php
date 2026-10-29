@@ -13,16 +13,21 @@ use larikmc\antibot\services\TokenService;
 use Yii;
 use yii\base\BootstrapInterface;
 use yii\base\Component;
-use yii\helpers\Html;
 use yii\web\Application as WebApplication;
-use yii\web\Cookie;
 use yii\web\Response;
 
 /**
- * High-performance autonomous Anti-Bot protection component for Yii2.
+ * Universal Smart Anti-Bot & AI Crawler Shield Module for Yii 2.
  *
- * Provides multi-layer defense against bad scrapers, fake search bots,
- * aggressive AI crawlers, and HTTP flood requests with < 0.5 ms latency.
+ * Provides:
+ * - Reverse DNS verification for legitimate search crawlers (Google, Yandex, Bing).
+ * - Detection and mitigation of spoofed / fake search engines.
+ * - Granular control over AI crawlers (Search & Referral vs Training scrapers).
+ * - Mitigation of commercial SEO parsers, CLI tools, and HTTP libraries.
+ * - Two-phase lifecycle: Global URI checks and Action-level rate limits.
+ * - Anti-DNS-DoS budget and safe proxy IP resolution.
+ * - Non-blocking JSONL event logging and accurate multi-tier statistics.
+ * - Machine/API request detection with clean JSON 403 / 429 responses.
  *
  * @author LarikMC <https://64web.ru>
  * @license MIT
@@ -31,25 +36,53 @@ class Antibot extends Component implements BootstrapInterface
 {
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;
+
     public bool $blockAiCrawlers = true;
     public bool $blockCommercialScrapers = true;
     public bool $blockCliAndLibraries = true;
     public bool $verifySearchBots = true;
     public bool $blockFakeSearchBots = true;
+
     public bool $rateLimitEnabled = true;
     public int $rateLimitMax = 60;
     public int $rateLimitWindow = 60;
+    public int $rateLimitBanDuration = 300;
+    public string $rateLimitAdapter = RateLimiter::ADAPTER_CACHE;
+
     public bool $jsChallengeEnabled = true;
     public ?string $secretKey = null;
+
     public array $whitelist = ['127.0.0.1', '::1'];
     public array $blacklist = [];
+
+    /**
+     * @var array<int, string> Explicit list of trusted reverse proxy IPs or CIDR subnets.
+     * When empty, proxy headers (X-Forwarded-For, CF-Connecting-IP) are NEVER trusted, preventing IP spoofing.
+     */
+    public array $trustedProxies = [];
+
+    /**
+     * @var array<int, string> Headers to inspect when REMOTE_ADDR is in $trustedProxies.
+     */
+    public array $ipHeaders = ['CF-Connecting-IP', 'X-Forwarded-For', 'X-Real-IP'];
+
+    /**
+     * @var array<string, string> Individual AI crawler policies (name => 'allow'|'monitor'|'throttle'|'block').
+     */
+    public array $aiCrawlerPolicies = [];
+
+    /**
+     * @var array<int, array{pattern: string, methods?: array, maxRequests: int, window: int, action?: string}>
+     */
+    public array $routeRules = [];
+
     public ?string $storageFile = null;
     public ?string $eventsFile = null;
     public array $skipRoutes = ['assets', 'debug', 'gii'];
-    public bool $trustProxyHeaders = true;
     public string $customBlockMessage = 'Access Denied: Automated bot activity detected.';
 
     private StorageService $_storage;
+    private bool $_hasSecretKeyWarning = false;
 
     public function init(): void
     {
@@ -75,14 +108,23 @@ class Antibot extends Component implements BootstrapInterface
         $this->rateLimitEnabled = (bool) ($settings['rateLimitEnabled'] ?? $this->rateLimitEnabled);
         $this->rateLimitMax = (int) ($settings['rateLimitMax'] ?? $this->rateLimitMax);
         $this->rateLimitWindow = (int) ($settings['rateLimitWindow'] ?? $this->rateLimitWindow);
+        $this->rateLimitBanDuration = (int) ($settings['rateLimitBanDuration'] ?? $this->rateLimitBanDuration);
+        $this->rateLimitAdapter = (string) ($settings['rateLimitAdapter'] ?? $this->rateLimitAdapter);
         $this->jsChallengeEnabled = (bool) ($settings['jsChallengeEnabled'] ?? $this->jsChallengeEnabled);
         $this->whitelist = (array) ($settings['whitelist'] ?? $this->whitelist);
         $this->blacklist = (array) ($settings['blacklist'] ?? $this->blacklist);
+        $this->trustedProxies = (array) ($settings['trustedProxies'] ?? $this->trustedProxies);
+        $this->ipHeaders = (array) ($settings['ipHeaders'] ?? $this->ipHeaders);
+        $this->aiCrawlerPolicies = (array) ($settings['aiCrawlerPolicies'] ?? $this->aiCrawlerPolicies);
+        $this->routeRules = (array) ($settings['routeRules'] ?? $this->routeRules);
         $this->customBlockMessage = (string) ($settings['customBlockMessage'] ?? $this->customBlockMessage);
 
         if (!empty($settings['secretKey'])) {
             $this->secretKey = (string) $settings['secretKey'];
         }
+
+        // Configure RateLimiter adapter
+        RateLimiter::$adapter = $this->rateLimitAdapter;
     }
 
     /**
@@ -94,9 +136,66 @@ class Antibot extends Component implements BootstrapInterface
             return;
         }
 
+        // Phase 1: Fast global URI and IP checks before routing
         $app->on(WebApplication::EVENT_BEFORE_REQUEST, function (): void {
             $this->checkRequest();
         });
+
+        // Phase 2: Route and controller action checks after routing
+        $app->on(WebApplication::EVENT_BEFORE_ACTION, function ($event): void {
+            $this->checkAction($event);
+        });
+    }
+
+    /**
+     * Safely resolves the client IP address.
+     * Prevents IP spoofing by validating $_SERVER['REMOTE_ADDR'] against $trustedProxies.
+     */
+    public function resolveClientIp(): string
+    {
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+        // Strict: If no trusted proxies configured, never trust proxy headers
+        if (empty($this->trustedProxies) || !IpMatcher::match($remoteAddr, $this->trustedProxies)) {
+            return $this->sanitizeIp($remoteAddr);
+        }
+
+        $request = Yii::$app !== null ? Yii::$app->request : null;
+        if ($request === null) {
+            return $this->sanitizeIp($remoteAddr);
+        }
+
+        foreach ($this->ipHeaders as $header) {
+            $val = $request->headers->get($header);
+            if ($val !== null && trim($val) !== '') {
+                $ips = array_map('trim', explode(',', $val));
+                // Walk from right to left to find the first untrusted client IP
+                for ($i = count($ips) - 1; $i >= 0; $i--) {
+                    $cand = $ips[$i];
+                    if (!IpMatcher::match($cand, $this->trustedProxies)) {
+                        $sanitized = $this->sanitizeIp($cand);
+                        if ($sanitized !== '') {
+                            return $sanitized;
+                        }
+                    }
+                }
+                $sanitized = $this->sanitizeIp($ips[0]);
+                if ($sanitized !== '') {
+                    return $sanitized;
+                }
+            }
+        }
+
+        return $this->sanitizeIp($remoteAddr);
+    }
+
+    private function sanitizeIp(string $ip): string
+    {
+        $ip = trim($ip);
+        if (filter_var($ip, FILTER_VALIDATE_IP)) {
+            return $ip;
+        }
+        return '127.0.0.1';
     }
 
     /**
@@ -112,11 +211,19 @@ class Antibot extends Component implements BootstrapInterface
             return Yii::$app->request->cookieValidationKey;
         }
 
-        return 'larikmc_antibot_secret_default_key_change_in_config';
+        // Safe deterministic machine-local fallback (different for every server installation)
+        $this->_hasSecretKeyWarning = true;
+        $base = Yii::$app !== null ? Yii::$app->getBasePath() : __DIR__;
+        return hash('sha256', 'antibot_salt_' . $base);
+    }
+
+    public function hasSecretKeyWarning(): bool
+    {
+        return $this->_hasSecretKeyWarning;
     }
 
     /**
-     * Main inspection logic executed on beforeRequest.
+     * Phase 1: Fast global inspection executed on beforeRequest.
      */
     public function checkRequest(): void
     {
@@ -134,16 +241,7 @@ class Antibot extends Component implements BootstrapInterface
             }
         }
 
-        $clientIp = null;
-        if ($this->trustProxyHeaders) {
-            $clientIp = $request->headers->get('cf-connecting-ip')
-                ?? $request->headers->get('x-real-ip')
-                ?? $request->headers->get('x-forwarded-for');
-            if ($clientIp !== null && str_contains($clientIp, ',')) {
-                $clientIp = trim(explode(',', $clientIp)[0]);
-            }
-        }
-        $ip = $clientIp ?? $request->getUserIP() ?? '127.0.0.1';
+        $ip = $this->resolveClientIp();
         $ua = $request->getUserAgent() ?? '';
         $url = $request->getAbsoluteUrl();
 
@@ -164,12 +262,13 @@ class Antibot extends Component implements BootstrapInterface
             return;
         }
 
-        // 4. Search Engine Bot Check (with Reverse DNS verification)
+        // 4. Legitimate vs Fake Search Bot Verification
         $searchEngine = BotDetector::detectSearchBot($ua);
         if ($searchEngine !== null) {
             if ($this->verifySearchBots) {
-                $isAuthentic = ReverseDnsVerifier::verify($ip, $searchEngine);
-                if ($isAuthentic) {
+                $dnsStatus = ReverseDnsVerifier::check($ip, $searchEngine);
+
+                if ($dnsStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
                     $this->_storage->logEvent([
                         'ip' => $ip,
                         'userAgent' => $ua,
@@ -177,126 +276,162 @@ class Antibot extends Component implements BootstrapInterface
                         'reason' => 'Authentic Search Engine: ' . ucfirst($searchEngine),
                         'url' => $url,
                     ]);
-                    return; // NEVER block real search engine bots
+                    return; // Pass verified search engine through
                 }
 
-                if ($this->blockFakeSearchBots) {
+                if ($dnsStatus === ReverseDnsVerifier::STATUS_FAKE && $this->blockFakeSearchBots) {
                     $this->blockRequest('Fake search bot spoofing ' . ucfirst($searchEngine), $ip, $ua, $url);
                     return;
                 }
+                // STATUS_UNKNOWN: do NOT block as fake; proceed with standard checks
             } else {
                 return;
             }
         }
 
-        // 5. AI Crawlers Check
-        if ($this->blockAiCrawlers) {
-            $aiCrawler = BotDetector::detectAiCrawler($ua);
-            if ($aiCrawler !== null) {
-                $this->blockRequest('AI crawler blocked: ' . $aiCrawler, $ip, $ua, $url);
+        // 5. AI Crawlers (Search vs Training Scrapers)
+        $aiBot = BotDetector::detectAiCrawler($ua);
+        if ($aiBot !== null) {
+            $botName = $aiBot['name'];
+            $policy = $this->aiCrawlerPolicies[$botName] ?? null;
+
+            if ($policy === null) {
+                // Default: allow AI Search bots to preserve referral traffic, block training scrapers
+                $policy = $aiBot['type'] === 'search' ? 'allow' : ($this->blockAiCrawlers ? 'block' : 'allow');
+            }
+
+            if ($policy === 'block') {
+                $this->blockRequest('AI crawler blocked: ' . $botName, $ip, $ua, $url);
                 return;
+            } elseif ($policy === 'monitor') {
+                $this->_storage->logEvent([
+                    'ip' => $ip,
+                    'userAgent' => $ua,
+                    'action' => 'monitored',
+                    'reason' => 'AI crawler monitored: ' . $botName,
+                    'url' => $url,
+                ]);
             }
         }
 
-        // 6. Commercial Aggressive Scrapers Check
-        if ($this->blockCommercialScrapers) {
-            $scraper = BotDetector::detectCommercialScraper($ua);
-            if ($scraper !== null) {
-                $this->blockRequest('Commercial scraper blocked: ' . $scraper, $ip, $ua, $url);
-                return;
-            }
-        }
-
-        // 7. CLI utilities and HTTP libraries
-        if ($this->blockCliAndLibraries) {
-            $cliTool = BotDetector::detectCliOrLibrary($ua);
-            if ($cliTool !== null) {
-                $this->blockRequest('Automated CLI or HTTP library: ' . $cliTool, $ip, $ua, $url);
-                return;
-            }
-        }
-
-        // 8. Header anomalies
-        $headers = [];
-        foreach ($request->getHeaders() as $name => $values) {
-            $headers[strtolower($name)] = implode(',', $values);
-        }
-        $anomaly = BotDetector::detectHeaderAnomalies($ua, $headers);
-        if ($anomaly !== null) {
-            $this->blockRequest('Header anomaly: ' . $anomaly, $ip, $ua, $url);
+        // 6. Commercial SEO Scrapers
+        $scraper = BotDetector::detectCommercialScraper($ua);
+        if ($scraper !== null && $this->blockCommercialScrapers) {
+            $this->blockRequest('Commercial scraper blocked: ' . $scraper, $ip, $ua, $url);
             return;
         }
 
-        // 9. Rate Limiter Check
+        // 7. CLI tools & automated HTTP libraries
+        $cliTool = BotDetector::detectCliAndLibraries($ua);
+        if ($cliTool !== null && $this->blockCliAndLibraries) {
+            $this->blockRequest('Automated CLI or HTTP library: ' . $cliTool, $ip, $ua, $url);
+            return;
+        }
+
+        // 8. Anomalous HTTP headers
+        $anomReason = BotDetector::detectAnomalousHeaders($request->headers->toArray());
+        if ($anomReason !== null && $this->blockCliAndLibraries) {
+            $this->blockRequest($anomReason, $ip, $ua, $url);
+            return;
+        }
+
+        // 9. Verified Visitor Cookie Check
+        $secretKey = $this->getResolvedSecretKey();
+        $cookieToken = $request->cookies->getValue(TokenService::COOKIE_NAME);
+        $isVerifiedVisitor = $cookieToken !== null && TokenService::validateToken($cookieToken, $ip, $ua, $secretKey);
+
+        // 10. URI pattern rules & Rate Limiting
+        $matchedRule = $this->findMatchingUriRule($pathInfo, $request->getMethod());
+        $maxReq = $matchedRule['maxRequests'] ?? $this->rateLimitMax;
+        $win = $matchedRule['window'] ?? $this->rateLimitWindow;
+
         if ($this->rateLimitEnabled) {
-            $rl = RateLimiter::check($ip, $this->rateLimitMax, $this->rateLimitWindow);
-            if ($rl['exceeded']) {
-                $this->blockRequest('Rate limit exceeded: too many requests', $ip, $ua, $url, 429);
+            $limitKey = $matchedRule !== null ? sprintf('%s_uri_%s', $ip, md5($pathInfo)) : $ip;
+            $limitResult = RateLimiter::check($limitKey, $maxReq, $win, $this->rateLimitBanDuration);
+
+            if ($limitResult['exceeded']) {
+                $this->throttleRequest(
+                    sprintf('Rate limit exceeded: %d req/%ds', $maxReq, $win),
+                    $ip,
+                    $limitResult['retryAfter']
+                );
                 return;
             }
         }
 
-        // 10. Strict Mode JS Challenge Check
-        if ($this->mode === StorageService::MODE_STRICT) {
-            $cookieToken = (string) $request->cookies->getValue(TokenService::COOKIE_NAME, '');
-            $isValid = TokenService::validateToken($cookieToken, $ip, $ua, $this->getResolvedSecretKey());
-
-            if (!$isValid) {
-                $this->renderChallengePage($ip);
-                return;
+        // 11. Strict Mode Challenge
+        if ($this->mode === StorageService::MODE_STRICT && !$isVerifiedVisitor && $this->jsChallengeEnabled) {
+            if (!$this->isMachineOrApiRequest()) {
+                $this->renderChallengeScreen($ip, $ua, $secretKey);
+                exit(0);
             }
         }
+
+        // Tag request to prevent duplicate checks in Phase 2
+        Yii::$app->params['__antibot_checked_ip'] = $ip;
     }
 
     /**
-     * Issues verified cookie to the visitor.
+     * Phase 2: Action-level inspection executed on beforeAction.
      */
-    public function issueVerifiedCookie(string $ip, string $userAgent): void
+    public function checkAction($event): void
     {
-        $token = TokenService::generateToken($ip, $userAgent, $this->getResolvedSecretKey());
+        if (!$this->enabled || Yii::$app === null || !isset($event->action)) {
+            return;
+        }
 
-        $cookie = new Cookie([
-            'name' => TokenService::COOKIE_NAME,
-            'value' => $token,
-            'expire' => time() + TokenService::DEFAULT_TTL,
-            'httpOnly' => true,
-            'secure' => Yii::$app->request->isSecureConnection,
-            'path' => '/',
-        ]);
-
-        Yii::$app->response->cookies->add($cookie);
-    }
-
-    /**
-     * Handles background or form verification of the client challenge.
-     */
-    protected function handleChallengeSubmission(string $ip, string $ua): void
-    {
+        $action = $event->action;
+        $route = $action->getUniqueId();
         $request = Yii::$app->request;
-        $seed = (string) $request->post('seed', '');
-        $answer = (string) $request->post('answer', '');
 
-        $isValid = TokenService::verifyJsChallenge($seed, $answer, $this->getResolvedSecretKey());
-        if ($isValid) {
-            $this->issueVerifiedCookie($ip, $ua);
-
-            if ($request->isAjax) {
-                Yii::$app->response->format = Response::FORMAT_JSON;
-                Yii::$app->response->data = ['success' => true];
-            } else {
-                Yii::$app->response->redirect($request->getAbsoluteUrl());
-            }
-            Yii::$app->end();
+        $matchedRule = $this->findMatchingRouteRule($route, $request->getMethod());
+        if ($matchedRule === null) {
+            return;
         }
 
-        $this->blockRequest('Failed JS Challenge verification', $ip, $ua, $request->getAbsoluteUrl());
+        $ip = $this->resolveClientIp();
+        $key = sprintf('%s_act_%s', $ip, md5($route));
+        $maxReq = (int) ($matchedRule['maxRequests'] ?? 30);
+        $win = (int) ($matchedRule['window'] ?? 60);
+        $actionType = (string) ($matchedRule['action'] ?? 'throttle');
+
+        $limitResult = RateLimiter::check($key, $maxReq, $win, $this->rateLimitBanDuration);
+        if ($limitResult['exceeded']) {
+            if ($actionType === 'block') {
+                $this->blockRequest(
+                    sprintf('Route rule blocked on "%s"', $route),
+                    $ip,
+                    $request->getUserAgent() ?? '',
+                    $request->getAbsoluteUrl()
+                );
+            } else {
+                $this->throttleRequest(
+                    sprintf('Action rate limit exceeded on "%s" (%d req/%ds)', $route, $maxReq, $win),
+                    $ip,
+                    $limitResult['retryAfter']
+                );
+            }
+            $event->isValid = false;
+        }
     }
 
     /**
-     * Blocks the request with an HTTP status and HTML notice.
+     * Blocks the request with HTTP 403.
      */
-    public function blockRequest(string $reason, string $ip, string $ua, string $url, int $statusCode = 403): void
+    public function blockRequest(string $reason, string $ip, string $ua, string $url): void
     {
+        // In Monitoring mode, record and allow through without blocking
+        if ($this->mode === StorageService::MODE_MONITORING) {
+            $this->_storage->logEvent([
+                'ip' => $ip,
+                'userAgent' => $ua,
+                'action' => 'monitored',
+                'reason' => $reason,
+                'url' => $url,
+            ]);
+            return;
+        }
+
         $this->_storage->logEvent([
             'ip' => $ip,
             'userAgent' => $ua,
@@ -305,27 +440,204 @@ class Antibot extends Component implements BootstrapInterface
             'url' => $url,
         ]);
 
-        // If in monitoring mode, only log without aborting
-        if ($this->mode === StorageService::MODE_MONITORING) {
-            Yii::info(sprintf('[Antibot Monitoring] Block skipped for %s: %s', $ip, $reason), __METHOD__);
-            return;
+        if (Yii::$app === null) {
+            http_response_code(403);
+            exit(0);
         }
 
         $response = Yii::$app->response;
-        $response->statusCode = $statusCode;
+        $response->statusCode = 403;
+
+        // Machine/API request: return clean JSON without HTML leakage
+        if ($this->isMachineOrApiRequest()) {
+            $response->format = Response::FORMAT_JSON;
+            $response->data = [
+                'error' => 'Forbidden',
+                'message' => $this->customBlockMessage,
+                'status' => 403,
+            ];
+            $response->send();
+            exit(0);
+        }
+
+        // Normal browser: render dark mode branded HTML block page
         $response->format = Response::FORMAT_HTML;
+        $response->content = $this->renderBlockHtml($reason, $ip);
+        $response->send();
+        exit(0);
+    }
 
-        $safeReason = Html::encode($reason);
-        $safeIp = Html::encode($ip);
-        $safeMessage = Html::encode($this->customBlockMessage);
+    /**
+     * Throttles the request with HTTP 429 Too Many Requests.
+     */
+    public function throttleRequest(string $reason, string $ip, int $retryAfter = 60): void
+    {
+        if ($this->mode === StorageService::MODE_MONITORING) {
+            $this->_storage->logEvent([
+                'ip' => $ip,
+                'userAgent' => Yii::$app->request->getUserAgent() ?? '',
+                'action' => 'monitored',
+                'reason' => $reason,
+                'url' => Yii::$app->request->getAbsoluteUrl(),
+            ]);
+            return;
+        }
 
-        $response->content = <<<HTML
+        $this->_storage->logEvent([
+            'ip' => $ip,
+            'userAgent' => Yii::$app->request->getUserAgent() ?? '',
+            'action' => 'throttled',
+            'reason' => $reason,
+            'url' => Yii::$app->request->getAbsoluteUrl(),
+        ]);
+
+        $response = Yii::$app->response;
+        $response->statusCode = 429;
+        $response->headers->set('Retry-After', (string) max(1, $retryAfter));
+
+        if ($this->isMachineOrApiRequest()) {
+            $response->format = Response::FORMAT_JSON;
+            $response->data = [
+                'error' => 'Too Many Requests',
+                'message' => 'Rate limit exceeded. Please try again later.',
+                'retry_after' => max(1, $retryAfter),
+                'status' => 429,
+            ];
+            $response->send();
+            exit(0);
+        }
+
+        $response->format = Response::FORMAT_HTML;
+        $response->content = $this->renderBlockHtml($reason . ' (Повторите через ' . $retryAfter . ' сек.)', $ip, 429);
+        $response->send();
+        exit(0);
+    }
+
+    /**
+     * Determines whether the incoming request expects a machine-readable response (AJAX/API).
+     */
+    public function isMachineOrApiRequest(): bool
+    {
+        $request = Yii::$app !== null ? Yii::$app->request : null;
+        if ($request === null) {
+            return false;
+        }
+
+        if ($request->isAjax) {
+            return true;
+        }
+
+        $accept = (string) $request->headers->get('Accept', '');
+        if (str_contains($accept, 'application/json') || str_contains($accept, 'application/xml')) {
+            return true;
+        }
+
+        if ($request->headers->has('X-Requested-With')) {
+            return true;
+        }
+
+        $path = $request->getPathInfo();
+        if (str_starts_with($path, 'api/') || $path === 'api' || str_starts_with($path, 'webhook/')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Handles POST submission of solved JS Challenge.
+     */
+    protected function handleChallengeSubmission(string $ip, string $ua): void
+    {
+        $request = Yii::$app->request;
+        $seed = (string) $request->post('seed', '');
+        $answer = (string) $request->post('answer', '');
+        $secretKey = $this->getResolvedSecretKey();
+
+        if (TokenService::verifyJsChallenge($seed, $answer, $secretKey)) {
+            $token = TokenService::generateToken($ip, $ua, $secretKey);
+            $cookie = new \yii\web\Cookie([
+                'name' => TokenService::COOKIE_NAME,
+                'value' => $token,
+                'expire' => time() + TokenService::DEFAULT_TTL,
+                'httpOnly' => true,
+                'secure' => $request->isSecureConnection,
+                'sameSite' => 'Lax',
+            ]);
+            Yii::$app->response->cookies->add($cookie);
+
+            $this->_storage->logEvent([
+                'ip' => $ip,
+                'userAgent' => $ua,
+                'action' => 'challenge_passed',
+                'reason' => 'JS Challenge Solved',
+                'url' => $request->getAbsoluteUrl(),
+            ]);
+
+            $response = Yii::$app->response;
+            $response->format = Response::FORMAT_JSON;
+            $response->data = ['success' => true];
+            $response->send();
+            exit(0);
+        }
+
+        $this->blockRequest('JS Challenge verification failed or replayed', $ip, $ua, $request->getAbsoluteUrl());
+    }
+
+    private function findMatchingUriRule(string $pathInfo, string $method): ?array
+    {
+        foreach ($this->routeRules as $rule) {
+            $pattern = $rule['pattern'] ?? '';
+            if ($pattern === '') {
+                continue;
+            }
+            if (!empty($rule['methods']) && !in_array(strtoupper($method), array_map('strtoupper', $rule['methods']), true)) {
+                continue;
+            }
+            if ($pathInfo === $pattern || str_starts_with($pathInfo, rtrim($pattern, '*') . '/')) {
+                return $rule;
+            }
+        }
+        return null;
+    }
+
+    private function findMatchingRouteRule(string $route, string $method): ?array
+    {
+        foreach ($this->routeRules as $rule) {
+            $pattern = $rule['pattern'] ?? '';
+            if ($pattern === '') {
+                continue;
+            }
+            if (!empty($rule['methods']) && !in_array(strtoupper($method), array_map('strtoupper', $rule['methods']), true)) {
+                continue;
+            }
+            if ($route === $pattern || fnmatch($pattern, $route)) {
+                return $rule;
+            }
+        }
+        return null;
+    }
+
+    public function getStorage(): StorageService
+    {
+        return $this->_storage;
+    }
+
+    protected function renderBlockHtml(string $reason, string $ip, int $statusCode = 403): string
+    {
+        $time = date('d.m.Y H:i:s');
+        $title = $statusCode === 429 ? 'Слишком много запросов' : 'Доступ ограничен';
+        $sub = $statusCode === 429 ? 'Превышен лимит обращений к сайту.' : htmlspecialchars($this->customBlockMessage, ENT_QUOTES, 'UTF-8');
+        $safeReason = htmlspecialchars($reason, ENT_QUOTES, 'UTF-8');
+        $safeIp = htmlspecialchars($ip, ENT_QUOTES, 'UTF-8');
+
+        return <<<HTML
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Доступ ограничен / Access Restricted</title>
+    <title>{$title} / Access Restricted</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
@@ -343,85 +655,69 @@ class Antibot extends Component implements BootstrapInterface
 <body>
     <div class="card">
         <div class="icon">🛡️</div>
-        <h1>Доступ ограничен</h1>
-        <p>{$safeMessage}</p>
+        <h1>{$title}</h1>
+        <p>{$sub}</p>
         <div class="details">
             <div><strong>Причина:</strong> {$safeReason}</div>
             <div><strong>Ваш IP:</strong> <code>{$safeIp}</code></div>
-            <div><strong>Время:</strong> <code>{$this->getCurrentDateTime()}</code></div>
+            <div><strong>Время:</strong> <code>{$time}</code></div>
         </div>
         <div class="footer">Защищено модулем Yii2 Antibot</div>
     </div>
 </body>
 </html>
 HTML;
-
-        $response->send();
-        Yii::$app->end();
     }
 
-    /**
-     * Renders a lightweight seamless JS challenge screen for strict mode.
-     */
-    protected function renderChallengePage(string $ip): void
+    protected function renderChallengeScreen(string $ip, string $ua, string $secretKey): void
     {
-        $challenge = TokenService::generateJsChallenge($ip, $this->getResolvedSecretKey());
-        $seed = Html::encode($challenge['seed']);
-        $target = Html::encode($challenge['target']);
+        $challenge = TokenService::generateJsChallenge($ip, $secretKey);
+        $seed = htmlspecialchars($challenge['seed'], ENT_QUOTES, 'UTF-8');
+        $target = htmlspecialchars($challenge['target'], ENT_QUOTES, 'UTF-8');
 
-        $response = Yii::$app->response;
-        $response->statusCode = 200;
-        $response->format = Response::FORMAT_HTML;
-
-        $response->content = <<<HTML
+        echo <<<HTML
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Проверка браузера...</title>
+    <title>Проверка безопасности / Security Check</title>
     <style>
-        body { font-family: sans-serif; background: #0f172a; color: #cbd5e1; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
-        .box { padding: 40px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; max-width: 480px; width: 100%; padding: 40px 32px; text-align: center; }
+        .spinner { width: 44px; height: 44px; border: 3px solid rgba(59, 130, 246, 0.2); border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 24px; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        h1 { font-size: 20px; margin-bottom: 8px; }
+        p { color: #94a3b8; font-size: 14px; }
     </style>
 </head>
 <body>
-    <div class="box">
+    <div class="card">
         <div class="spinner"></div>
-        <h2>Проверка безопасности соединения</h2>
-        <p style="font-size: 14px; color: #94a3b8;">Пожалуйста, подождите пару секунд...</p>
+        <h1>Проверка браузера...</h1>
+        <p>Пожалуйста, подождите. Выполняется автоматическая проверка перед переходом на сайт.</p>
     </div>
-    <form id="challengeForm" method="post" style="display:none;">
-        <input type="hidden" name="antibot_challenge_verify" value="1">
-        <input type="hidden" name="seed" value="{$seed}">
-        <input type="hidden" name="answer" value="{$target}">
-    </form>
     <script>
-        (function() {
-            // Verify real browser features
-            if (navigator.webdriver) { return; }
-            setTimeout(function() {
-                document.getElementById('challengeForm').submit();
-            }, 600);
-        })();
+        setTimeout(function() {
+            var form = new FormData();
+            form.append('antibot_challenge_verify', '1');
+            form.append('seed', '{$seed}');
+            form.append('answer', '{$target}');
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', window.location.href, true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    window.location.reload();
+                } else {
+                    document.querySelector('h1').innerText = 'Ошибка верификации';
+                }
+            };
+            xhr.send(form);
+        }, 300);
     </script>
 </body>
 </html>
 HTML;
-
-        $response->send();
-        Yii::$app->end();
-    }
-
-    public function getStorage(): StorageService
-    {
-        return $this->_storage;
-    }
-
-    private function getCurrentDateTime(): string
-    {
-        return date('d.m.Y H:i:s');
     }
 }

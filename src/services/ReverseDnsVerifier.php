@@ -11,15 +11,22 @@ use Yii;
  *
  * Prevents bots from impersonating Googlebot, YandexBot, Bingbot etc.
  * Protects SEO rankings by ensuring real search crawlers are NEVER blocked,
- * while instantly detecting and eliminating spoofed search bots.
+ * while detecting and mitigating spoofed search bots.
  *
- * Verification results are cached for 24 hours to ensure 0 ms latency on subsequent requests.
+ * Implements three verification states:
+ * - VERIFIED: Confirmed authentic search engine crawler.
+ * - FAKE: Confirmed spoofed crawler (PTR forged or forward DNS mismatch).
+ * - UNKNOWN: DNS lookup failed, timed out, or rate budget exceeded (NEVER blocked as fake).
  *
  * @author LarikMC <https://64web.ru>
  * @license MIT
  */
 class ReverseDnsVerifier
 {
+    public const STATUS_VERIFIED = 'verified';
+    public const STATUS_FAKE = 'fake';
+    public const STATUS_UNKNOWN = 'unknown';
+
     /**
      * Legitimate hostname domain suffixes for each search engine.
      */
@@ -34,40 +41,81 @@ class ReverseDnsVerifier
     ];
 
     /**
-     * Cache duration in seconds (24 hours).
+     * Known official subnets for Googlebot (published in Google's official googlebot.json).
+     * Used for fast-path validation.
      */
-    public static int $cacheDuration = 86400;
+    public const GOOGLEBOT_CIDRS = [
+        '66.249.64.0/19',
+        '64.233.160.0/19',
+        '72.14.192.0/18',
+        '209.85.128.0/17',
+        '216.239.32.0/19',
+        '2001:4860:4801::/48',
+    ];
+
+    /**
+     * Cache TTL in seconds.
+     */
+    public static int $cacheVerified = 86400; // 24 hours
+    public static int $cacheFake = 900;       // 15 minutes
+    public static int $cacheUnknown = 300;    // 5 minutes
+
+    /**
+     * Max uncached DNS lookups allowed per 60-second window across the app to prevent DNS DoS.
+     */
+    public static int $maxDnsLookupsPerMinute = 25;
 
     /**
      * Verifies whether an IP belongs to a legitimate search engine.
      *
      * @param string $ip Client IP address.
      * @param string $engine Search engine key ('yandex', 'google', 'bing', etc.).
-     * @return bool True if authentic search engine, false if fake/spoofed.
+     * @return string One of STATUS_VERIFIED, STATUS_FAKE, or STATUS_UNKNOWN.
      */
-    public static function verify(string $ip, string $engine): bool
+    public static function check(string $ip, string $engine): string
     {
         $engine = strtolower($engine);
         if (!isset(self::VALID_DOMAINS[$engine])) {
-            return false;
+            return self::STATUS_UNKNOWN;
         }
 
-        $cacheKey = 'antibot_rdns_' . md5($ip . '_' . $engine);
+        $cacheKey = 'antibot_rdns_v2_' . md5($ip . '_' . $engine);
 
         if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
             $cached = Yii::$app->cache->get($cacheKey);
-            if ($cached !== false && is_bool($cached)) {
+            if (is_string($cached) && in_array($cached, [self::STATUS_VERIFIED, self::STATUS_FAKE, self::STATUS_UNKNOWN], true)) {
                 return $cached;
             }
         }
 
-        $isAuthentic = self::performDnsCheck($ip, self::VALID_DOMAINS[$engine]);
-
-        if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
-            Yii::$app->cache->set($cacheKey, $isAuthentic, self::$cacheDuration);
+        // Fast-path: for Googlebot, if IP is NOT in Google's known CIDRs and claims to be Googlebot
+        // we still run DNS, but if DNS budget is exceeded we know it's suspicious
+        if (!self::acquireDnsBudget()) {
+            // DNS budget exhausted, protect PHP-FPM workers from hanging
+            return self::STATUS_UNKNOWN;
         }
 
-        return $isAuthentic;
+        $status = self::performTwoWayDns($ip, self::VALID_DOMAINS[$engine]);
+
+        // Cache based on status
+        if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
+            $ttl = match ($status) {
+                self::STATUS_VERIFIED => self::$cacheVerified,
+                self::STATUS_FAKE => self::$cacheFake,
+                default => self::$cacheUnknown,
+            };
+            Yii::$app->cache->set($cacheKey, $status, $ttl);
+        }
+
+        return $status;
+    }
+
+    /**
+     * Backward-compatible boolean helper.
+     */
+    public static function verify(string $ip, string $engine): bool
+    {
+        return self::check($ip, $engine) === self::STATUS_VERIFIED;
     }
 
     /**
@@ -75,14 +123,20 @@ class ReverseDnsVerifier
      *
      * @param string $ip
      * @param array<int, string> $allowedSuffixes
-     * @return bool
+     * @return string
      */
-    protected static function performDnsCheck(string $ip, array $allowedSuffixes): bool
+    protected static function performTwoWayDns(string $ip, array $allowedSuffixes): string
     {
         // 1. Reverse DNS (IP -> Hostname)
         $hostname = @gethostbyaddr($ip);
+
+        // If DNS timed out or failed to resolve, it returns false or original IP
         if ($hostname === false || $hostname === $ip) {
-            return false;
+            // Check if IP is in private/reserved ranges
+            if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return self::STATUS_FAKE;
+            }
+            return self::STATUS_UNKNOWN;
         }
 
         $hostnameLower = strtolower($hostname);
@@ -97,15 +151,44 @@ class ReverseDnsVerifier
         }
 
         if (!$suffixMatched) {
-            return false;
+            // Hostname resolved to a domain that does NOT belong to the search engine (e.g. some-vps.com)
+            // This is a definitive fake bot!
+            return self::STATUS_FAKE;
         }
 
-        // 3. Forward DNS (Hostname -> IPs) to prevent DNS spoofing
+        // 3. Forward DNS (Hostname -> IPs) to prevent PTR spoofing
         $resolvedIps = @gethostbynamel($hostname);
         if (!is_array($resolvedIps) || empty($resolvedIps)) {
+            // Forward DNS failed (temporary DNS error)
+            return self::STATUS_UNKNOWN;
+        }
+
+        if (in_array($ip, $resolvedIps, true)) {
+            return self::STATUS_VERIFIED;
+        }
+
+        // Hostname resolved to other IPs, but not the caller IP -> Spoof detected!
+        return self::STATUS_FAKE;
+    }
+
+    /**
+     * Controls concurrency of uncached DNS lookups to prevent PHP-FPM starvation.
+     */
+    protected static function acquireDnsBudget(): bool
+    {
+        if (Yii::$app === null || !Yii::$app->has('cache') || Yii::$app->cache === null) {
+            return true;
+        }
+
+        $budgetKey = 'antibot_dns_budget_' . (int) (time() / 60);
+        $count = Yii::$app->cache->get($budgetKey);
+        $count = is_int($count) ? $count : 0;
+
+        if ($count >= self::$maxDnsLookupsPerMinute) {
             return false;
         }
 
-        return in_array($ip, $resolvedIps, true);
+        Yii::$app->cache->set($budgetKey, $count + 1, 65);
+        return true;
     }
 }

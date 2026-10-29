@@ -4,83 +4,81 @@ declare(strict_types=1);
 
 namespace larikmc\antibot\services;
 
+use larikmc\antibot\services\limiter\CacheLimiter;
+use larikmc\antibot\services\limiter\RateLimiterInterface;
+use larikmc\antibot\services\limiter\RedisLimiter;
 use Yii;
 
 /**
- * High-speed cache-backed rate limiter for flood and DDoS scraper protection.
+ * Universal Rate Limiter service with pluggable storage adapters.
  *
- * Uses sliding window counter in Yii::$app->cache.
+ * Provides:
+ * - CacheLimiter: Fast, best-effort dual-bucket algorithm for standard setups without Redis.
+ * - RedisLimiter: 100% atomic sliding window algorithm powered by Redis and Lua scripts.
  *
  * @author LarikMC <https://64web.ru>
  * @license MIT
  */
 class RateLimiter
 {
+    public const ADAPTER_CACHE = 'cache';
+    public const ADAPTER_REDIS = 'redis';
+
     /**
-     * Checks whether an IP has exceeded the allowed rate limit.
+     * @var string Current active adapter ('cache' or 'redis').
+     */
+    public static string $adapter = self::ADAPTER_CACHE;
+
+    private static ?RateLimiterInterface $_instance = null;
+
+    /**
+     * Resolves the active RateLimiterInterface instance.
+     */
+    public static function getAdapter(): RateLimiterInterface
+    {
+        if (self::$_instance !== null) {
+            return self::$_instance;
+        }
+
+        if (self::$adapter === self::ADAPTER_REDIS) {
+            self::$_instance = new RedisLimiter();
+        } else {
+            self::$_instance = new CacheLimiter();
+        }
+
+        return self::$_instance;
+    }
+
+    /**
+     * Sets a custom adapter instance or type.
+     */
+    public static function setAdapter(RateLimiterInterface|string $adapter): void
+    {
+        if ($adapter instanceof RateLimiterInterface) {
+            self::$_instance = $adapter;
+        } else {
+            self::$adapter = (string) $adapter;
+            self::$_instance = null;
+        }
+    }
+
+    /**
+     * Checks whether an IP or key has exceeded the allowed rate limit.
      *
-     * @param string $ip Client IP.
+     * @param string $key Client IP or combined key.
      * @param int $maxRequests Max requests allowed within the window.
      * @param int $window Window duration in seconds.
-     * @return array{exceeded: bool, current: int, remaining: int, reset: int}
+     * @param int $banDuration Ban duration in seconds if threshold is repeatedly exceeded.
+     * @return array{
+     *     exceeded: bool,
+     *     current: int,
+     *     remaining: int,
+     *     reset: int,
+     *     retryAfter: int
+     * }
      */
-    public static function check(string $ip, int $maxRequests = 60, int $window = 60): array
+    public static function check(string $key, int $maxRequests = 60, int $window = 60, int $banDuration = 300): array
     {
-        if (Yii::$app === null || !Yii::$app->has('cache') || Yii::$app->cache === null) {
-            return [
-                'exceeded' => false,
-                'current' => 1,
-                'remaining' => $maxRequests - 1,
-                'reset' => time() + $window,
-            ];
-        }
-
-        $now = time();
-        $bucketKey = 'antibot_rl_' . md5($ip);
-        $banKey = 'antibot_ban_' . md5($ip);
-
-        // Check if currently temporarily banned
-        $banUntil = Yii::$app->cache->get($banKey);
-        if ($banUntil !== false && is_int($banUntil) && $now < $banUntil) {
-            return [
-                'exceeded' => true,
-                'current' => $maxRequests + 1,
-                'remaining' => 0,
-                'reset' => $banUntil,
-            ];
-        }
-
-        $data = Yii::$app->cache->get($bucketKey);
-
-        if (!is_array($data) || !isset($data['reset'], $data['count']) || $now > $data['reset']) {
-            $data = [
-                'count' => 1,
-                'reset' => $now + $window,
-            ];
-            Yii::$app->cache->set($bucketKey, $data, $window);
-
-            return [
-                'exceeded' => false,
-                'current' => 1,
-                'remaining' => max(0, $maxRequests - 1),
-                'reset' => $data['reset'],
-            ];
-        }
-
-        $data['count']++;
-        Yii::$app->cache->set($bucketKey, $data, max(1, $data['reset'] - $now));
-
-        $exceeded = $data['count'] > $maxRequests;
-        if ($exceeded) {
-            // Apply a 5-minute temporary ban on repeated violations
-            Yii::$app->cache->set($banKey, $now + 300, 300);
-        }
-
-        return [
-            'exceeded' => $exceeded,
-            'current' => $data['count'],
-            'remaining' => max(0, $maxRequests - $data['count']),
-            'reset' => $data['reset'],
-        ];
+        return self::getAdapter()->check($key, $maxRequests, $window, $banDuration);
     }
 }

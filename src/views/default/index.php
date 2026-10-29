@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 /** @var yii\web\View $this */
 /** @var larikmc\antibot\Antibot $antibot */
+/** @var larikmc\antibot\Module $module */
 /** @var array<string, mixed> $stats */
 /** @var array<int, array<string, mixed>> $events */
 
@@ -31,8 +32,39 @@ $this->params['breadcrumbs'] = [
             <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="btn btn-outline-secondary">
                 📋 Списки IP (White/Black)
             </a>
+            <?php if (!empty($events)): ?>
+                <?= Html::beginForm(['/antibot/default/clear-events'], 'post', ['class' => 'd-inline']) ?>
+                    <?= Html::submitButton('🗑️ Очистить журнал', [
+                        'class' => 'btn btn-outline-danger',
+                        'data-confirm' => 'Вы уверены, что хотите очистить журнал событий?',
+                    ]) ?>
+                <?= Html::endForm() ?>
+            <?php endif; ?>
         </div>
     </div>
+
+    <!-- Security Warnings -->
+    <?php if ($module->hasInsecureAccessConfig()): ?>
+        <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+            <span class="fs-4 me-3">⚠️</span>
+            <div>
+                <strong>Предупреждение безопасности доступа:</strong>
+                Модуль настроен с ролью <code>['@']</code> (доступен любому авторизованному пользователю сайта).
+                Рекомендуется настроить RBAC-разрешение <code>antibot.manage</code> или ограничить роли <code>accessRoles =&gt; ['admin']</code>.
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($antibot->hasSecretKeyWarning()): ?>
+        <div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+            <span class="fs-4 me-3">🔑</span>
+            <div>
+                <strong>Предупреждение ключа подписи:</strong>
+                Не задан <code>$secretKey</code> антибота и отсутствует <code>cookieValidationKey</code> в запросе.
+                Используется сгенерированный машинный ключ. Рекомендуется задать собственный ключ в настройках.
+            </div>
+        </div>
+    <?php endif; ?>
 
     <!-- Alert status -->
     <?php if (!$antibot->enabled): ?>
@@ -53,22 +85,24 @@ $this->params['breadcrumbs'] = [
             <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <div class="text-muted small text-uppercase fw-bold">Всего запросов</div>
-                        <h2 class="display-6 fw-bold mb-0 text-dark"><?= (int) ($stats['total'] ?? 0) ?></h2>
+                        <div class="text-muted small text-uppercase fw-bold">Всего событий (24ч)</div>
+                        <h2 class="display-6 fw-bold mb-0 text-dark"><?= (int) ($stats['last24h']['total'] ?? $stats['total'] ?? 0) ?></h2>
                     </div>
                     <div class="fs-1 text-primary opacity-50">🌐</div>
                 </div>
+                <div class="small text-muted mt-2">Всего в журнале: <?= (int) ($stats['total'] ?? 0) ?></div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
             <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <div class="text-muted small text-uppercase fw-bold">Заблокировано ботов</div>
-                        <h2 class="display-6 fw-bold mb-0 text-danger"><?= (int) ($stats['blocked'] ?? 0) ?></h2>
+                        <div class="text-muted small text-uppercase fw-bold">Заблокировано (24ч)</div>
+                        <h2 class="display-6 fw-bold mb-0 text-danger"><?= (int) ($stats['last24h']['blocked'] ?? $stats['blocked'] ?? 0) ?></h2>
                     </div>
                     <div class="fs-1 text-danger opacity-50">🛑</div>
                 </div>
+                <div class="small text-muted mt-2">Всего блокировок: <?= (int) ($stats['blocked'] ?? 0) ?></div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
@@ -80,37 +114,29 @@ $this->params['breadcrumbs'] = [
                     </div>
                     <div class="fs-1 text-success opacity-50">🤖</div>
                 </div>
-                <div class="small text-muted mt-2">Яндекс, Google, Bing (PTR подтвержден)</div>
+                <div class="small text-muted mt-2">Яндекс, Google, Bing (Reverse DNS)</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
             <div class="card border-0 shadow-sm rounded-3 h-100 p-3 bg-white">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <div class="text-muted small text-uppercase fw-bold">Режим защиты</div>
-                        <h3 class="h4 fw-bold mb-0 text-capitalize text-info"><?= Html::encode($antibot->mode) ?></h3>
+                        <div class="text-muted small text-uppercase fw-bold">Rate Limiter / Флуд</div>
+                        <h2 class="display-6 fw-bold mb-0 text-warning"><?= (int) ($stats['throttled'] ?? 0) ?></h2>
                     </div>
-                    <div class="fs-1 text-info opacity-50">⚡</div>
+                    <div class="fs-1 text-warning opacity-50">⚡</div>
                 </div>
-                <div class="small text-muted mt-2">
-                    <?php if ($antibot->mode === 'strict'): ?>
-                        Строгий (JS-челлендж для всех)
-                    <?php elseif ($antibot->mode === 'monitoring'): ?>
-                        Только аудит логов
-                    <?php else: ?>
-                        Стандартный (авто-отсечение)
-                    <?php endif; ?>
-                </div>
+                <div class="small text-muted mt-2">Адаптер: <code><?= Html::encode($antibot->rateLimitAdapter) ?></code></div>
             </div>
         </div>
     </div>
 
-    <!-- Secondary Row: Top IPs and Top Reasons -->
-    <div class="row g-3 mb-4">
+    <!-- Top Blocked & Reasons Section -->
+    <div class="row g-4 mb-4">
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm rounded-3 h-100">
                 <div class="card-header bg-transparent border-0 pt-3 pb-0">
-                    <h5 class="card-title fw-bold mb-0">Топ заблокированных IP-адресов</h5>
+                    <h5 class="card-title fw-bold mb-0">Топ заблокированных IP</h5>
                 </div>
                 <div class="card-body">
                     <?php if (empty($stats['topIps'])): ?>
@@ -120,9 +146,12 @@ $this->params['breadcrumbs'] = [
                             <?php foreach ($stats['topIps'] as $ip => $count): ?>
                                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                                     <code><?= Html::encode($ip) ?></code>
-                                    <div>
-                                        <span class="badge bg-danger rounded-pill me-2"><?= $count ?> заблокировано</span>
-                                        <a href="<?= Url::to(['/antibot/default/quick-whitelist', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-success py-0 px-2" title="В белый список">В белый</a>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-danger rounded-pill"><?= $count ?> событий</span>
+                                        <?= Html::beginForm(['/antibot/default/quick-whitelist'], 'post', ['class' => 'd-inline']) ?>
+                                            <?= Html::hiddenInput('ip', $ip) ?>
+                                            <?= Html::submitButton('В белый', ['class' => 'btn btn-sm btn-outline-success py-0 px-2', 'title' => 'Добавить в белый список']) ?>
+                                        <?= Html::endForm() ?>
                                     </div>
                                 </li>
                             <?php endforeach; ?>
@@ -139,12 +168,12 @@ $this->params['breadcrumbs'] = [
                 </div>
                 <div class="card-body">
                     <?php if (empty($stats['topReasons'])): ?>
-                        <div class="text-muted small py-3">Блокировок еще не зафиксировано.</div>
+                        <div class="text-muted small py-3">Пока нет зафиксированных причин.</div>
                     <?php else: ?>
                         <ul class="list-group list-group-flush">
                             <?php foreach ($stats['topReasons'] as $reason => $count): ?>
                                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <span><?= Html::encode($reason) ?></span>
+                                    <span class="small fw-semibold"><?= Html::encode($reason) ?></span>
                                     <span class="badge bg-secondary rounded-pill"><?= $count ?></span>
                                 </li>
                             <?php endforeach; ?>
@@ -157,44 +186,49 @@ $this->params['breadcrumbs'] = [
 
     <!-- Live Event Feed Table -->
     <div class="card border-0 shadow-sm rounded-3">
-        <div class="card-header bg-transparent border-0 pt-3 pb-2 d-flex justify-content-between align-items-center flex-wrap">
-            <h5 class="card-title fw-bold mb-0">Лента последних событий (Live Feed)</h5>
-            <span class="badge bg-light text-dark border">Последние <?= count($events) ?> записей</span>
+        <div class="card-header bg-transparent border-0 pt-3 pb-2 d-flex justify-content-between align-items-center">
+            <h5 class="card-title fw-bold mb-0">Журнал последних событий (Live Feed)</h5>
+            <span class="badge bg-light text-dark border">JSON Lines (.jsonl)</span>
         </div>
         <div class="card-body p-0">
             <?php if (empty($events)): ?>
                 <div class="p-4 text-center text-muted">
-                    Событий трафика пока нет. Как только на сайт зайдут посетители или боты, они появятся в этой таблице.
+                    Журнал событий пуст. Активность ботов пока не фиксировалась.
                 </div>
             <?php else: ?>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light">
+                        <thead class="table-light small text-uppercase text-muted">
                             <tr>
                                 <th style="width: 170px;">Время</th>
-                                <th style="width: 140px;">IP адрес</th>
-                                <th style="width: 110px;">Действие</th>
-                                <th>Причина / Источник</th>
+                                <th style="width: 150px;">IP адрес</th>
+                                <th style="width: 140px;">Действие</th>
+                                <th>Причина</th>
                                 <th>User-Agent</th>
-                                <th style="width: 120px;" class="text-end">Действия</th>
+                                <th class="text-end" style="width: 120px;">Действия</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($events as $event): ?>
                                 <?php
-                                $action = (string) ($event['action'] ?? '');
-                                $badgeClass = match ($action) {
-                                    'blocked' => 'bg-danger',
-                                    'allowed_search_bot' => 'bg-success',
-                                    'challenged' => 'bg-warning text-dark',
-                                    default => 'bg-secondary',
-                                };
-                                $ip = (string) ($event['ip'] ?? '');
+                                    $action = (string) ($event['action'] ?? '');
+                                    $badgeClass = match ($action) {
+                                        'blocked' => 'bg-danger',
+                                        'throttled' => 'bg-warning text-dark',
+                                        'allowed_search_bot' => 'bg-success',
+                                        'monitored' => 'bg-info text-dark',
+                                        'challenged' => 'bg-secondary',
+                                        'challenge_passed' => 'bg-primary',
+                                        default => 'bg-secondary',
+                                    };
+                                    $ip = (string) ($event['ip'] ?? '');
                                 ?>
                                 <tr>
-                                    <td class="small text-muted font-monospace"><?= Html::encode($event['date'] ?? '') ?></td>
+                                    <td class="small text-muted font-monospace">
+                                        <?= Html::encode($event['date'] ?? date('Y-m-d H:i:s', (int) ($event['timestamp'] ?? time()))) ?>
+                                    </td>
                                     <td>
-                                        <code><?= Html::encode($ip) ?></code>
+                                        <code class="fw-bold"><?= Html::encode($ip) ?></code>
                                     </td>
                                     <td>
                                         <span class="badge <?= $badgeClass ?>"><?= Html::encode(strtoupper($action)) ?></span>
@@ -205,9 +239,15 @@ $this->params['breadcrumbs'] = [
                                     </td>
                                     <td class="text-end">
                                         <?php if ($action !== 'blocked'): ?>
-                                            <a href="<?= Url::to(['/antibot/default/quick-block', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-danger py-0 px-2" title="Заблокировать этот IP">Бан</a>
+                                            <?= Html::beginForm(['/antibot/default/quick-block'], 'post', ['class' => 'd-inline']) ?>
+                                                <?= Html::hiddenInput('ip', $ip) ?>
+                                                <?= Html::submitButton('Бан', ['class' => 'btn btn-sm btn-outline-danger py-0 px-2', 'title' => 'Заблокировать этот IP']) ?>
+                                            <?= Html::endForm() ?>
                                         <?php else: ?>
-                                            <a href="<?= Url::to(['/antibot/default/quick-whitelist', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-success py-0 px-2" title="Добавить IP в белый список">В белый</a>
+                                            <?= Html::beginForm(['/antibot/default/quick-whitelist'], 'post', ['class' => 'd-inline']) ?>
+                                                <?= Html::hiddenInput('ip', $ip) ?>
+                                                <?= Html::submitButton('В белый', ['class' => 'btn btn-sm btn-outline-success py-0 px-2', 'title' => 'Добавить в белый список']) ?>
+                                            <?= Html::endForm() ?>
                                         <?php endif; ?>
                                     </td>
                                 </tr>

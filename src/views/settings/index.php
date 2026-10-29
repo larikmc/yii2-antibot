@@ -14,6 +14,9 @@ $this->params['breadcrumbs'] = [
     ['label' => 'Антибот', 'url' => ['/antibot/default/index']],
     ['label' => 'Настройки'],
 ];
+
+$trustedProxiesStr = implode("\n", (array) ($settings['trustedProxies'] ?? []));
+$aiPolicies = (array) ($settings['aiCrawlerPolicies'] ?? []);
 ?>
 
 <div class="antibot-settings">
@@ -33,7 +36,7 @@ $this->params['breadcrumbs'] = [
         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
 
         <div class="row g-4">
-            <!-- Left Column: Core Rules -->
+            <!-- Left Column: Core Rules & Crawlers -->
             <div class="col-lg-8">
                 <!-- 1. Основные режимы -->
                 <div class="card border-0 shadow-sm rounded-3 mb-4">
@@ -63,118 +66,203 @@ $this->params['breadcrumbs'] = [
                             <div class="col-md-4">
                                 <label class="card p-3 h-100 border border-primary bg-primary bg-opacity-10 cursor-pointer">
                                     <div class="form-check mb-1">
-                                        <input class="form-check-input" type="radio" name="AntibotSetting[mode]" value="standard" <?= ($settings['mode'] ?? '') === 'standard' ? 'checked' : '' ?>>
-                                        <span class="fw-bold text-primary">Стандартный (Реком.)</span>
+                                        <input class="form-check-input" type="radio" name="AntibotSetting[mode]" value="standard" <?= ($settings['mode'] ?? 'standard') === 'standard' ? 'checked' : '' ?>>
+                                        <span class="fw-bold text-primary">Стандартный (Рекомендуется)</span>
                                     </div>
-                                    <div class="small text-muted">Блокирует явных ботов, парсеры и спам. Живые люди не замечают проверку.</div>
+                                    <div class="small text-muted">Блокирует известные парсеры, ИИ-скраперы и фейковые поисковики.</div>
                                 </label>
                             </div>
                             <div class="col-md-4">
                                 <label class="card p-3 h-100 border cursor-pointer">
                                     <div class="form-check mb-1">
                                         <input class="form-check-input" type="radio" name="AntibotSetting[mode]" value="strict" <?= ($settings['mode'] ?? '') === 'strict' ? 'checked' : '' ?>>
-                                        <span class="fw-bold">Строгий</span>
+                                        <span class="fw-bold text-danger">Строгий (Strict)</span>
                                     </div>
-                                    <div class="small text-muted">Принудительный JS-челлендж для всех новых посетителей сайта.</div>
+                                    <div class="small text-muted">JS-челлендж для всех браузеров перед допуском к сайту.</div>
                                 </label>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 2. Сигнатурные фильтры -->
+                <!-- 2. Поисковики и Reverse DNS -->
                 <div class="card border-0 shadow-sm rounded-3 mb-4">
                     <div class="card-header bg-transparent border-0 pt-3">
-                        <h5 class="fw-bold mb-0">2. Сигнатурные правила и краулеры</h5>
+                        <h5 class="fw-bold mb-0">2. Верификация поисковиков (SEO-защита)</h5>
                     </div>
                     <div class="card-body">
                         <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" name="AntibotSetting[blockAiCrawlers]" value="1" id="blockAiSwitch" <?= !empty($settings['blockAiCrawlers']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="blockAiSwitch">Блокировать AI-краулеры (ChatGPT, Claude, Bytespider, CCBot)</label>
-                            <div class="form-text">Защищает сайт от выкачивания контента нейросетями для обучения моделей.</div>
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[verifySearchBots]" value="1" id="verifySearchSwitch" <?= !empty($settings['verifySearchBots']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="verifySearchSwitch">Верифицировать реальные поисковые роботы</label>
+                            <div class="form-text">Двусторонняя Reverse DNS (PTR + Forward) проверка ботов Яндекс, Google, Bing, Mail.ru. Легитимные поисковики никогда не блокируются.</div>
                         </div>
 
                         <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" name="AntibotSetting[blockCommercialScrapers]" value="1" id="blockScrapersSwitch" <?= !empty($settings['blockCommercialScrapers']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="blockScrapersSwitch">Блокировать коммерческие парсеры (Ahrefs, Semrush, MJ12bot, DotBot)</label>
-                            <div class="form-text">Снижает паразитную нагрузку на сервер от SEO-агрегаторов.</div>
-                        </div>
-
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" name="AntibotSetting[blockCliAndLibraries]" value="1" id="blockCliSwitch" <?= !empty($settings['blockCliAndLibraries']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="blockCliSwitch">Блокировать скрипты и CLI-утилиты (cURL, Python, Wget, Scrapy, Guzzle, Go)</label>
-                            <div class="form-text">Отсекает прямые автоматические запросы к страницам без браузера.</div>
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[blockFakeSearchBots]" value="1" id="fakeSearchSwitch" <?= !empty($settings['blockFakeSearchBots']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold text-danger" for="fakeSearchSwitch">Блокировать поддельных поисковых роботов (Fake Search Bots)</label>
+                            <div class="form-text">Если бот маскируется под Googlebot или YandexBot с постороннего IP-адреса, он блокируется с 403 Forbidden. Ошибки DNS трактуются безопасно как <code>unknown</code>.</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 3. Поисковые системы (SEO) -->
+                <!-- 3. Гранулярное управление ИИ-краулерами -->
                 <div class="card border-0 shadow-sm rounded-3 mb-4">
                     <div class="card-header bg-transparent border-0 pt-3">
-                        <h5 class="fw-bold mb-0">3. Поисковые системы и SEO</h5>
+                        <h5 class="fw-bold mb-0">3. Политики для ИИ-краулеров (AI Bots)</h5>
                     </div>
                     <div class="card-body">
                         <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" name="AntibotSetting[verifySearchBots]" value="1" id="verifyBotsSwitch" <?= !empty($settings['verifySearchBots']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="verifyBotsSwitch">Проверять подлинность поисковиков (Reverse DNS PTR)</label>
-                            <div class="form-text">Проверяет, действительно ли IP принадлежит серверам Яндекса, Google или Bing.</div>
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[blockAiCrawlers]" value="1" id="aiSwitch" <?= !empty($settings['blockAiCrawlers']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="aiSwitch">Глобальная блокировка скраперов для обучения ИИ</label>
+                            <div class="form-text">Базовое правило для всех ненастроенных индивидуально скраперов.</div>
                         </div>
 
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" name="AntibotSetting[blockFakeSearchBots]" value="1" id="blockFakeBotsSwitch" <?= !empty($settings['blockFakeSearchBots']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold text-danger" for="blockFakeBotsSwitch">Мгновенно банить фейковых поисковиков</label>
-                            <div class="form-text">Если бот притворился Googlebot или YandexBot, но PTR-запись не подтвердилась — немедленный бан.</div>
+                        <h6 class="fw-bold small text-muted text-uppercase mt-4 mb-2">Индивидуальные правила для роботов:</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr class="small text-muted">
+                                        <th>Бот / Система</th>
+                                        <th>Тип</th>
+                                        <th>Политика</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php
+                                    $botsList = [
+                                        'OAI-SearchBot' => ['Поиск ChatGPT Search', 'search'],
+                                        'ChatGPT-User' => ['Прямой переход пользователя из ChatGPT', 'search'],
+                                        'PerplexityBot' => ['Поисковик Perplexity AI', 'search'],
+                                        'GPTBot' => ['Сбор данных для обучения моделей OpenAI', 'training'],
+                                        'ClaudeBot' => ['Сбор данных Anthropic Claude', 'training'],
+                                        'Bytespider' => ['Скрапер ByteDance (TikTok)', 'training'],
+                                        'CCBot' => ['Common Crawl датасет', 'training'],
+                                        'Google-Extended' => ['Обучение Gemini / Bard', 'training'],
+                                    ];
+                                    foreach ($botsList as $bKey => [$bDesc, $bType]):
+                                        $currentPolicy = $aiPolicies[$bKey] ?? ($bType === 'search' ? 'allow' : 'block');
+                                    ?>
+                                        <tr>
+                                            <td>
+                                                <strong><?= Html::encode($bKey) ?></strong>
+                                                <div class="small text-muted"><?= Html::encode($bDesc) ?></div>
+                                            </td>
+                                            <td>
+                                                <span class="badge <?= $bType === 'search' ? 'bg-success' : 'bg-secondary' ?>">
+                                                    <?= $bType === 'search' ? 'Поисковый' : 'Обучение' ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <select name="AntibotSetting[aiCrawlerPolicies][<?= Html::encode($bKey) ?>]" class="form-select form-select-sm">
+                                                    <option value="allow" <?= $currentPolicy === 'allow' ? 'selected' : '' ?>>Разрешить (Allow)</option>
+                                                    <option value="monitor" <?= $currentPolicy === 'monitor' ? 'selected' : '' ?>>Мониторить (Monitor)</option>
+                                                    <option value="throttle" <?= $currentPolicy === 'throttle' ? 'selected' : '' ?>>Ограничивать (Throttle)</option>
+                                                    <option value="block" <?= $currentPolicy === 'block' ? 'selected' : '' ?>>Блокировать (Block)</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Коммерческие парсеры и CLI -->
+                <div class="card border-0 shadow-sm rounded-3 mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3">
+                        <h5 class="fw-bold mb-0">4. Прочие нежелательные клиенты</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[blockCommercialScrapers]" value="1" id="commercialSwitch" <?= !empty($settings['blockCommercialScrapers']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="commercialSwitch">Блокировать коммерческие SEO-парсеры</label>
+                            <div class="form-text">AhrefsBot, SemrushBot, DotBot, MJ12bot, MegaIndex и аналогичные тяжелые скраперы.</div>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[blockCliAndLibraries]" value="1" id="cliSwitch" <?= !empty($settings['blockCliAndLibraries']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="cliSwitch">Блокировать CLI-утилиты и скрипты</label>
+                            <div class="form-text">cURL, Wget, Python-requests, Scrapy, Guzzle, Go-http-client и клиенты без User-Agent.</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Rate Limiting & Messages -->
+            <!-- Right Column: Rate Limiter & Proxies -->
             <div class="col-lg-4">
-                <!-- Ограничение частоты -->
+                <!-- 5. Rate Limiter -->
                 <div class="card border-0 shadow-sm rounded-3 mb-4">
                     <div class="card-header bg-transparent border-0 pt-3">
-                        <h5 class="fw-bold mb-0">⏱️ Ограничение частоты (Rate Limiter)</h5>
+                        <h5 class="fw-bold mb-0">5. Ограничение частоты (Rate Limiter)</h5>
                     </div>
                     <div class="card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[rateLimitEnabled]" value="1" id="rateLimitSwitch" <?= !empty($settings['rateLimitEnabled']) ? 'checked' : '' ?>>
                             <label class="form-check-label fw-bold" for="rateLimitSwitch">Включить Rate Limiter</label>
-                            <div class="form-text">Защита от быстрого кликанья и флуда.</div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Макс. запросов:</label>
-                            <input type="number" class="form-control" name="AntibotSetting[rateLimitMax]" value="<?= (int) ($settings['rateLimitMax'] ?? 60) ?>" min="5" max="1000">
-                            <div class="form-text">С одного IP-адреса.</div>
+                            <label class="form-label small fw-bold">Адаптер хранилища:</label>
+                            <select name="AntibotSetting[rateLimitAdapter]" class="form-select form-select-sm">
+                                <option value="cache" <?= ($settings['rateLimitAdapter'] ?? 'cache') === 'cache' ? 'selected' : '' ?>>CacheLimiter (Стандартный без Redis)</option>
+                                <option value="redis" <?= ($settings['rateLimitAdapter'] ?? '') === 'redis' ? 'selected' : '' ?>>RedisLimiter (Атомарный Lua, при наличии Redis)</option>
+                            </select>
+                            <div class="form-text">CacheLimiter не создает блокировок и предотвращает зависание PHP.</div>
                         </div>
 
-                        <div class="mb-0">
-                            <label class="form-label small fw-bold">Интервал окна (сек):</label>
-                            <input type="number" class="form-control" name="AntibotSetting[rateLimitWindow]" value="<?= (int) ($settings['rateLimitWindow'] ?? 60) ?>" min="5" max="600">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Максимум запросов:</label>
+                            <input type="number" name="AntibotSetting[rateLimitMax]" class="form-control" value="<?= (int) ($settings['rateLimitMax'] ?? 60) ?>" min="1" max="1000">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Окно подсчета (секунды):</label>
+                            <input type="number" name="AntibotSetting[rateLimitWindow]" class="form-control" value="<?= (int) ($settings['rateLimitWindow'] ?? 60) ?>" min="1" max="3600">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Время временного бана (секунды):</label>
+                            <input type="number" name="AntibotSetting[rateLimitBanDuration]" class="form-control" value="<?= (int) ($settings['rateLimitBanDuration'] ?? 300) ?>" min="0" max="86400">
+                            <div class="form-text">Применяется при систематическом превышении лимита (0 = без бана).</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Сообщение о блокировке -->
+                <!-- 6. Доверенные прокси (Trusted Proxies) -->
                 <div class="card border-0 shadow-sm rounded-3 mb-4">
                     <div class="card-header bg-transparent border-0 pt-3">
-                        <h5 class="fw-bold mb-0">💬 Сообщение при блокировке</h5>
+                        <h5 class="fw-bold mb-0">6. Доверенные прокси (Trusted Proxies)</h5>
                     </div>
                     <div class="card-body">
-                        <textarea class="form-control mb-2" rows="3" name="AntibotSetting[customBlockMessage]"><?= Html::encode($settings['customBlockMessage'] ?? 'Access Denied: Automated bot activity detected.') ?></textarea>
-                        <div class="small text-muted">Текст, отображаемый заблокированным ботам на 403 экране.</div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">IP или CIDR подсети доверенных прокси:</label>
+                            <textarea name="AntibotSetting[trustedProxies]" class="form-control font-monospace small" rows="4" placeholder="127.0.0.1&#10;10.0.0.0/8&#10;173.245.48.0/20"><?= Html::encode($trustedProxiesStr) ?></textarea>
+                            <div class="form-text text-danger">
+                                <strong>Безопасность:</strong> Если список пуст, заголовки <code>X-Forwarded-For</code> и <code>CF-Connecting-IP</code> игнорируются для защиты от подмены IP.
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Сохранение -->
-                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
-                    <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold">
-                        💾 Сохранить настройки
-                    </button>
-                    <div class="small text-muted text-center mt-2">
-                        Настройки сохраняются в <code>common/config/antibot.json</code>.
+                <!-- 7. Сообщение блокировки -->
+                <div class="card border-0 shadow-sm rounded-3 mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3">
+                        <h5 class="fw-bold mb-0">7. Кастомизация</h5>
                     </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Текст на экране блокировки:</label>
+                            <textarea name="AntibotSetting[customBlockMessage]" class="form-control" rows="2"><?= Html::encode($settings['customBlockMessage'] ?? '') ?></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Сохранить -->
+                <div class="d-grid mb-4">
+                    <button type="submit" class="btn btn-primary btn-lg shadow-sm">
+                        💾 Сохранить все настройки
+                    </button>
                 </div>
             </div>
         </div>

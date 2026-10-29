@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace larikmc\antibot\controllers;
 
 use larikmc\antibot\Module;
+use larikmc\antibot\services\IpMatcher;
 use Yii;
+use yii\filters\VerbFilter;
 use yii\web\Controller;
 use yii\web\Response;
 
@@ -20,6 +22,21 @@ use yii\web\Response;
 class SettingsController extends Controller
 {
     /**
+     * {@inheritdoc}
+     */
+    public function behaviors(): array
+    {
+        $behaviors = parent::behaviors();
+        $behaviors['verbs'] = [
+            'class' => VerbFilter::class,
+            'actions' => [
+                'index' => ['GET', 'POST'],
+            ],
+        ];
+        return $behaviors;
+    }
+
+    /**
      * Settings configuration form.
      *
      * @return Response|string
@@ -32,6 +49,25 @@ class SettingsController extends Controller
         if ($this->request->isPost) {
             $post = $this->request->post('AntibotSetting', []);
 
+            // Process trusted proxies
+            $trustedProxiesRaw = (string) ($post['trustedProxies'] ?? '');
+            $trustedProxies = [];
+            foreach (preg_split('/[\r\n,]+/', $trustedProxiesRaw) as $item) {
+                $item = trim($item);
+                if ($item !== '' && IpMatcher::isValidIpOrCidr($item)) {
+                    $trustedProxies[] = $item;
+                }
+            }
+
+            // Process AI crawler policies
+            $aiPolicies = (array) ($post['aiCrawlerPolicies'] ?? []);
+            $cleanAiPolicies = [];
+            foreach ($aiPolicies as $bot => $action) {
+                if (in_array($action, ['allow', 'monitor', 'throttle', 'block'], true)) {
+                    $cleanAiPolicies[$bot] = $action;
+                }
+            }
+
             $payload = [
                 'enabled' => !empty($post['enabled']),
                 'mode' => (string) ($post['mode'] ?? 'standard'),
@@ -43,8 +79,12 @@ class SettingsController extends Controller
                 'rateLimitEnabled' => !empty($post['rateLimitEnabled']),
                 'rateLimitMax' => max(1, (int) ($post['rateLimitMax'] ?? 60)),
                 'rateLimitWindow' => max(1, (int) ($post['rateLimitWindow'] ?? 60)),
+                'rateLimitBanDuration' => max(0, (int) ($post['rateLimitBanDuration'] ?? 300)),
+                'rateLimitAdapter' => in_array($post['rateLimitAdapter'] ?? '', ['cache', 'redis'], true) ? $post['rateLimitAdapter'] : 'cache',
                 'jsChallengeEnabled' => !empty($post['jsChallengeEnabled']),
-                'customBlockMessage' => trim((string) ($post['customBlockMessage'] ?? '')),
+                'trustedProxies' => array_values(array_unique($trustedProxies)),
+                'aiCrawlerPolicies' => $cleanAiPolicies,
+                'customBlockMessage' => trim((string) ($post['customBlockMessage'] ?? 'Access Denied: Automated bot activity detected.')),
             ];
 
             try {

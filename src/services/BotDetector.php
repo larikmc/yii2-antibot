@@ -7,13 +7,20 @@ namespace larikmc\antibot\services;
 /**
  * High-speed Bot and Crawler detection service using pre-compiled regex signatures.
  *
+ * Clearly separates:
+ * 1. Traditional search engines (Google, Yandex, Bing, etc.)
+ * 2. AI Search & Referral bots (OAI-SearchBot, ChatGPT-User, Perplexity)
+ * 3. AI Training & Scraper bots (GPTBot, ClaudeBot, Bytespider, CCBot)
+ * 4. Commercial SEO scrapers (Ahrefs, Semrush, DotBot, etc.)
+ * 5. Automated CLI tools & HTTP libraries (cURL, Python, Wget, Scrapy)
+ *
  * @author LarikMC <https://64web.ru>
  * @license MIT
  */
 class BotDetector
 {
     /**
-     * Search engines map: bot name => signature pattern.
+     * Search engines map: engine key => regex pattern.
      */
     public const SEARCH_BOTS = [
         'yandex' => 'YandexBot|YandexMobileBot|YandexDirect|YandexMetrika|YandexImages|YandexNews|YandexVideo|YandexMedia|YandexFavicons|YandexWebmaster|YandexSpravBot',
@@ -27,18 +34,26 @@ class BotDetector
     ];
 
     /**
-     * AI training crawlers and LLM scrapers.
+     * AI Search & Conversational bots that bring direct referral visitors.
      */
-    public const AI_CRAWLERS = [
-        'OpenAI' => 'GPTBot|ChatGPT-User|OAI-SearchBot',
-        'Anthropic' => 'ClaudeBot|anthropic-ai|Claude-Web',
-        'ByteDance' => 'Bytespider',
-        'CommonCrawl' => 'CCBot',
-        'Perplexity' => 'PerplexityBot',
-        'GoogleAI' => 'Google-Extended',
-        'MetaAI' => 'FacebookBot|Meta-ExternalAgent',
-        'Amazon' => 'Amazonbot',
-        'Cohere' => 'cohere-ai',
+    public const AI_SEARCH_BOTS = [
+        'OAI-SearchBot' => 'OAI-SearchBot',
+        'ChatGPT-User' => 'ChatGPT-User',
+        'PerplexityBot' => 'PerplexityBot',
+    ];
+
+    /**
+     * AI Training crawlers and offline LLM scrapers.
+     */
+    public const AI_TRAINING_CRAWLERS = [
+        'GPTBot' => 'GPTBot',
+        'ClaudeBot' => 'ClaudeBot|anthropic-ai|Claude-Web',
+        'Bytespider' => 'Bytespider',
+        'CCBot' => 'CCBot',
+        'Google-Extended' => 'Google-Extended',
+        'Meta-ExternalAgent' => 'FacebookBot|Meta-ExternalAgent',
+        'Amazonbot' => 'Amazonbot',
+        'cohere-ai' => 'cohere-ai',
         'Diffbot' => 'Diffbot',
         'Timpibot' => 'Timpibot',
     ];
@@ -77,10 +92,7 @@ class BotDetector
     ];
 
     /**
-     * Determines whether the given User-Agent belongs to a known legitimate search engine.
-     *
-     * @param string $userAgent
-     * @return string|null Returns the search engine key (e.g. 'yandex', 'google') or null.
+     * Determines whether the User-Agent belongs to a known legitimate search engine.
      */
     public static function detectSearchBot(string $userAgent): ?string
     {
@@ -98,20 +110,28 @@ class BotDetector
     }
 
     /**
-     * Determines whether the User-Agent belongs to an AI crawler/scraper.
+     * Detects AI crawlers with category separation: 'search' vs 'training'.
      *
      * @param string $userAgent
-     * @return string|null Returns crawler name or null.
+     * @return array{name: string, type: 'search'|'training'}|null
      */
-    public static function detectAiCrawler(string $userAgent): ?string
+    public static function detectAiCrawler(string $userAgent): ?array
     {
         if ($userAgent === '') {
             return null;
         }
 
-        foreach (self::AI_CRAWLERS as $name => $pattern) {
+        // Check AI Search bots first
+        foreach (self::AI_SEARCH_BOTS as $name => $pattern) {
             if (preg_match('/' . $pattern . '/i', $userAgent)) {
-                return $name;
+                return ['name' => $name, 'type' => 'search'];
+            }
+        }
+
+        // Check AI Training bots
+        foreach (self::AI_TRAINING_CRAWLERS as $name => $pattern) {
+            if (preg_match('/' . $pattern . '/i', $userAgent)) {
+                return ['name' => $name, 'type' => 'training'];
             }
         }
 
@@ -119,10 +139,7 @@ class BotDetector
     }
 
     /**
-     * Determines whether the User-Agent is an aggressive commercial scraper (Ahrefs, Semrush, etc.).
-     *
-     * @param string $userAgent
-     * @return string|null
+     * Detects commercial SEO crawlers.
      */
     public static function detectCommercialScraper(string $userAgent): ?string
     {
@@ -140,15 +157,12 @@ class BotDetector
     }
 
     /**
-     * Determines whether the User-Agent is a CLI utility, HTTP library, or headless browser.
-     *
-     * @param string $userAgent
-     * @return string|null
+     * Detects CLI tools and programming libraries.
      */
-    public static function detectCliOrLibrary(string $userAgent): ?string
+    public static function detectCliAndLibraries(string $userAgent): ?string
     {
         if ($userAgent === '') {
-            return 'Empty User-Agent';
+            return null;
         }
 
         foreach (self::CLI_AND_LIBRARIES as $name => $pattern) {
@@ -161,40 +175,25 @@ class BotDetector
     }
 
     /**
-     * Checks for obvious header anomalies indicating a fake or dumb bot.
+     * Detects anomalous or suspicious HTTP headers typical of crude scrapers.
      *
-     * For example: User-Agent claims to be a modern desktop Chrome/Safari/Firefox,
-     * but completely lacks standard browser headers (Accept, Accept-Language, Accept-Encoding).
-     *
-     * @param string $userAgent
-     * @param array<string, string> $headers Lowercase header name => value.
-     * @return string|null Returns reason if anomalous, or null if normal.
+     * @param array<string, mixed> $headers
+     * @return string|null Reason or null.
      */
-    public static function detectHeaderAnomalies(string $userAgent, array $headers): ?string
+    public static function detectAnomalousHeaders(array $headers): ?string
     {
-        $uaLower = strtolower($userAgent);
-
-        if (trim($userAgent) === '') {
-            return 'Empty User-Agent';
+        $uaVal = $headers['user-agent'] ?? $headers['User-Agent'] ?? null;
+        if (is_array($uaVal)) {
+            $uaVal = reset($uaVal);
         }
 
-        if (strlen($userAgent) < 15) {
-            return 'Abnormally short User-Agent';
+        $ua = trim((string) $uaVal);
+        if ($ua === '') {
+            return 'Empty or missing User-Agent header';
         }
 
-        // If pretending to be standard desktop Chrome, Firefox or Safari
-        $isBrowser = str_contains($uaLower, 'mozilla/') &&
-            (str_contains($uaLower, 'chrome/') || str_contains($uaLower, 'firefox/') || str_contains($uaLower, 'safari/'));
-
-        if ($isBrowser) {
-            // Real desktop browsers always send Accept-Language or Accept-Encoding
-            $hasAccept = !empty($headers['accept']);
-            $hasEncoding = !empty($headers['accept-encoding']);
-            $hasLanguage = !empty($headers['accept-language']);
-
-            if (!$hasAccept && !$hasEncoding && !$hasLanguage) {
-                return 'Missing standard browser headers (Accept / Encoding / Language)';
-            }
+        if (strlen($ua) < 8) {
+            return 'Suspiciously short User-Agent string';
         }
 
         return null;
