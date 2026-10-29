@@ -46,6 +46,7 @@ class Antibot extends Component implements BootstrapInterface
     public ?string $storageFile = null;
     public ?string $eventsFile = null;
     public array $skipRoutes = ['assets', 'debug', 'gii'];
+    public bool $trustProxyHeaders = true;
     public string $customBlockMessage = 'Access Denied: Automated bot activity detected.';
 
     private StorageService $_storage;
@@ -133,7 +134,16 @@ class Antibot extends Component implements BootstrapInterface
             }
         }
 
-        $ip = $request->getUserIP() ?? '127.0.0.1';
+        $clientIp = null;
+        if ($this->trustProxyHeaders) {
+            $clientIp = $request->headers->get('cf-connecting-ip')
+                ?? $request->headers->get('x-real-ip')
+                ?? $request->headers->get('x-forwarded-for');
+            if ($clientIp !== null && str_contains($clientIp, ',')) {
+                $clientIp = trim(explode(',', $clientIp)[0]);
+            }
+        }
+        $ip = $clientIp ?? $request->getUserIP() ?? '127.0.0.1';
         $ua = $request->getUserAgent() ?? '';
         $url = $request->getAbsoluteUrl();
 

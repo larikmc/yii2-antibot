@@ -2,6 +2,13 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.0.1] - 2026-10-29
+
+### Improved
+- Added proxy and CDN headers inspection (`CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) with `$trustProxyHeaders`.
+- Added shared multi-tier log storage resolution (`@common/runtime/logs/antibot_events.json`) for Yii2 Advanced template.
+- Normalized view route resolution to prevent routing context conflicts in embedded modules.
+
 ## [1.0.0] - 2026-10-29
 
 ### Added

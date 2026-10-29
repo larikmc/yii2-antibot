@@ -56,6 +56,14 @@ class StorageService
             return Yii::getAlias($this->eventsFile);
         }
 
+        if (Yii::$app !== null && Yii::getAlias('@common', false) !== false) {
+            $sharedDir = Yii::getAlias('@common/runtime/logs');
+            if (!is_dir($sharedDir)) {
+                @mkdir($sharedDir, 0777, true);
+            }
+            return $sharedDir . '/antibot_events.json';
+        }
+
         return Yii::getAlias('@runtime/logs/antibot_events.json');
     }
 

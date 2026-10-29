@@ -29,7 +29,7 @@ $this->params['breadcrumbs'] = [
         </div>
     </div>
 
-    <form method="post" action="<?= Url::to(['index']) ?>">
+    <form method="post" action="<?= Url::to(['/antibot/settings/index']) ?>">
         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
 
         <div class="row g-4">

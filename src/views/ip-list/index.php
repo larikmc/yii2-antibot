@@ -39,7 +39,7 @@ $this->params['breadcrumbs'] = [
                 </div>
                 <div class="card-body">
                     <!-- Форма добавления -->
-                    <form method="post" action="<?= Url::to(['index']) ?>" class="mb-4">
+                    <form method="post" action="<?= Url::to(['/antibot/ip-list/index']) ?>" class="mb-4">
                         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
                         <input type="hidden" name="type" value="whitelist">
                         <div class="input-group">
@@ -57,7 +57,7 @@ $this->params['breadcrumbs'] = [
                             <?php foreach ($whitelist as $ip): ?>
                                 <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
                                     <code><?= Html::encode($ip) ?></code>
-                                    <a href="<?= Url::to(['delete', 'type' => 'whitelist', 'entry' => $ip]) ?>"
+                                    <a href="<?= Url::to(['/antibot/ip-list/delete', 'type' => 'whitelist', 'entry' => $ip]) ?>"
                                        class="btn btn-sm btn-outline-danger py-0 px-2"
                                        data-confirm="Удалить '<?= Html::encode($ip) ?>' из белого списка?">Удалить</a>
                                 </li>
@@ -77,7 +77,7 @@ $this->params['breadcrumbs'] = [
                 </div>
                 <div class="card-body">
                     <!-- Форма добавления -->
-                    <form method="post" action="<?= Url::to(['index']) ?>" class="mb-4">
+                    <form method="post" action="<?= Url::to(['/antibot/ip-list/index']) ?>" class="mb-4">
                         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
                         <input type="hidden" name="type" value="blacklist">
                         <div class="input-group">
@@ -95,7 +95,7 @@ $this->params['breadcrumbs'] = [
                             <?php foreach ($blacklist as $ip): ?>
                                 <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
                                     <code><?= Html::encode($ip) ?></code>
-                                    <a href="<?= Url::to(['delete', 'type' => 'blacklist', 'entry' => $ip]) ?>"
+                                    <a href="<?= Url::to(['/antibot/ip-list/delete', 'type' => 'blacklist', 'entry' => $ip]) ?>"
                                        class="btn btn-sm btn-outline-danger py-0 px-2"
                                        data-confirm="Удалить '<?= Html::encode($ip) ?>' из черного списка?">Удалить</a>
                                 </li>

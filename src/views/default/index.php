@@ -122,7 +122,7 @@ $this->params['breadcrumbs'] = [
                                     <code><?= Html::encode($ip) ?></code>
                                     <div>
                                         <span class="badge bg-danger rounded-pill me-2"><?= $count ?> заблокировано</span>
-                                        <a href="<?= Url::to(['quick-whitelist', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-success py-0 px-2" title="В белый список">В белый</a>
+                                        <a href="<?= Url::to(['/antibot/default/quick-whitelist', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-success py-0 px-2" title="В белый список">В белый</a>
                                     </div>
                                 </li>
                             <?php endforeach; ?>
@@ -205,9 +205,9 @@ $this->params['breadcrumbs'] = [
                                     </td>
                                     <td class="text-end">
                                         <?php if ($action !== 'blocked'): ?>
-                                            <a href="<?= Url::to(['quick-block', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-danger py-0 px-2" title="Заблокировать этот IP">Бан</a>
+                                            <a href="<?= Url::to(['/antibot/default/quick-block', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-danger py-0 px-2" title="Заблокировать этот IP">Бан</a>
                                         <?php else: ?>
-                                            <a href="<?= Url::to(['quick-whitelist', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-success py-0 px-2" title="Добавить IP в белый список">В белый</a>
+                                            <a href="<?= Url::to(['/antibot/default/quick-whitelist', 'ip' => $ip]) ?>" class="btn btn-sm btn-outline-success py-0 px-2" title="Добавить IP в белый список">В белый</a>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
