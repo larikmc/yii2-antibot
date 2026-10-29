@@ -1,0 +1,40 @@
+{
+    "name": "larikmc/yii2-antibot",
+    "description": "High-performance autonomous Anti-Bot protection module for Yii2 with Reverse DNS search bot verification, AI crawler blocking, JS challenge, honeypot and visual dashboard",
+    "keywords": [
+        "yii2",
+        "extension",
+        "antibot",
+        "bot-protection",
+        "anti-scraper",
+        "security",
+        "crawler-blocker",
+        "honeypot",
+        "rate-limit",
+        "captcha"
+    ],
+    "type": "yii2-extension",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "LarikMC",
+            "homepage": "https://64web.ru",
+            "email": "larikmc@mail.ru"
+        }
+    ],
+    "require": {
+        "php": ">=8.0.0",
+        "yiisoft/yii2": "~2.0.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0 || ^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "larikmc\\antibot\\": "src/"
+        }
+    },
+    "extra": {
+        "bootstrap": "larikmc\\antibot\\Bootstrap"
+    }
+}
