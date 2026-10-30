@@ -80,9 +80,10 @@ class CircuitBreaker
      * Checks if the protected service is available for execution.
      *
      * Performs an atomic check-and-lease operation:
-     * - If CLOSED: returns true.
-     * - If OPEN and recoveryTimeout has elapsed: transitions to HALF_OPEN and atomically grants probe lease.
-     * - If HALF_OPEN: returns true ONLY to the single process that holds the active lease; other processes return false.
+     * - If CLOSED: returns true immediately without lock overhead.
+     * - If OPEN and recoveryTimeout has elapsed: atomically transitions to HALF_OPEN and grants probe lease under flock.
+     * - If HALF_OPEN: returns true ONLY to the single process that successfully acquires the active lease under lock.
+     * - If synchronization cannot be acquired: strictly avoids granting probe lease (fail-safe policy).
      *
      * @param string $service
      * @param int $recoveryTimeout
@@ -95,9 +96,46 @@ class CircuitBreaker
         ?string &$leaseToken = null
     ): bool {
         $leaseToken = null;
-        $capturedToken = null;
 
-        $res = self::atomicStateTransition(function (array &$states) use ($service, $recoveryTimeout, &$capturedToken): bool {
+        // 1. Read-only fast evaluation (zero lock overhead for normal healthy traffic)
+        $stateFile = self::resolveStateFile();
+        $states = self::loadStatesFromFile($stateFile);
+        $info = $states[$service] ?? [
+            'state' => self::STATE_CLOSED,
+            'failures' => 0,
+            'lastFailure' => 0,
+            'probeTimestamp' => 0,
+            'probeToken' => '',
+            'generation' => 1,
+        ];
+
+        $state = (string) ($info['state'] ?? self::STATE_CLOSED);
+
+        if ($state === self::STATE_CLOSED) {
+            return true;
+        }
+
+        $now = time();
+
+        if ($state === self::STATE_OPEN) {
+            $lastFailure = (int) ($info['lastFailure'] ?? 0);
+            if ($now - $lastFailure < $recoveryTimeout) {
+                // Recovery backoff has not elapsed yet: unavailable
+                return false;
+            }
+            // Timeout elapsed: eligible to attempt acquiring exclusive trial probe
+        } elseif ($state === self::STATE_HALF_OPEN) {
+            $probeTimestamp = (int) ($info['probeTimestamp'] ?? 0);
+            if ($now - $probeTimestamp < self::HALF_OPEN_PROBE_INTERVAL) {
+                // Another worker holds active probe lease: unavailable
+                return false;
+            }
+            // Previous probe timed out or died: eligible to claim fresh lease
+        }
+
+        // 2. Atomic state transition: MUST acquire exclusive lock to claim lease
+        $capturedToken = null;
+        $transitionResult = self::atomicStateTransition(function (array &$states) use ($service, $recoveryTimeout, $now, &$capturedToken): bool {
             $info = $states[$service] ?? [
                 'state' => self::STATE_CLOSED,
                 'failures' => 0,
@@ -107,52 +145,43 @@ class CircuitBreaker
                 'generation' => 1,
             ];
 
-            $state = $info['state'] ?? self::STATE_CLOSED;
+            $currentState = (string) ($info['state'] ?? self::STATE_CLOSED);
 
-            if ($state === self::STATE_CLOSED) {
+            if ($currentState === self::STATE_CLOSED) {
                 return true;
             }
 
-            $now = time();
-
-            if ($state === self::STATE_OPEN) {
+            if ($currentState === self::STATE_OPEN) {
                 $lastFailure = (int) ($info['lastFailure'] ?? 0);
-                if ($now - $lastFailure >= $recoveryTimeout) {
-                    // Transition to HALF_OPEN and atomically grant probe lease
-                    $token = bin2hex(random_bytes(8));
-                    $info['state'] = self::STATE_HALF_OPEN;
-                    $info['probeTimestamp'] = $now;
-                    $info['probeToken'] = $token;
-                    $info['generation'] = ((int) ($info['generation'] ?? 0)) + 1;
-                    $states[$service] = $info;
-                    $capturedToken = $token;
-                    return true; // THIS process won the single probe lease!
-                }
-                return false; // Circuit is still in recovery backoff
-            }
-
-            if ($state === self::STATE_HALF_OPEN) {
-                $probeTimestamp = (int) ($info['probeTimestamp'] ?? 0);
-                // Protect against thundering herd: only 1 probe permitted per interval
-                if ($now - $probeTimestamp < self::HALF_OPEN_PROBE_INTERVAL) {
-                    // Another process currently holds the active probe lease; fail-open fallback
+                if ($now - $lastFailure < $recoveryTimeout) {
                     return false;
                 }
-                // Previous probing worker timed out or died: issue fresh lease!
-                $token = bin2hex(random_bytes(8));
-                $info['probeTimestamp'] = $now;
-                $info['probeToken'] = $token;
-                $info['generation'] = ((int) ($info['generation'] ?? 0)) + 1;
-                $states[$service] = $info;
-                $capturedToken = $token;
-                return true;
+            } elseif ($currentState === self::STATE_HALF_OPEN) {
+                $probeTimestamp = (int) ($info['probeTimestamp'] ?? 0);
+                if ($now - $probeTimestamp < self::HALF_OPEN_PROBE_INTERVAL) {
+                    return false;
+                }
             }
 
+            // Exclusively claim HALF_OPEN trial probe under the acquired lock!
+            $token = bin2hex(random_bytes(8));
+            $info['state'] = self::STATE_HALF_OPEN;
+            $info['probeTimestamp'] = $now;
+            $info['probeToken'] = $token;
+            $info['generation'] = ((int) ($info['generation'] ?? 0)) + 1;
+            $states[$service] = $info;
+            $capturedToken = $token;
             return true;
         });
 
-        $leaseToken = $capturedToken;
-        return $res;
+        if ($transitionResult === true && $capturedToken !== null) {
+            $leaseToken = $capturedToken;
+            return true;
+        }
+
+        // Lock could not be acquired or someone else claimed the lease:
+        // Do NOT grant probeToken, do NOT allow execution!
+        return false;
     }
 
     /**
@@ -280,12 +309,13 @@ class CircuitBreaker
      * Executes an atomic state mutation under a dedicated file lock with non-blocking retries.
      *
      * If the lock cannot be acquired within 5ms:
-     * - Strictly avoids performing un-locked writes that could corrupt shared state!
-     * - Falls back to safe in-memory evaluation (fail-open mode) without disrupting the website.
+     * - Strictly does NOT execute a mutating callback without an exclusive lock!
+     * - Avoids un-locked writes and avoids issuing un-synchronized probe leases.
+     * - Returns null indicating failure to synchronize.
      *
      * @template R
      * @param callable(array<string, array<string, mixed>>&): R $callback
-     * @return R
+     * @return R|null
      */
     private static function atomicStateTransition(callable $callback)
     {
@@ -299,12 +329,11 @@ class CircuitBreaker
         $fp = @fopen($lockFile, 'c+');
         if (!$fp) {
             // Cannot open lock file (e.g. read-only filesystem or permissions error):
-            // Strictly do NOT perform an unlocked write! Evaluate read-only and fail-open.
+            // Strictly do NOT perform an unlocked write or execute mutating callback!
             if (Yii::$app !== null) {
                 Yii::warning('CircuitBreaker could not open lock file: ' . $lockFile, __METHOD__);
             }
-            $states = self::loadStatesFromFile($stateFile);
-            return $callback($states);
+            return null;
         }
 
         // Bounded non-blocking lock (max 5 retries x 1ms = 5ms max wait)
@@ -319,9 +348,8 @@ class CircuitBreaker
 
         if (!$locked) {
             @fclose($fp);
-            // Lock busy: fail open safely without mutating shared file
-            $states = self::loadStatesFromFile($stateFile);
-            return $callback($states);
+            // Lock busy: strictly fail-safe without running mutating callback
+            return null;
         }
 
         try {

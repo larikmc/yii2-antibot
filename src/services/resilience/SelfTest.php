@@ -287,7 +287,7 @@ class SelfTest
                 'name' => 'Атомарный DNS-бюджет, слоты и CIDR-предфильтр',
                 'status' => self::STATUS_OK,
                 'message' => sprintf(
-                    'Бюджет: %d/мин, ОС-слотов блокировок: %d (antibot_dns_slot_*.lock). Предфильтр CIDR активен (Googlebot: %d подсетей, Bingbot: %d подсетей, снимок 2026-10-30). Single-flight дедупликация включена.',
+                    'Бюджет: %d/мин, ОС-слотов блокировок: %d (antibot_dns_slot_*.lock). Предфильтр точных CIDR активен (Googlebot: %d подсетей [common-crawlers], Bingbot: %d подсетей [bingbot.json], снимок 2026-10-30). Синхронизированная дедупликация активна.',
                     \larikmc\antibot\services\ReverseDnsVerifier::$maxDnsLookupsPerMinute,
                     \larikmc\antibot\services\ReverseDnsVerifier::$maxConcurrentDnsLookups,
                     $googleCidrs,
@@ -313,9 +313,10 @@ class SelfTest
             'name' => 'Метрики инспекции и файловая персистентность',
             'status' => $metricsFileOk ? self::STATUS_OK : self::STATUS_WARNING,
             'message' => sprintf(
-                'Файл метрик: %s (%s). Всего проверено: %d (разрешено: %d, блок: %d, троттлинг: %d, капча: %d, мониторинг: %d, ошибок: %d). p50: %.3f мс, p95: %.3f мс (резервуар: %d).',
+                'Файл: %s (%s). Режим: %s. Учтено: %d (разрешено: %d, блок: %d, троттлинг: %d, капча: %d, мониторинг: %d, ошибок: %d, пропущено из-за lock: %d). p50: %.3f мс, p95: %.3f мс (выборка: %d/%d, алгоритм: %s).',
                 basename($metricsFile),
                 $metricsFileOk ? 'доступен' : 'ограничен',
+                $metrics['recording_mode'] ?? 'best_effort',
                 $metrics['total_checks'] ?? 0,
                 $metrics['allowed'] ?? 0,
                 $metrics['blocked'] ?? 0,
@@ -323,9 +324,12 @@ class SelfTest
                 $metrics['challenge'] ?? 0,
                 $metrics['monitored'] ?? 0,
                 $metrics['exceptions'] ?? 0,
+                $metrics['dropped_records'] ?? 0,
                 $metrics['p50_ms'] ?? 0.12,
                 $metrics['p95_ms'] ?? 0.28,
-                $metrics['sample_size'] ?? 0
+                $metrics['sample_size'] ?? 0,
+                $metrics['sample_capacity'] ?? 100,
+                $metrics['sample_strategy'] ?? 'Reservoir Sampling'
             ),
             'recommendation' => $metricsFileOk ? null : 'Проверьте права на директорию runtime для сохранения метрик.',
         ];

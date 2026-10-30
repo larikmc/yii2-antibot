@@ -63,6 +63,12 @@ $this->params['breadcrumbs'] = [
                     , <span class="text-danger fw-bold ms-1" title="Исключения">💥 <?= (int) $perf['exceptions'] ?></span>
                 <?php endif; ?>
             </span>
+            <span class="badge bg-light text-muted border px-3 py-2" title="Режим учета статистики">
+                📊 Режим: <strong>Best-Effort</strong> (выборка: <?= (int) ($perf['sample_size'] ?? 0) ?>/<?= (int) ($perf['sample_capacity'] ?? 100) ?>)
+                <?php if (($perf['dropped_records'] ?? 0) > 0): ?>
+                    <span class="text-warning ms-1" title="Пропущено записей при конкурентной блокировке диска">⚠️ Пропущено: <?= (int) $perf['dropped_records'] ?></span>
+                <?php endif; ?>
+            </span>
         </div>
     </div>
     <?php if ($module->hasInsecureAccessConfig()): ?>

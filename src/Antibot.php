@@ -126,6 +126,10 @@ class Antibot extends Component implements BootstrapInterface
     public array $skipRoutes = ['assets', 'debug', 'gii'];
     public string $customBlockMessage = 'Access Denied: Automated bot activity detected.';
 
+    public const METRIC_SAMPLE_RESERVOIR_CAPACITY = 100;
+    public const METRIC_RECORDING_MODE = 'best_effort';
+    private static int $_metricDroppedRecords = 0;
+
     private StorageService $_storage;
     private bool $_hasSecretKeyWarning = false;
 
@@ -700,6 +704,7 @@ class Antibot extends Component implements BootstrapInterface
 
         if (!$locked) {
             @fclose($fp);
+            self::$_metricDroppedRecords++;
             return; // Fail open safely without stalling the request
         }
 
@@ -715,6 +720,7 @@ class Antibot extends Component implements BootstrapInterface
 
             if (empty($data)) {
                 $data = [
+                    'recording_mode' => self::METRIC_RECORDING_MODE,
                     'total_inspected' => 0,
                     'allowed' => 0,
                     'blocked' => 0,
@@ -722,12 +728,21 @@ class Antibot extends Component implements BootstrapInterface
                     'challenge' => 0,
                     'monitored' => 0,
                     'exceptions' => 0,
+                    'dropped_records' => 0,
                     'duration_sum' => 0.0,
                     'duration_count' => 0,
+                    'sample_capacity' => self::METRIC_SAMPLE_RESERVOIR_CAPACITY,
                     'samples' => [],
                     'updated_at' => time(),
                 ];
             }
+
+            if (self::$_metricDroppedRecords > 0) {
+                $data['dropped_records'] = ((int) ($data['dropped_records'] ?? 0)) + self::$_metricDroppedRecords;
+                self::$_metricDroppedRecords = 0;
+            }
+            $data['recording_mode'] = self::METRIC_RECORDING_MODE;
+            $data['sample_capacity'] = self::METRIC_SAMPLE_RESERVOIR_CAPACITY;
 
             $data['total_inspected'] = ((int) ($data['total_inspected'] ?? 0)) + 1;
             if (isset($data[$decision])) {
@@ -744,10 +759,10 @@ class Antibot extends Component implements BootstrapInterface
                     $data['samples'] = [];
                 }
 
-                if (count($data['samples']) < 100) {
+                if (count($data['samples']) < self::METRIC_SAMPLE_RESERVOIR_CAPACITY) {
                     $data['samples'][] = round($durationMs, 4);
                 } else {
-                    $idx = mt_rand(0, 99);
+                    $idx = mt_rand(0, self::METRIC_SAMPLE_RESERVOIR_CAPACITY - 1);
                     $data['samples'][$idx] = round($durationMs, 4);
                 }
             }
@@ -782,6 +797,7 @@ class Antibot extends Component implements BootstrapInterface
             @mkdir($dir, 0775, true);
         }
         $empty = [
+            'recording_mode' => self::METRIC_RECORDING_MODE,
             'total_checks' => 0,
             'total_inspected' => 0,
             'allowed' => 0,
@@ -790,9 +806,14 @@ class Antibot extends Component implements BootstrapInterface
             'challenge' => 0,
             'monitored' => 0,
             'exceptions' => 0,
-            'durations' => [],
-            'updated' => time(),
+            'dropped_records' => 0,
+            'duration_sum' => 0.0,
+            'duration_count' => 0,
+            'sample_capacity' => self::METRIC_SAMPLE_RESERVOIR_CAPACITY,
+            'samples' => [],
+            'updated_at' => time(),
         ];
+        self::$_metricDroppedRecords = 0;
         @file_put_contents($file, json_encode($empty, JSON_PRETTY_PRINT));
     }
 
@@ -811,7 +832,11 @@ class Antibot extends Component implements BootstrapInterface
      *     challenge: int,
      *     monitored: int,
      *     exceptions: int,
-     *     sample_size: int
+     *     dropped_records: int,
+     *     recording_mode: string,
+     *     sample_size: int,
+     *     sample_capacity: int,
+     *     sample_strategy: string
      * }
      */
     public function getInspectionMetrics(): array
@@ -828,7 +853,11 @@ class Antibot extends Component implements BootstrapInterface
             'challenge' => 0,
             'monitored' => 0,
             'exceptions' => 0,
+            'dropped_records' => 0,
+            'recording_mode' => self::METRIC_RECORDING_MODE,
             'sample_size' => 0,
+            'sample_capacity' => self::METRIC_SAMPLE_RESERVOIR_CAPACITY,
+            'sample_strategy' => 'Reservoir Sampling (Uniform N=' . self::METRIC_SAMPLE_RESERVOIR_CAPACITY . ')',
         ];
 
         $metricsFile = self::resolveMetricsFile();
@@ -877,7 +906,11 @@ class Antibot extends Component implements BootstrapInterface
                 'challenge' => (int) ($data['challenge'] ?? 0),
                 'monitored' => (int) ($data['monitored'] ?? 0),
                 'exceptions' => (int) ($data['exceptions'] ?? 0),
+                'dropped_records' => (int) ($data['dropped_records'] ?? 0),
+                'recording_mode' => (string) ($data['recording_mode'] ?? self::METRIC_RECORDING_MODE),
                 'sample_size' => $count,
+                'sample_capacity' => self::METRIC_SAMPLE_RESERVOIR_CAPACITY,
+                'sample_strategy' => 'Reservoir Sampling (Uniform N=' . self::METRIC_SAMPLE_RESERVOIR_CAPACITY . ')',
             ];
         } catch (\Throwable) {
             return $default;

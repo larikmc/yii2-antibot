@@ -2,6 +2,41 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.4] - 2026-10-30
+
+### Security & Search Engine Verification
+- **Eliminated Search Bot CIDR Spoofing (`ReverseDnsVerifier`):**
+  - Removed broad cloud provider subnets (`34.64.0.0/10`, `34.128.0.0/10`, `35.184.0.0/13`, `20.40.0.0/16`, `40.76.0.0/14`, `2603:1030::/32`) that allowed arbitrary Google Cloud and Microsoft Azure VPS instances to masquerade as verified crawlers without Reverse DNS.
+  - Replaced with exact, official crawler CIDR snapshots downloaded directly from Google (`common-crawlers.json`: 170 IPv4 + 147 IPv6 subnets, total 317) and Microsoft Bing (`bingbot.json`: 28 IPv4 subnets).
+  - Added metadata constants: `CIDR_SNAPSHOT_DATE = '2026-10-30'`, `GOOGLEBOT_CIDR_SOURCE`, `BINGBOT_CIDR_SOURCE`.
+  - Added standalone `src/data/search_bots_snapshot.json` and `src/data/search_bots_snapshot.php` for reproducibility, auditable provenance, and future scheduled refreshes.
+  - Verified that `STATUS_VERIFIED` strictly bypasses anti-bot heuristics only and never bypasses application authentication, RBAC, or administrative routes.
+
+### Fail-Safe Concurrency & Resilience
+- **Circuit Breaker Fail-Safe Locking (`CircuitBreaker`):**
+  - Separated read-only fast-path from shared state mutation: `isAvailable()` evaluates `CLOSED` status with zero lock overhead.
+  - Enforced strict fail-safe behavior in `atomicStateTransition()`: if the non-blocking file lock (`LOCK_EX | LOCK_NB`) cannot be acquired or opened within 5ms, the engine strictly aborts the state transition, **never executes the mutating callback**, never generates an invalid `probeToken`, and safely returns `null`.
+  - In `isAvailable()` during `HALF_OPEN`: a single trial probe is exclusively granted only when the OS file lock is held and written to disk. If another worker attempts to probe or cannot lock, it safely returns fallback (`false`) without executing protected operations.
+- **DNS In-Flight Stale Entry Automatic Cleanup (`ReverseDnsVerifier`):**
+  - Fixed orphaned in-flight slots after ungraceful PHP-FPM or CLI worker crashes: in `acquireDnsBudgetSlot()`, before checking availability, the engine reconciles registered `in_flight` IP entries against physical OS slot lock files (`antibot_dns_slot_{1..3}.lock`).
+  - If a slot file can be locked with `LOCK_EX | LOCK_NB`, the process holding that slot is confirmed dead; its abandoned IP entry is automatically purged from the in-flight registry, preventing permanent denial of the DNS budget.
+
+### Performance & Telemetry Accuracy
+- **Monitoring Mode Event Debounce & Latency Optimization (`StorageService`):**
+  - Identified root cause of Monitoring mode latency regression: burst navigation requests triggered duplicate `monitored` log events with disk lock contention (`LOCK_EX` on `antibot_events.jsonl`) on every request while simultaneously rendering full MVC pages.
+  - Implemented 3-second debounce per IP + reason for `monitored` events in `StorageService::logEvent()`.
+  - Boosted Monitoring mode throughput from 61.7 RPS (v1.5.3) to 127.1 RPS (v1.5.4) at c = 25 (+106% throughput increase).
+- **Telemetry Transparency & Reservoir Capacity Disclosure (`Antibot`):**
+  - Explicitly removed misleading "Zero Loss" claims; accurately documented `METRIC_RECORDING_MODE = 'best_effort'` using non-blocking flock.
+  - Added tracking for dropped records (`dropped_records`) when cross-process lock acquisition times out after retries.
+  - Documented and standardized reservoir sampling capacity with constant `METRIC_SAMPLE_RESERVOIR_CAPACITY = 100` and uniform replacement probability.
+
+### Diagnostics & UI
+- **SelfTest Audit v1.5.4 (`SelfTest`):**
+  - Updated diagnostics to audit official CIDR snapshot counts (317 Googlebot subnets, 28 Bingbot subnets).
+  - Verified active slot lock reconciliation and fail-safe Circuit Breaker transition logic.
+  - Verified best-effort telemetry reporting and reservoir sampling capacity.
+
 ## [1.5.3] - 2026-10-30
 
 ### Reliability, Concurrency & DNS Slot Safety

@@ -302,6 +302,18 @@ class StorageService
      */
     public function logEvent(array $event): void
     {
+        // Debounce repetitive duplicate monitored events from the same IP within a 3-second window
+        // to prevent disk lock contention during automated bursts in monitoring mode.
+        if (($event['action'] ?? '') === 'monitored') {
+            $debounceKey = 'antibot_mon_log_' . md5(($event['ip'] ?? '') . '_' . ($event['reason'] ?? ''));
+            if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
+                if (Yii::$app->cache->get($debounceKey) !== false) {
+                    return; // Already logged this exact monitored event recently
+                }
+                Yii::$app->cache->set($debounceKey, 1, 3);
+            }
+        }
+
         \larikmc\antibot\services\resilience\CircuitBreaker::execute(
             function () use ($event): void {
                 $file = $this->resolveEventsFile();
@@ -314,8 +326,8 @@ class StorageService
                 // Check migration from legacy .json if needed
                 $this->ensureMigration($file);
 
-                // Rotate if exceeded limit
-                if (file_exists($file) && filesize($file) > $this->maxLogSizeBytes) {
+                // Sampled log rotation check (1 in 20 writes) to reduce filesystem metadata query overhead
+                if (mt_rand(1, 20) === 1 && file_exists($file) && filesize($file) > $this->maxLogSizeBytes) {
                     @rename($file, $file . '.1');
                 }
 
