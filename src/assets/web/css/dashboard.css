@@ -1,93 +1,288 @@
 /**
- * Antibot Admin Dashboard & Visual Analytics Styles
+ * Antibot Admin Dashboard & UI Polish Styles
  *
- * Professional, clean light theme with subtle shadows and 12px rounded cards.
+ * Modern, clean, SaaS-grade design (Tailwind/Stripe/Vercel aesthetics).
+ * Compatible with yii2-admin and Bootstrap 5.
  *
  * @author LarikMC <https://64web.ru>
  * @license MIT
  */
 
-.antibot-dashboard {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    color: #212529;
+:root {
+    --ab-primary: #4f46e5;
+    --ab-primary-hover: #4338ca;
+    --ab-primary-light: #eef2ff;
+    --ab-success: #10b981;
+    --ab-success-light: #ecfdf5;
+    --ab-danger: #ef4444;
+    --ab-danger-light: #fef2f2;
+    --ab-warning: #f59e0b;
+    --ab-warning-light: #fffbeb;
+    --ab-info: #0ea5e9;
+    --ab-info-light: #f0f9ff;
+    --ab-slate-900: #0f172a;
+    --ab-slate-800: #1e293b;
+    --ab-slate-700: #334155;
+    --ab-slate-600: #475569;
+    --ab-slate-500: #64748b;
+    --ab-slate-400: #94a3b8;
+    --ab-slate-200: #e2e8f0;
+    --ab-slate-100: #f1f5f9;
+    --ab-slate-50: #f8fafc;
+    --ab-radius-sm: 8px;
+    --ab-radius: 14px;
+    --ab-radius-lg: 18px;
+    --ab-shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+    --ab-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+    --ab-shadow-md: 0 10px 15px -3px rgba(15, 23, 42, 0.07), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
 }
 
-/* Card Styling */
+.antibot-dashboard,
+.antibot-settings,
+.antibot-ip-list {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ab-slate-800);
+}
+
+/* ==========================================================================
+   Header & Module Navigation Tabs
+   ========================================================================== */
+.antibot-header {
+    margin-bottom: 1.5rem;
+}
+
+.antibot-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ab-slate-900);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.antibot-subtitle {
+    font-size: 0.875rem;
+    color: var(--ab-slate-500);
+    margin: 0;
+}
+
+/* Top Navigation Tabs */
+.antibot-nav-pills {
+    display: inline-flex;
+    background: var(--ab-slate-100);
+    padding: 4px;
+    border-radius: 12px;
+    border: 1px solid var(--ab-slate-200);
+    gap: 4px;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.antibot-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ab-slate-600);
+    text-decoration: none;
+    border-radius: 9px;
+    transition: all 0.15s ease;
+}
+
+.antibot-nav-link:hover {
+    color: var(--ab-slate-900);
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.antibot-nav-link.active {
+    color: #ffffff;
+    background: var(--ab-primary);
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25);
+}
+
+/* ==========================================================================
+   Card System
+   ========================================================================== */
 .antibot-card {
     background: #ffffff;
-    border: 1px solid #e9ecef;
-    border-radius: 12px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-    transition: box-shadow 0.2s ease;
+    border: 1px solid var(--ab-slate-200);
+    border-radius: var(--ab-radius);
+    box-shadow: var(--ab-shadow-sm);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
     overflow: hidden;
 }
 
 .antibot-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: var(--ab-shadow);
+    border-color: #cbd5e1;
 }
 
 .antibot-card-header {
     background: transparent;
-    border-bottom: 1px solid #f1f3f5;
-    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--ab-slate-100);
+    padding: 1.15rem 1.35rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.75rem;
 }
 
 .antibot-card-title {
-    font-size: 1.05rem;
+    font-size: 1rem;
     font-weight: 600;
     margin: 0;
-    color: #343a40;
+    color: var(--ab-slate-900);
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
 
+.antibot-card-title-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    border-radius: 20px;
+    background: var(--ab-slate-100);
+    color: var(--ab-slate-600);
+}
+
 .antibot-card-body {
-    padding: 1.25rem;
+    padding: 1.35rem;
     position: relative;
 }
 
-/* KPI Cards */
+/* ==========================================================================
+   KPI Cards System (Modern SaaS style)
+   ========================================================================== */
 .antibot-kpi-card {
-    border-radius: 12px;
-    border: 1px solid #e9ecef;
+    border-radius: var(--ab-radius);
+    border: 1px solid var(--ab-slate-200);
     background: #ffffff;
     padding: 1.25rem;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+    box-shadow: var(--ab-shadow-sm);
     height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    position: relative;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.antibot-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ab-shadow);
+    border-color: #cbd5e1;
+}
+
+.antibot-kpi-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
 }
 
 .antibot-kpi-label {
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #6c757d;
-    margin-bottom: 0.25rem;
+    letter-spacing: 0.05em;
+    color: var(--ab-slate-500);
+    margin-bottom: 0.35rem;
 }
 
 .antibot-kpi-value {
-    font-size: 2rem;
+    font-size: 2.15rem;
     font-weight: 700;
-    line-height: 1.2;
-    margin-bottom: 0.25rem;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    color: var(--ab-slate-900);
 }
 
-.antibot-kpi-meta {
+.antibot-kpi-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    flex-shrink: 0;
+}
+
+.antibot-kpi-icon-primary {
+    background: var(--ab-primary-light);
+    color: var(--ab-primary);
+}
+
+.antibot-kpi-icon-success {
+    background: var(--ab-success-light);
+    color: var(--ab-success);
+}
+
+.antibot-kpi-icon-danger {
+    background: var(--ab-danger-light);
+    color: var(--ab-danger);
+}
+
+.antibot-kpi-icon-warning {
+    background: var(--ab-warning-light);
+    color: var(--ab-warning);
+}
+
+.antibot-kpi-icon-info {
+    background: var(--ab-info-light);
+    color: var(--ab-info);
+}
+
+.antibot-kpi-footer {
     font-size: 0.8rem;
-    color: #6c757d;
-    margin-top: 0.5rem;
+    color: var(--ab-slate-500);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--ab-slate-100);
 }
 
-/* Chart Containers */
+.antibot-kpi-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.antibot-kpi-tag-success {
+    background: var(--ab-success-light);
+    color: #065f46;
+}
+
+.antibot-kpi-tag-danger {
+    background: var(--ab-danger-light);
+    color: #991b1b;
+}
+
+.antibot-kpi-tag-warning {
+    background: var(--ab-warning-light);
+    color: #92400e;
+}
+
+.antibot-kpi-tag-info {
+    background: var(--ab-info-light);
+    color: #075985;
+}
+
+/* ==========================================================================
+   Chart Controls & Styling
+   ========================================================================== */
 .antibot-chart-container {
     width: 100%;
     min-height: 320px;
@@ -100,75 +295,56 @@
     height: 340px;
 }
 
-/* Loading & Empty States */
-.antibot-chart-loading,
-.antibot-chart-empty,
-.antibot-chart-error {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.92);
-    z-index: 10;
-    padding: 1rem;
-    text-align: center;
-}
-
-.antibot-spinner {
-    width: 2rem;
-    height: 2rem;
-    border: 3px solid #e9ecef;
-    border-top-color: #0d6efd;
-    border-radius: 50%;
-    animation: antibot-spin 0.8s linear infinite;
-    margin-bottom: 0.5rem;
-}
-
-@keyframes antibot-spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Period Switcher Buttons */
-.antibot-btn-group {
+/* Segmented Control Buttons (Linear/iOS style) */
+.antibot-segmented-control {
     display: inline-flex;
-    border-radius: 8px;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--ab-slate-100);
+    border: 1px solid var(--ab-slate-200);
+    border-radius: 9px;
     padding: 2px;
 }
 
 .antibot-btn-period {
     background: transparent;
     border: none;
-    border-radius: 6px;
-    padding: 0.25rem 0.65rem;
-    font-size: 0.8rem;
+    border-radius: 7px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 600;
-    color: #495057;
+    color: var(--ab-slate-600);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: all 0.15s ease;
 }
 
 .antibot-btn-period:hover {
-    background: #e9ecef;
-    color: #212529;
+    color: var(--ab-slate-900);
 }
 
 .antibot-btn-period.active {
-    background: #0d6efd;
-    color: #ffffff;
-    box-shadow: 0 1px 3px rgba(13, 110, 253, 0.3);
+    background: #ffffff;
+    color: var(--ab-primary);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
 .antibot-btn-refresh {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.8rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 8px;
+    gap: 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 9px;
+    border: 1px solid var(--ab-slate-200);
+    background: #ffffff;
+    color: var(--ab-slate-700);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.antibot-btn-refresh:hover {
+    background: var(--ab-slate-50);
+    color: var(--ab-slate-900);
+    border-color: #cbd5e1;
 }
 
 .antibot-btn-refresh.is-spinning .antibot-refresh-icon {
@@ -176,7 +352,183 @@
     animation: antibot-spin 0.8s linear infinite;
 }
 
-/* Accessible Table Fallbacks (hidden when JS and charts are rendered) */
+@keyframes antibot-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Meta Information Badges */
+.antibot-badge-soft {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    background: var(--ab-slate-50);
+    border: 1px solid var(--ab-slate-200);
+    color: var(--ab-slate-700);
+}
+
+/* Mode Badges */
+.antibot-badge-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.antibot-badge-mode-monitoring {
+    background: var(--ab-info-light);
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+}
+
+.antibot-badge-mode-standard {
+    background: var(--ab-primary-light);
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+}
+
+.antibot-badge-mode-strict {
+    background: var(--ab-danger-light);
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+/* ==========================================================================
+   Settings Page Modernization (Mode selection cards, switches)
+   ========================================================================== */
+.antibot-mode-card {
+    border: 2px solid var(--ab-slate-200);
+    border-radius: var(--ab-radius);
+    padding: 1.25rem;
+    cursor: pointer;
+    background: #ffffff;
+    transition: all 0.2s ease;
+    height: 100%;
+    display: block;
+}
+
+.antibot-mode-card:hover {
+    border-color: #cbd5e1;
+    transform: translateY(-2px);
+    box-shadow: var(--ab-shadow-sm);
+}
+
+.antibot-mode-card.is-active {
+    border-color: var(--ab-primary);
+    background: #faf5ff;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.antibot-mode-card.is-active-monitoring {
+    border-color: var(--ab-info);
+    background: #f0f9ff;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+}
+
+.antibot-mode-card.is-active-strict {
+    border-color: var(--ab-danger);
+    background: #fef2f2;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+
+/* Modern Switch Styling */
+.form-switch .form-check-input {
+    width: 2.75em;
+    height: 1.45em;
+    cursor: pointer;
+}
+
+.form-switch .form-check-input:checked {
+    background-color: var(--ab-primary);
+    border-color: var(--ab-primary);
+}
+
+/* Sticky Action Bar for Settings */
+.antibot-sticky-bar {
+    position: sticky;
+    bottom: 1.5rem;
+    z-index: 99;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--ab-slate-200);
+    border-radius: var(--ab-radius);
+    box-shadow: var(--ab-shadow-md);
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+}
+
+/* ==========================================================================
+   IP List Columns
+   ========================================================================== */
+.antibot-list-col {
+    border-top: 4px solid var(--ab-slate-300);
+    border-radius: var(--ab-radius);
+}
+
+.antibot-list-col-whitelist {
+    border-top-color: var(--ab-success);
+}
+
+.antibot-list-col-blacklist {
+    border-top-color: var(--ab-danger);
+}
+
+.antibot-list-col-proxies {
+    border-top-color: var(--ab-primary);
+}
+
+.antibot-ip-item {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.85rem;
+    border-radius: 8px !important;
+    margin-bottom: 4px;
+    border: 1px solid var(--ab-slate-200) !important;
+    transition: background 0.15s ease;
+}
+
+.antibot-ip-item:hover {
+    background: var(--ab-slate-50);
+}
+
+/* ==========================================================================
+   Live Feed Table
+   ========================================================================== */
+.antibot-table {
+    margin-bottom: 0;
+}
+
+.antibot-table th {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ab-slate-500);
+    background: var(--ab-slate-50);
+    border-bottom: 1px solid var(--ab-slate-200);
+    padding: 0.85rem 1rem;
+}
+
+.antibot-table td {
+    padding: 0.85rem 1rem;
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--ab-slate-100);
+    vertical-align: middle;
+}
+
+.antibot-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+/* Accessible Table Fallbacks */
 .antibot-chart-fallback {
     display: none;
     margin-top: 1rem;
@@ -187,21 +539,9 @@
     display: block;
 }
 
-/* Badges and tags */
-.antibot-badge-soft {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.35rem 0.65rem;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 500;
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    color: #495057;
-}
-
-/* Responsive adjustments */
+/* ==========================================================================
+   Responsive Breakpoints
+   ========================================================================== */
 @media (max-width: 768px) {
     .antibot-card-header {
         flex-direction: column;
@@ -218,7 +558,7 @@
         height: 300px;
     }
 
-    .antibot-btn-group {
+    .antibot-segmented-control {
         width: 100%;
         justify-content: stretch;
     }
@@ -226,5 +566,22 @@
     .antibot-btn-period {
         flex: 1;
         text-align: center;
+    }
+
+    .antibot-nav-pills {
+        width: 100%;
+    }
+
+    .antibot-nav-link {
+        flex: 1;
+        text-align: center;
+        justify-content: center;
+    }
+
+    .antibot-sticky-bar {
+        position: static;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
     }
 }

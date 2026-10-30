@@ -1,8 +1,8 @@
 /**
  * Antibot Admin Dashboard Visual Analytics (Apache ECharts)
  *
- * Implements lazy chart rendering, responsive resize, period switching,
- * tooltips, legends, and fail-safe graceful degradation without external CDNs.
+ * Modern, refined chart visuals with linear gradients, custom dark tooltips,
+ * responsive resizing, and accessible fallbacks.
  *
  * @author LarikMC <https://64web.ru>
  * @license MIT
@@ -67,7 +67,7 @@
 
             if (badgeCoverage) {
                 if (data.coverage_status === 'full_window') {
-                    badgeCoverage.innerHTML = '⏱ <strong>Полное окно</strong> (' + (data.period === '24h' ? '24 часа' : (data.period === '7d' ? '7 дней' : 'история')) + ')';
+                    badgeCoverage.innerHTML = '⏱ <strong>Полное окно</strong> (' + (data.period === '24h' ? '24 часа' : (data.period === '7d' ? '7 дней' : 'вся история')) + ')';
                     badgeCoverage.className = 'antibot-badge-soft text-success border';
                 } else if (data.coverage_status === 'partial_window') {
                     badgeCoverage.innerHTML = '⚠️ <strong>Ограниченная выборка</strong> (последние ' + (data.events_in_sample || 0) + ' событий)';
@@ -87,7 +87,7 @@
         },
 
         /**
-         * Chart 1: Dynamic of suspicious activity (Line / Area Chart)
+         * Chart 1: Dynamic of suspicious activity (Line / Area Chart with gradients)
          */
         renderDynamics: function (timeline) {
             var container = document.getElementById('antibot-chart-dynamics');
@@ -106,19 +106,29 @@
             var option = {
                 tooltip: {
                     trigger: 'axis',
+                    backgroundColor: '#1e293b',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    textStyle: { color: '#f8fafc', fontSize: 12 },
+                    borderRadius: 8,
+                    padding: [10, 14],
                     axisPointer: {
-                        type: 'cross',
-                        label: { backgroundColor: '#6a7985' }
+                        type: 'line',
+                        lineStyle: { color: '#94a3b8', type: 'dashed' }
                     },
                     formatter: function (params) {
-                        var html = '<strong>' + params[0].axisValue + '</strong><br/>';
+                        var html = '<div style="font-weight:700;margin-bottom:6px;border-bottom:1px solid #334155;padding-bottom:4px;color:#e2e8f0;">' + params[0].axisValue + '</div>';
                         var total = 0;
                         params.forEach(function (item) {
-                            html += '<span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:' + item.color + '"></span>' +
-                                item.seriesName + ': <strong>' + item.value + '</strong><br/>';
+                            html += '<div style="display:flex;justify-content:space-between;gap:16px;margin:3px 0;">' +
+                                '<span><span style="display:inline-block;margin-right:6px;border-radius:50%;width:8px;height:8px;background-color:' + item.color + '"></span>' + item.seriesName + '</span>' +
+                                '<strong style="color:#ffffff;">' + item.value + '</strong>' +
+                                '</div>';
                             total += item.value;
                         });
-                        html += '<span style="color:#6c757d;font-size:11px;">Сумма за интервал: ' + total + '</span>';
+                        html += '<div style="margin-top:6px;padding-top:4px;border-top:1px solid #334155;color:#94a3b8;font-size:11px;display:flex;justify-content:space-between;">' +
+                            '<span>Всего событий:</span><strong style="color:#ffffff;">' + total + '</strong>' +
+                            '</div>';
                         return html;
                     }
                 },
@@ -126,7 +136,8 @@
                     data: ['Мониторинг', 'Заблокировано', 'Rate Limit', 'Проверки (Challenge)'],
                     top: 0,
                     icon: 'circle',
-                    itemGap: 16
+                    itemGap: 18,
+                    textStyle: { color: '#475569', fontSize: 12, fontWeight: 500 }
                 },
                 grid: {
                     left: '2%',
@@ -139,50 +150,82 @@
                     type: 'category',
                     boundaryGap: false,
                     data: labels,
-                    axisLine: { lineStyle: { color: '#ced4da' } },
-                    axisLabel: { color: '#6c757d', fontSize: 11 }
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 }
                 },
                 yAxis: {
                     type: 'value',
                     minInterval: 1,
-                    splitLine: { lineStyle: { color: '#f1f3f5' } },
-                    axisLabel: { color: '#6c757d', fontSize: 11 }
+                    splitLine: { lineStyle: { color: '#f1f5f9' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 }
                 },
                 series: [
                     {
                         name: 'Мониторинг',
                         type: 'line',
                         smooth: true,
-                        itemStyle: { color: '#0d6efd' },
-                        lineStyle: { width: 2, color: '#0d6efd' },
-                        areaStyle: { color: 'rgba(13, 110, 253, 0.12)' },
+                        itemStyle: { color: '#3b82f6' },
+                        lineStyle: { width: 2.5, color: '#3b82f6' },
+                        areaStyle: {
+                            color: {
+                                type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(59, 130, 246, 0.28)' },
+                                    { offset: 1, color: 'rgba(59, 130, 246, 0.01)' }
+                                ]
+                            }
+                        },
                         data: series.monitoring || []
                     },
                     {
                         name: 'Заблокировано',
                         type: 'line',
                         smooth: true,
-                        itemStyle: { color: '#dc3545' },
-                        lineStyle: { width: 2, color: '#dc3545' },
-                        areaStyle: { color: 'rgba(220, 53, 69, 0.12)' },
+                        itemStyle: { color: '#ef4444' },
+                        lineStyle: { width: 2.5, color: '#ef4444' },
+                        areaStyle: {
+                            color: {
+                                type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(239, 68, 68, 0.28)' },
+                                    { offset: 1, color: 'rgba(239, 68, 68, 0.01)' }
+                                ]
+                            }
+                        },
                         data: series.blocked || []
                     },
                     {
                         name: 'Rate Limit',
                         type: 'line',
                         smooth: true,
-                        itemStyle: { color: '#fd7e14' },
-                        lineStyle: { width: 2, color: '#fd7e14' },
-                        areaStyle: { color: 'rgba(253, 126, 20, 0.12)' },
+                        itemStyle: { color: '#f59e0b' },
+                        lineStyle: { width: 2.5, color: '#f59e0b' },
+                        areaStyle: {
+                            color: {
+                                type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(245, 158, 11, 0.28)' },
+                                    { offset: 1, color: 'rgba(245, 158, 11, 0.01)' }
+                                ]
+                            }
+                        },
                         data: series.throttled || []
                     },
                     {
                         name: 'Проверки (Challenge)',
                         type: 'line',
                         smooth: true,
-                        itemStyle: { color: '#6f42c1' },
-                        lineStyle: { width: 2, color: '#6f42c1' },
-                        areaStyle: { color: 'rgba(111, 66, 193, 0.12)' },
+                        itemStyle: { color: '#8b5cf6' },
+                        lineStyle: { width: 2.5, color: '#8b5cf6' },
+                        areaStyle: {
+                            color: {
+                                type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(139, 92, 246, 0.28)' },
+                                    { offset: 1, color: 'rgba(139, 92, 246, 0.01)' }
+                                ]
+                            }
+                        },
                         data: series.challenge || []
                     }
                 ]
@@ -215,71 +258,84 @@
                         subtext: 'Подозрительных событий в выборке не зафиксировано',
                         left: 'center',
                         top: 'center',
-                        textStyle: { color: '#6c757d', fontSize: 16, fontWeight: 'normal' },
-                        subtextStyle: { color: '#adb5bd', fontSize: 12 }
+                        textStyle: { color: '#64748b', fontSize: 16, fontWeight: 'normal' },
+                        subtextStyle: { color: '#94a3b8', fontSize: 12 }
                     }
                 });
                 return;
             }
 
+            var colorMap = {
+                'Мониторинг': '#3b82f6',
+                'Заблокировано': '#ef4444',
+                'Rate Limit': '#f59e0b',
+                'Проверки (Challenge)': '#8b5cf6',
+                'Другие события': '#64748b'
+            };
+
             var pieData = items.map(function (it) {
                 return {
                     name: it.name,
                     value: it.value,
-                    itemStyle: { color: it.color }
+                    itemStyle: { color: colorMap[it.name] || it.color }
                 };
             });
 
             var option = {
                 title: {
                     text: total,
-                    subtext: 'событий в выборке',
+                    subtext: 'событий журнала',
                     left: 'center',
                     top: '38%',
                     textStyle: {
-                        fontSize: 26,
+                        fontSize: 28,
                         fontWeight: 'bold',
-                        color: '#212529'
+                        color: '#0f172a'
                     },
                     subtextStyle: {
-                        fontSize: 11,
-                        color: '#6c757d'
+                        fontSize: 12,
+                        color: '#64748b'
                     }
                 },
                 tooltip: {
                     trigger: 'item',
+                    backgroundColor: '#1e293b',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    textStyle: { color: '#f8fafc', fontSize: 12 },
+                    borderRadius: 8,
+                    padding: [10, 14],
                     formatter: function (params) {
-                        return '<strong>' + params.name + '</strong><br/>' +
-                            'Количество: <strong>' + params.value + '</strong><br/>' +
-                            'Доля в журнале: <strong>' + params.percent + '%</strong><br/>' +
-                            '<span style="font-size:10px;color:#adb5bd;">(% от учтённых событий журнала)</span>';
+                        return '<div style="font-weight:700;color:#e2e8f0;margin-bottom:4px;">' + params.name + '</div>' +
+                            '<div style="display:flex;justify-content:space-between;gap:14px;"><span>Событий:</span><strong>' + params.value + '</strong></div>' +
+                            '<div style="display:flex;justify-content:space-between;gap:14px;"><span>Доля в журнале:</span><strong>' + params.percent + '%</strong></div>' +
+                            '<div style="font-size:10px;color:#94a3b8;margin-top:6px;border-top:1px solid #334155;padding-top:3px;">(% от учтённых событий журнала)</div>';
                     }
                 },
                 legend: {
                     bottom: 0,
                     left: 'center',
                     icon: 'circle',
-                    itemGap: 12
+                    itemGap: 14,
+                    textStyle: { color: '#475569', fontSize: 11, fontWeight: 500 }
                 },
                 series: [
                     {
                         name: 'Распределение событий',
                         type: 'pie',
-                        radius: ['45%', '70%'],
+                        radius: ['52%', '74%'],
                         center: ['50%', '45%'],
                         avoidLabelOverlap: true,
                         itemStyle: {
-                            borderRadius: 6,
-                            borderColor: '#fff',
-                            borderWidth: 2
+                            borderRadius: 8,
+                            borderColor: '#ffffff',
+                            borderWidth: 3
                         },
-                        label: {
-                            show: false
-                        },
+                        label: { show: false },
                         emphasis: {
-                            label: {
-                                show: false
-                            }
+                            label: { show: false },
+                            scale: true,
+                            scaleSize: 6
                         },
                         data: pieData
                     }
@@ -290,7 +346,7 @@
         },
 
         /**
-         * Chart 3: Main trigger reasons (Horizontal Bar Chart)
+         * Chart 3: Main trigger reasons (Horizontal Bar Chart with background track)
          */
         renderReasons: function (reasons) {
             var container = document.getElementById('antibot-chart-reasons');
@@ -312,8 +368,8 @@
                         subtext: 'Срабатываний не зафиксировано',
                         left: 'center',
                         top: 'center',
-                        textStyle: { color: '#6c757d', fontSize: 16, fontWeight: 'normal' },
-                        subtextStyle: { color: '#adb5bd', fontSize: 12 }
+                        textStyle: { color: '#64748b', fontSize: 16, fontWeight: 'normal' },
+                        subtextStyle: { color: '#94a3b8', fontSize: 12 }
                     }
                 });
                 return;
@@ -325,35 +381,42 @@
             var option = {
                 tooltip: {
                     trigger: 'axis',
+                    backgroundColor: '#1e293b',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    textStyle: { color: '#f8fafc', fontSize: 12 },
+                    borderRadius: 8,
+                    padding: [10, 14],
                     axisPointer: { type: 'shadow' },
                     formatter: function (params) {
                         var p = params[0];
-                        return '<strong>' + p.name + '</strong><br/>' +
-                            'Количество срабатываний: <strong>' + p.value + '</strong>';
+                        return '<div style="font-weight:700;color:#e2e8f0;margin-bottom:4px;">' + p.name + '</div>' +
+                            '<div style="display:flex;justify-content:space-between;gap:14px;"><span>Срабатываний:</span><strong style="color:#ffffff;">' + p.value + '</strong></div>';
                     }
                 },
                 grid: {
                     left: '3%',
                     right: '6%',
                     bottom: '3%',
-                    top: '6%',
+                    top: '4%',
                     containLabel: true
                 },
                 xAxis: {
                     type: 'value',
                     minInterval: 1,
-                    splitLine: { lineStyle: { color: '#f1f3f5' } },
-                    axisLabel: { color: '#6c757d', fontSize: 11 }
+                    splitLine: { lineStyle: { color: '#f1f5f9' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 }
                 },
                 yAxis: {
                     type: 'category',
                     data: categories,
-                    axisLine: { lineStyle: { color: '#ced4da' } },
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
                     axisLabel: {
-                        color: '#495057',
+                        color: '#334155',
                         fontSize: 11,
+                        fontWeight: 500,
                         formatter: function (val) {
-                            return val.length > 22 ? val.substr(0, 20) + '…' : val;
+                            return val.length > 24 ? val.substr(0, 22) + '…' : val;
                         }
                     }
                 },
@@ -362,11 +425,22 @@
                         name: 'Срабатывания',
                         type: 'bar',
                         data: values,
-                        itemStyle: {
-                            color: '#0d6efd',
-                            borderRadius: [0, 4, 4, 0]
+                        showBackground: true,
+                        backgroundStyle: {
+                            color: '#f8fafc',
+                            borderRadius: [0, 6, 6, 0]
                         },
-                        barMaxWidth: 20
+                        itemStyle: {
+                            color: {
+                                type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+                                colorStops: [
+                                    { offset: 0, color: '#4f46e5' },
+                                    { offset: 1, color: '#6366f1' }
+                                ]
+                            },
+                            borderRadius: [0, 6, 6, 0]
+                        },
+                        barMaxWidth: 18
                     }
                 ]
             };
@@ -397,8 +471,8 @@
                         subtext: 'Подозрительных обращений к маршрутам не зафиксировано',
                         left: 'center',
                         top: 'center',
-                        textStyle: { color: '#6c757d', fontSize: 16, fontWeight: 'normal' },
-                        subtextStyle: { color: '#adb5bd', fontSize: 12 }
+                        textStyle: { color: '#64748b', fontSize: 16, fontWeight: 'normal' },
+                        subtextStyle: { color: '#94a3b8', fontSize: 12 }
                     }
                 });
                 return;
@@ -410,38 +484,43 @@
             var option = {
                 tooltip: {
                     trigger: 'axis',
+                    backgroundColor: '#1e293b',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    textStyle: { color: '#f8fafc', fontSize: 12 },
+                    borderRadius: 8,
+                    padding: [10, 14],
                     axisPointer: { type: 'shadow' },
                     formatter: function (params) {
                         var p = params[0];
-                        // Safe sanitization in tooltip
                         var safeRoute = (p.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        return '<code>' + safeRoute + '</code><br/>' +
-                            'Подозрительных событий: <strong>' + p.value + '</strong>';
+                        return '<div style="font-family:monospace;font-size:12px;color:#e2e8f0;margin-bottom:4px;">' + safeRoute + '</div>' +
+                            '<div style="display:flex;justify-content:space-between;gap:14px;"><span>Подозрительных событий:</span><strong style="color:#ef4444;">' + p.value + '</strong></div>';
                     }
                 },
                 grid: {
                     left: '3%',
                     right: '6%',
                     bottom: '3%',
-                    top: '6%',
+                    top: '4%',
                     containLabel: true
                 },
                 xAxis: {
                     type: 'value',
                     minInterval: 1,
-                    splitLine: { lineStyle: { color: '#f1f3f5' } },
-                    axisLabel: { color: '#6c757d', fontSize: 11 }
+                    splitLine: { lineStyle: { color: '#f1f5f9' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 }
                 },
                 yAxis: {
                     type: 'category',
                     data: categories,
-                    axisLine: { lineStyle: { color: '#ced4da' } },
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
                     axisLabel: {
-                        color: '#495057',
-                        fontFamily: 'monospace',
+                        color: '#334155',
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                         fontSize: 11,
                         formatter: function (val) {
-                            return val.length > 25 ? val.substr(0, 23) + '…' : val;
+                            return val.length > 28 ? val.substr(0, 26) + '…' : val;
                         }
                     }
                 },
@@ -450,11 +529,22 @@
                         name: 'События',
                         type: 'bar',
                         data: values,
-                        itemStyle: {
-                            color: '#dc3545',
-                            borderRadius: [0, 4, 4, 0]
+                        showBackground: true,
+                        backgroundStyle: {
+                            color: '#f8fafc',
+                            borderRadius: [0, 6, 6, 0]
                         },
-                        barMaxWidth: 20
+                        itemStyle: {
+                            color: {
+                                type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+                                colorStops: [
+                                    { offset: 0, color: '#ef4444' },
+                                    { offset: 1, color: '#f87171' }
+                                ]
+                            },
+                            borderRadius: [0, 6, 6, 0]
+                        },
+                        barMaxWidth: 18
                     }
                 ]
             };
@@ -468,7 +558,6 @@
         bindEvents: function () {
             var self = this;
 
-            // Period selector buttons
             var periodButtons = document.querySelectorAll('.antibot-btn-period');
             periodButtons.forEach(function (btn) {
                 btn.addEventListener('click', function (e) {
@@ -484,7 +573,6 @@
                 });
             });
 
-            // Refresh button
             var refreshBtn = document.getElementById('antibot-btn-refresh');
             if (refreshBtn) {
                 refreshBtn.addEventListener('click', function (e) {
