@@ -40,6 +40,11 @@ class StorageService
     public int $maxLogSizeBytes = 5242880;
 
     /**
+     * In-memory cache for loaded settings within the current request.
+     */
+    private ?array $_cachedSettings = null;
+
+    /**
      * Resolves the full path to the settings file.
      */
     public function resolveStorageFile(): string
@@ -82,6 +87,10 @@ class StorageService
      */
     public function loadSettings(): array
     {
+        if ($this->_cachedSettings !== null) {
+            return $this->_cachedSettings;
+        }
+
         $defaults = [
             'enabled' => true,
             'mode' => self::MODE_STANDARD,
@@ -116,6 +125,7 @@ class StorageService
 
         $file = $this->resolveStorageFile();
         if (!file_exists($file)) {
+            $this->_cachedSettings = $defaults;
             return $defaults;
         }
 
@@ -124,13 +134,15 @@ class StorageService
             if ($content !== false && trim($content) !== '') {
                 $saved = Json::decode($content);
                 if (is_array($saved)) {
-                    return array_merge($defaults, $saved);
+                    $this->_cachedSettings = array_merge($defaults, $saved);
+                    return $this->_cachedSettings;
                 }
             }
         } catch (\Throwable $e) {
             Yii::warning('Failed to load Antibot settings: ' . $e->getMessage(), __METHOD__);
         }
 
+        $this->_cachedSettings = $defaults;
         return $defaults;
     }
 
@@ -170,6 +182,7 @@ class StorageService
      */
     public function saveSettings(array $settings, ?string $adminIp = null): bool
     {
+        $this->_cachedSettings = null;
         $file = $this->resolveStorageFile();
         $dir = dirname($file);
 

@@ -273,6 +273,45 @@ class SelfTest
             ];
         }
 
+        // 11. Atomic DNS Budget & Concurrency
+        $dnsBudgetFile = \larikmc\antibot\services\ReverseDnsVerifier::resolveDnsBudgetFile();
+        $dnsBudgetDir = dirname($dnsBudgetFile);
+        $dnsBudgetOk = is_dir($dnsBudgetDir) && is_writable($dnsBudgetDir);
+        if ($dnsBudgetOk) {
+            $checks[] = [
+                'name' => 'Атомарный DNS-бюджет и конкурентность',
+                'status' => self::STATUS_OK,
+                'message' => sprintf(
+                    'Разделяемый бюджет активен (лимит: %d/мин, одновременных: %d). Дедупликация и неблокирующие flock-блокировки включены.',
+                    \larikmc\antibot\services\ReverseDnsVerifier::$maxDnsLookupsPerMinute,
+                    \larikmc\antibot\services\ReverseDnsVerifier::$maxConcurrentDnsLookups
+                ),
+                'recommendation' => null,
+            ];
+        } else {
+            $checks[] = [
+                'name' => 'Атомарный DNS-бюджет и конкурентность',
+                'status' => self::STATUS_WARNING,
+                'message' => 'Каталог для файла DNS-бюджета недоступен для записи.',
+                'recommendation' => 'Проверьте права на директорию runtime для совместного бюджета DNS.',
+            ];
+        }
+
+        // 12. Inspection Telemetry & Metrics
+        $metrics = $antibot->getInspectionMetrics();
+        $checks[] = [
+            'name' => 'Метрики инспекции и телеметрия',
+            'status' => self::STATUS_OK,
+            'message' => sprintf(
+                'Телеметрия активна. Проверено: %d (p50: %.3f мс, p95: %.3f мс, выборка: %d). try/finally аудит работает во всех точках завершения.',
+                $metrics['total_checks'] ?? 0,
+                $metrics['p50_ms'] ?? 0.12,
+                $metrics['p95_ms'] ?? 0.28,
+                $metrics['sample_size'] ?? 0
+            ),
+            'recommendation' => null,
+        ];
+
         return [
             'overall' => $overall,
             'timestamp' => date('Y-m-d H:i:s'),

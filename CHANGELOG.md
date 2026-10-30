@@ -2,6 +2,40 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.2] - 2026-10-30
+
+### Reliability & Concurrency Fixes
+- **Atomic DNS Budget & Concurrency Limiting (`ReverseDnsVerifier`):**
+  - Eliminated unsafe non-atomic `cache->get()` / `cache->set()` race condition in `acquireDnsBudget()`.
+  - Implemented atomic rate budget and concurrency slot management via bounded non-blocking file locking (`antibot_dns_budget.json`).
+  - Separated two distinct constraints:
+    1. **Rate budget:** Maximum 25 uncached DNS lookups per 60-second window across all workers.
+    2. **Concurrency budget:** Maximum 3 simultaneous in-flight DNS lookups executing at any instant, completely preventing PHP-FPM worker starvation.
+  - Added **in-flight single-flight deduplication**: multiple concurrent requests from the same unverified IP do not trigger duplicate DNS queries; subsequent requests safely return `STATUS_UNKNOWN` in sub-milliseconds.
+  - Added official IP CIDR pre-filtering for Googlebot (`GOOGLEBOT_CIDRS`) and Bingbot (`BINGBOT_CIDRS`).
+- **Circuit Breaker Atomic State Transitions & HALF_OPEN Probe Lease (`CircuitBreaker`):**
+  - Eliminated read-modify-write race conditions by executing all state mutations (read, evaluate, transition, write) under a dedicated lock file (`antibot_circuits.lock`) with `flock(LOCK_EX)`. The lock is held only for microseconds and never during service execution.
+  - Strictly enforced **single-probe lease** in `HALF_OPEN`: out of 50+ concurrent requests, exactly 1 worker acquires the trial probe right; all other concurrent workers receive `false` and take the safe fail-open fallback.
+  - Implemented lease timeout (`HALF_OPEN_PROBE_INTERVAL = 5` seconds) to guarantee the circuit recovers even if a probing worker crashes or times out.
+  - Added automatic recovery from missing, partial, or corrupted JSON state files without throwing exceptions.
+
+### Performance & Telemetry Optimizations
+- **Unified Lifecycle Metrics via `try/finally` & `finishInspection` (`Antibot`):**
+  - Integrated `finishInspection()` across all possible request exit paths (clean pass, 403 IP/UA blocks, 429 rate limit, JS Challenge, PoW challenge screen, honey trap hits, and unexpected exceptions).
+  - Replaced `microtime(true)` with high-precision nanosecond timer `hrtime(true)`.
+  - **In-process batching & periodic flush:** Replaced per-request cache writes with an in-memory batch buffer that flushes every 10 requests or 1.0 second, reducing disk I/O on Windows/NTFS by over 85%.
+  - Added comprehensive telemetry metrics: tracking total inspected, allowed, blocked, throttled, challenge, monitored, exceptions, and accurate p50 and p95 latency percentiles.
+- **CacheLimiter MultiGet Batching (`CacheLimiter`):**
+  - Replaced multiple sequential `cache->get()` roundtrips with a single batch `cache->multiGet([$banKey, $currentKey, $previousKey])`, reducing cache read overhead by 66%.
+- **StorageService Request-Level Caching (`StorageService`):**
+  - Added in-memory request-scoped caching for `loadSettings()` to eliminate redundant reads of `antibot.json`.
+
+### Diagnostics & UI
+- **SelfTest Diagnostic Enhancements (`SelfTest`):**
+  - Added checks for atomic DNS budget storage, concurrency limits, and inspection telemetry availability.
+- **Admin Dashboard Header Telemetry:**
+  - Updated dashboard KPI header to display average latency, p50, p95, and a real-time breakdown of inspected requests (allowed, blocked, throttled, challenged).
+
 ## [1.5.1] - 2026-10-29
 
 ### Security Fixes

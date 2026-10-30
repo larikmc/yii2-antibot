@@ -41,8 +41,22 @@ class CacheLimiter implements RateLimiterInterface
             $hash = md5($key);
             $banKey = 'antibot_ban_' . $hash;
 
+            $currentBucket = (int) ($now / $window);
+            $bucketOffset = $now % $window;
+            $currentKey = sprintf('antibot_rl_%s_%d', $hash, $currentBucket);
+            $previousKey = sprintf('antibot_rl_%s_%d', $hash, $currentBucket - 1);
+
+            // Fetch keys in a single batch operation to minimize cache I/O overhead
+            $multi = method_exists($cache, 'multiGet')
+                ? $cache->multiGet([$banKey, $currentKey, $previousKey])
+                : [
+                    $banKey => $cache->get($banKey),
+                    $currentKey => $cache->get($currentKey),
+                    $previousKey => $cache->get($previousKey),
+                ];
+
             // 1. Check temporary ban
-            $banUntil = $cache->get($banKey);
+            $banUntil = $multi[$banKey] ?? false;
             if ($banUntil !== false && is_int($banUntil) && $now < $banUntil) {
                 return [
                     'exceeded' => true,
@@ -54,15 +68,10 @@ class CacheLimiter implements RateLimiterInterface
             }
 
             // 2. Sliding window approximation using current and previous bucket
-            $currentBucket = (int) ($now / $window);
-            $bucketOffset = $now % $window;
-            $currentKey = sprintf('antibot_rl_%s_%d', $hash, $currentBucket);
-            $previousKey = sprintf('antibot_rl_%s_%d', $hash, $currentBucket - 1);
-
-            $currentCount = $cache->get($currentKey);
+            $currentCount = $multi[$currentKey] ?? 0;
             $currentCount = is_int($currentCount) ? $currentCount : 0;
 
-            $prevCount = $cache->get($previousKey);
+            $prevCount = $multi[$previousKey] ?? 0;
             $prevCount = is_int($prevCount) ? $prevCount : 0;
 
             // Weight previous bucket by remaining portion of window

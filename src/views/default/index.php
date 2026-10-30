@@ -43,11 +43,21 @@ $this->params['breadcrumbs'] = [
         </div>
     </div>
 
-    <!-- Security Warnings -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <span class="badge bg-light text-secondary border px-3 py-2">
-            ⚡ Среднее время инспекции: <strong><?= number_format((float) ($perf['avg_ms'] ?? 0.15), 3) ?> мс</strong> (проверок: <?= (int) ($perf['total_checks'] ?? 0) ?>)
-        </span>
+    <!-- Performance & Telemetry Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <span class="badge bg-light text-dark border px-3 py-2">
+                ⚡ Время проверки: <strong><?= number_format((float) ($perf['avg_ms'] ?? 0.15), 3) ?> мс</strong>
+                (p50: <?= number_format((float) ($perf['p50_ms'] ?? 0.12), 3) ?> мс, p95: <?= number_format((float) ($perf['p95_ms'] ?? 0.28), 3) ?> мс)
+            </span>
+            <span class="badge bg-light text-secondary border px-3 py-2">
+                Всего проверено: <strong><?= (int) ($perf['total_checks'] ?? 0) ?></strong>
+                <span class="text-success ms-1">✓ <?= (int) ($perf['allowed'] ?? 0) ?></span>,
+                <span class="text-danger ms-1">✗ <?= (int) ($perf['blocked'] ?? 0) ?></span>,
+                <span class="text-warning ms-1">⏱ <?= (int) ($perf['throttled'] ?? 0) ?></span>,
+                <span class="text-info ms-1">🧩 <?= (int) ($perf['challenge'] ?? 0) ?></span>
+            </span>
+        </div>
     </div>
     <?php if ($module->hasInsecureAccessConfig()): ?>
         <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">

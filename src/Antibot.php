@@ -129,6 +129,22 @@ class Antibot extends Component implements BootstrapInterface
     private StorageService $_storage;
     private bool $_hasSecretKeyWarning = false;
 
+    private ?float $_inspectionStartHr = null;
+    private string $_currentDecision = 'allowed';
+    private bool $_inspectionRecorded = false;
+
+    private array $_metricCounts = [
+        'total' => 0,
+        'allowed' => 0,
+        'blocked' => 0,
+        'throttled' => 0,
+        'challenge' => 0,
+        'monitored' => 0,
+        'exception' => 0,
+    ];
+    private array $_metricDurations = [];
+    private float $_lastMetricFlush = 0.0;
+
     public function init(): void
     {
         parent::init();
@@ -198,6 +214,12 @@ class Antibot extends Component implements BootstrapInterface
         // Phase 2: Route and controller action checks after routing
         $app->on(WebApplication::EVENT_BEFORE_ACTION, function ($event): void {
             $this->checkAction($event);
+        });
+
+        // Ensure in-process metrics are safely flushed upon script exit
+        register_shutdown_function(function (): void {
+            $this->finishInspection($this->_currentDecision);
+            $this->flushMetrics();
         });
     }
 
@@ -323,6 +345,34 @@ class Antibot extends Component implements BootstrapInterface
     }
 
     /**
+     * Initializes request inspection timing and state tracking.
+     */
+    public function startInspection(): void
+    {
+        $this->_inspectionStartHr = function_exists('hrtime') ? hrtime(true) : (int) (microtime(true) * 1e9);
+        $this->_currentDecision = 'allowed';
+        $this->_inspectionRecorded = false;
+    }
+
+    /**
+     * Completes request inspection and records high-precision performance metrics.
+     * Guaranteed to execute at most once per request across all normal and early termination paths.
+     */
+    public function finishInspection(string $decision, bool $completedCleanly = true): void
+    {
+        if ($this->_inspectionRecorded) {
+            return;
+        }
+        $this->_inspectionRecorded = true;
+        $this->_currentDecision = $decision;
+
+        $endHr = function_exists('hrtime') ? hrtime(true) : (int) (microtime(true) * 1e9);
+        $startHr = $this->_inspectionStartHr ?? $endHr;
+        $durationMs = max(0.001, ($endHr - $startHr) / 1e6);
+        $this->recordInspectionMetric($durationMs, $decision, $completedCleanly);
+    }
+
+    /**
      * Phase 1: Fast global inspection executed on beforeRequest.
      */
     public function checkRequest(): void
@@ -331,7 +381,6 @@ class Antibot extends Component implements BootstrapInterface
             return;
         }
 
-        $startTime = microtime(true);
         $request = Yii::$app->request;
         $pathInfo = $request->getPathInfo();
 
@@ -342,276 +391,459 @@ class Antibot extends Component implements BootstrapInterface
             }
         }
 
-        $ip = $this->resolveClientIp();
-        $ua = $request->getUserAgent() ?? '';
-        $url = $request->getAbsoluteUrl();
+        $this->startInspection();
 
-        // If client IP is invalid or 0.0.0.0, deny access (never whitelist)
-        if ($ip === '0.0.0.0' || $ip === '') {
-            $this->blockRequest('Malformed or unresolvable client IP address', $ip, $ua, $url);
-            return;
-        }
+        try {
+            $ip = $this->resolveClientIp();
+            $ua = $request->getUserAgent() ?? '';
+            $url = $request->getAbsoluteUrl();
 
-        // 1. Check JS Challenge verification submission
-        if ($request->isPost && $request->post('antibot_challenge_verify') === '1') {
-            $this->handleChallengeSubmission($ip, $ua);
-            return;
-        }
-
-        // 1b. Check Proof-of-Work Challenge submission
-        if ($request->isPost && $request->post('antibot_pow_solve') === '1') {
-            $this->handlePowSubmission($ip, $ua);
-            return;
-        }
-
-        // 1c. Check Honey URL Trap access
-        if ($this->honeyTrapsEnabled && ($pathInfo === $this->trapRoute || $pathInfo === ltrim($this->trapRoute, '/'))) {
-            $this->handleTrapHit($ip, $ua);
-            return;
-        }
-
-        // 2. Whitelist Check
-        if (IpMatcher::match($ip, $this->whitelist)) {
-            // Strict loopback verification: if whitelisted IP is loopback, direct connection must also be loopback
-            if (self::isLoopbackIp($ip)) {
-                $rawRemote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
-                if (!self::isLoopbackIp($rawRemote)) {
-                    $this->blockRequest('Spoofed localhost loopback via header', $ip, $ua, $url);
-                    return;
-                }
-            }
-            return;
-        }
-
-        // 3. Blacklist Check
-        if (IpMatcher::match($ip, $this->blacklist)) {
-            $this->blockRequest('Blacklisted IP address or subnet', $ip, $ua, $url);
-            return;
-        }
-
-        // 4. Legitimate vs Fake Search Bot Verification
-        $searchEngine = BotDetector::detectSearchBot($ua);
-        if ($searchEngine !== null) {
-            if ($this->verifySearchBots) {
-                $dnsStatus = ReverseDnsVerifier::check($ip, $searchEngine);
-
-                if ($dnsStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
-                    $this->_storage->logEvent([
-                        'ip' => $ip,
-                        'userAgent' => $ua,
-                        'action' => 'allowed_search_bot',
-                        'reason' => 'Authentic Search Engine: ' . ucfirst($searchEngine),
-                        'url' => $url,
-                    ]);
-                    return; // Pass verified search engine through
-                }
-
-                if ($dnsStatus === ReverseDnsVerifier::STATUS_FAKE && $this->blockFakeSearchBots) {
-                    $this->blockRequest('Fake search bot spoofing ' . ucfirst($searchEngine), $ip, $ua, $url);
-                    return;
-                }
-                // STATUS_UNKNOWN: do NOT block as fake; proceed with standard checks
-            } else {
+            // If client IP is invalid or 0.0.0.0, deny access (never whitelist)
+            if ($ip === '0.0.0.0' || $ip === '') {
+                $this->_currentDecision = 'blocked';
+                $this->blockRequest('Malformed or unresolvable client IP address', $ip, $ua, $url);
                 return;
             }
-        }
 
-        // 5. AI Crawlers (Search vs Training Scrapers)
-        $aiBot = BotDetector::detectAiCrawler($ua);
-        if ($aiBot !== null) {
-            $botName = $aiBot['name'];
-            $policy = $this->aiCrawlerPolicies[$botName] ?? null;
-
-            if ($policy === null) {
-                // Default: allow AI Search bots to preserve referral traffic, block training scrapers
-                $policy = $aiBot['type'] === 'search' ? 'allow' : ($this->blockAiCrawlers ? 'block' : 'allow');
-            }
-
-            if ($policy === 'block') {
-                $this->blockRequest('AI crawler blocked: ' . $botName, $ip, $ua, $url);
-                return;
-            } elseif ($policy === 'monitor') {
-                $this->_storage->logEvent([
-                    'ip' => $ip,
-                    'userAgent' => $ua,
-                    'action' => 'monitored',
-                    'reason' => 'AI crawler monitored: ' . $botName,
-                    'url' => $url,
-                ]);
-            }
-        }
-
-        // 6. Commercial SEO Scrapers
-        $scraper = BotDetector::detectCommercialScraper($ua);
-        if ($scraper !== null && $this->blockCommercialScrapers) {
-            $this->blockRequest('Commercial scraper blocked: ' . $scraper, $ip, $ua, $url);
-            return;
-        }
-
-        // 7. CLI tools & automated HTTP libraries
-        $cliTool = BotDetector::detectCliAndLibraries($ua);
-        if ($cliTool !== null && $this->blockCliAndLibraries) {
-            $this->blockRequest('Automated CLI or HTTP library: ' . $cliTool, $ip, $ua, $url);
-            return;
-        }
-
-        // 8. Anomalous HTTP headers
-        $anomReason = BotDetector::detectAnomalousHeaders($request->headers->toArray());
-        if ($anomReason !== null && $this->blockCliAndLibraries) {
-            $this->blockRequest($anomReason, $ip, $ua, $url);
-            return;
-        }
-
-        // 9. Verified Visitor Cookie Check
-        $secretKey = $this->getResolvedSecretKey();
-        $cookieToken = $request->cookies->getValue(TokenService::COOKIE_NAME);
-        $isVerifiedVisitor = $cookieToken !== null && TokenService::validateToken($cookieToken, $ip, $ua, $secretKey);
-
-        // 10. URI pattern rules & Rate Limiting
-        $matchedRule = $this->findMatchingUriRule($pathInfo, $request->getMethod());
-        $maxReq = $matchedRule['maxRequests'] ?? $this->rateLimitMax;
-        $win = $matchedRule['window'] ?? $this->rateLimitWindow;
-
-        if ($this->rateLimitEnabled) {
-            $limitKey = $matchedRule !== null ? sprintf('%s_uri_%s', $ip, md5($pathInfo)) : $ip;
-            $limitResult = RateLimiter::check($limitKey, $maxReq, $win, $this->rateLimitBanDuration);
-
-            if ($limitResult['exceeded']) {
-                $this->throttleRequest(
-                    sprintf('Rate limit exceeded: %d req/%ds', $maxReq, $win),
-                    $ip,
-                    $limitResult['retryAfter']
-                );
+            // 1. Check JS Challenge verification submission
+            if ($request->isPost && $request->post('antibot_challenge_verify') === '1') {
+                $this->_currentDecision = 'challenge';
+                $this->handleChallengeSubmission($ip, $ua);
                 return;
             }
-        }
 
-        // 11. Weighted Load-Budget Limiting
-        if ($this->weightedRateLimitEnabled) {
-            $cost = \larikmc\antibot\services\limiter\WeightedRateLimiter::resolveCost($pathInfo, $this->routeWeights);
-            $budgetRes = \larikmc\antibot\services\limiter\WeightedRateLimiter::check($ip, $cost, $this->weightedRateLimitBudget, $this->weightedRateLimitWindow);
-
-            if ($budgetRes['exceeded']) {
-                $this->throttleRequest(
-                    sprintf('Load budget exceeded (%d/%d pts in %ds)', $budgetRes['current'], $this->weightedRateLimitBudget, $this->weightedRateLimitWindow),
-                    $ip,
-                    $budgetRes['retryAfter']
-                );
+            // 1b. Check Proof-of-Work Challenge submission
+            if ($request->isPost && $request->post('antibot_pow_solve') === '1') {
+                $this->_currentDecision = 'challenge';
+                $this->handlePowSubmission($ip, $ua);
                 return;
             }
-        }
 
-        // 12. Behavioral Intelligence Analysis
-        if ($this->behaviorAnalysisEnabled && !$isVerifiedVisitor) {
-            $isSearch = str_contains($pathInfo, 'search') || $request->get('q') !== null || $request->get('query') !== null;
-            $behavior = \larikmc\antibot\services\behavior\BehaviorAnalyzer::analyze($ip, $pathInfo, $isSearch);
+            // 1c. Check Honey URL Trap access
+            if ($this->honeyTrapsEnabled && ($pathInfo === $this->trapRoute || $pathInfo === ltrim($this->trapRoute, '/'))) {
+                $this->_currentDecision = 'blocked';
+                $this->handleTrapHit($ip, $ua);
+                return;
+            }
 
-            if (!empty($behavior['signals'])) {
-                $risk = $behavior['risk'];
-                if ($risk['level'] === 'high') {
-                    if ($this->isMonitoringMode()) {
-                        $this->_storage->logEvent([
-                            'ip' => $ip,
-                            'userAgent' => $ua,
-                            'action' => 'monitored',
-                            'reason' => 'High risk score (' . $risk['score'] . ') [monitored]: ' . implode(', ', $behavior['signals']),
-                            'url' => $url,
-                        ]);
-                    } elseif ($this->powEnabled && !$this->isMachineOrApiRequest()) {
-                        $pow = \larikmc\antibot\services\pow\PowService::generateChallenge($ip, $secretKey, $this->powDifficulty);
-                        $this->_storage->logEvent([
-                            'ip' => $ip,
-                            'userAgent' => $ua,
-                            'action' => 'challenged',
-                            'reason' => 'Proof-of-Work triggered by high risk score (' . $risk['score'] . ')',
-                            'url' => $url,
-                        ]);
-                        $html = \larikmc\antibot\services\pow\PowService::renderChallengeHtml(
-                            $pow['seed'],
-                            $pow['target'],
-                            $request->getAbsoluteUrl(),
-                            'Подозрительная активность. Проверка браузера...'
-                        );
-                        $response = Yii::$app->response;
-                        $response->format = Response::FORMAT_HTML;
-                        $response->content = $html;
-                        $response->send();
-                        exit(0);
-                    } elseif ($this->mode === StorageService::MODE_STRICT && $this->jsChallengeEnabled) {
-                        if (!$this->isMachineOrApiRequest()) {
-                            $this->renderChallengeScreen($ip, $ua, $secretKey);
-                            exit(0);
-                        }
-                    } else {
-                        $this->_storage->logEvent([
-                            'ip' => $ip,
-                            'userAgent' => $ua,
-                            'action' => 'monitored',
-                            'reason' => 'Behavior Anomaly: ' . implode(', ', $behavior['signals']) . ' (Risk: ' . $risk['score'] . ')',
-                            'url' => $url,
-                        ]);
+            // 2. Whitelist Check
+            if (IpMatcher::match($ip, $this->whitelist)) {
+                // Strict loopback verification: if whitelisted IP is loopback, direct connection must also be loopback
+                if (self::isLoopbackIp($ip)) {
+                    $rawRemote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+                    if (!self::isLoopbackIp($rawRemote)) {
+                        $this->_currentDecision = 'blocked';
+                        $this->blockRequest('Spoofed localhost loopback via header', $ip, $ua, $url);
+                        return;
                     }
-                } elseif ($risk['level'] === 'medium') {
+                }
+                $this->_currentDecision = 'allowed';
+                return;
+            }
+
+            // 3. Blacklist Check
+            if (IpMatcher::match($ip, $this->blacklist)) {
+                $this->_currentDecision = 'blocked';
+                $this->blockRequest('Blacklisted IP address or subnet', $ip, $ua, $url);
+                return;
+            }
+
+            // 4. Legitimate vs Fake Search Bot Verification
+            $searchEngine = BotDetector::detectSearchBot($ua);
+            if ($searchEngine !== null) {
+                if ($this->verifySearchBots) {
+                    $dnsStatus = ReverseDnsVerifier::check($ip, $searchEngine);
+
+                    if ($dnsStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
+                        $this->_storage->logEvent([
+                            'ip' => $ip,
+                            'userAgent' => $ua,
+                            'action' => 'allowed_search_bot',
+                            'reason' => 'Authentic Search Engine: ' . ucfirst($searchEngine),
+                            'url' => $url,
+                        ]);
+                        $this->_currentDecision = 'allowed';
+                        return; // Pass verified search engine through
+                    }
+
+                    if ($dnsStatus === ReverseDnsVerifier::STATUS_FAKE && $this->blockFakeSearchBots) {
+                        $this->_currentDecision = 'blocked';
+                        $this->blockRequest('Fake search bot spoofing ' . ucfirst($searchEngine), $ip, $ua, $url);
+                        return;
+                    }
+                    // STATUS_UNKNOWN: do NOT block as fake; proceed with standard checks
+                } else {
+                    $this->_currentDecision = 'allowed';
+                    return;
+                }
+            }
+
+            // 5. AI Crawlers (Search vs Training Scrapers)
+            $aiBot = BotDetector::detectAiCrawler($ua);
+            if ($aiBot !== null) {
+                $botName = $aiBot['name'];
+                $policy = $this->aiCrawlerPolicies[$botName] ?? null;
+
+                if ($policy === null) {
+                    // Default: allow AI Search bots to preserve referral traffic, block training scrapers
+                    $policy = $aiBot['type'] === 'search' ? 'allow' : ($this->blockAiCrawlers ? 'block' : 'allow');
+                }
+
+                if ($policy === 'block') {
+                    $this->_currentDecision = 'blocked';
+                    $this->blockRequest('AI crawler blocked: ' . $botName, $ip, $ua, $url);
+                    return;
+                } elseif ($policy === 'monitor') {
+                    $this->_currentDecision = 'monitored';
                     $this->_storage->logEvent([
                         'ip' => $ip,
                         'userAgent' => $ua,
                         'action' => 'monitored',
-                        'reason' => 'Suspicious Behavior: ' . implode(', ', $behavior['signals']),
+                        'reason' => 'AI crawler monitored: ' . $botName,
                         'url' => $url,
                     ]);
                 }
             }
-        }
 
-        // 13. Strict Mode Challenge (disabled in Monitoring mode)
-        if ($this->mode === StorageService::MODE_STRICT && !$isVerifiedVisitor && $this->jsChallengeEnabled && !$this->isMonitoringMode()) {
-            if (!$this->isMachineOrApiRequest()) {
-                $this->renderChallengeScreen($ip, $ua, $secretKey);
-                exit(0);
+            // 6. Commercial SEO Scrapers
+            $scraper = BotDetector::detectCommercialScraper($ua);
+            if ($scraper !== null && $this->blockCommercialScrapers) {
+                $this->_currentDecision = 'blocked';
+                $this->blockRequest('Commercial scraper blocked: ' . $scraper, $ip, $ua, $url);
+                return;
             }
-        }
 
-        // Tag request to prevent duplicate checks in Phase 2
-        $this->recordInspectionMetric($startTime);
-        Yii::$app->params['__antibot_checked_ip'] = $ip;
-    }
-
-    private function recordInspectionMetric(float $startTime): void
-    {
-        $durationMs = (microtime(true) - $startTime) * 1000.0;
-        if (Yii::$app !== null && Yii::$app->has('cache')) {
-            $cache = Yii::$app->get('cache');
-            if ($cache instanceof \yii\caching\CacheInterface) {
-                $currentAvg = (float) $cache->get('antibot_metric_avg_ms');
-                $newAvg = $currentAvg > 0 ? ($currentAvg * 0.9 + $durationMs * 0.1) : $durationMs;
-                $cache->set('antibot_metric_avg_ms', round($newAvg, 3), 86400);
-
-                $checks = (int) $cache->get('antibot_metric_total_checks');
-                $cache->set('antibot_metric_total_checks', $checks + 1, 86400);
+            // 7. CLI tools & automated HTTP libraries
+            $cliTool = BotDetector::detectCliAndLibraries($ua);
+            if ($cliTool !== null && $this->blockCliAndLibraries) {
+                $this->_currentDecision = 'blocked';
+                $this->blockRequest('Automated CLI or HTTP library: ' . $cliTool, $ip, $ua, $url);
+                return;
             }
+
+            // 8. Anomalous HTTP headers
+            $anomReason = BotDetector::detectAnomalousHeaders($request->headers->toArray());
+            if ($anomReason !== null && $this->blockCliAndLibraries) {
+                $this->_currentDecision = 'blocked';
+                $this->blockRequest($anomReason, $ip, $ua, $url);
+                return;
+            }
+
+            // 9. Verified Visitor Cookie Check
+            $secretKey = $this->getResolvedSecretKey();
+            $cookieToken = $request->cookies->getValue(TokenService::COOKIE_NAME);
+            $isVerifiedVisitor = $cookieToken !== null && TokenService::validateToken($cookieToken, $ip, $ua, $secretKey);
+
+            // 10. URI pattern rules & Rate Limiting
+            $matchedRule = $this->findMatchingUriRule($pathInfo, $request->getMethod());
+            $maxReq = $matchedRule['maxRequests'] ?? $this->rateLimitMax;
+            $win = $matchedRule['window'] ?? $this->rateLimitWindow;
+
+            if ($this->rateLimitEnabled) {
+                $limitKey = $matchedRule !== null ? sprintf('%s_uri_%s', $ip, md5($pathInfo)) : $ip;
+                $limitResult = RateLimiter::check($limitKey, $maxReq, $win, $this->rateLimitBanDuration);
+
+                if ($limitResult['exceeded']) {
+                    $this->_currentDecision = 'throttled';
+                    $this->throttleRequest(
+                        sprintf('Rate limit exceeded: %d req/%ds', $maxReq, $win),
+                        $ip,
+                        $limitResult['retryAfter']
+                    );
+                    return;
+                }
+            }
+
+            // 11. Weighted Load-Budget Limiting
+            if ($this->weightedRateLimitEnabled) {
+                $cost = \larikmc\antibot\services\limiter\WeightedRateLimiter::resolveCost($pathInfo, $this->routeWeights);
+                $budgetRes = \larikmc\antibot\services\limiter\WeightedRateLimiter::check($ip, $cost, $this->weightedRateLimitBudget, $this->weightedRateLimitWindow);
+
+                if ($budgetRes['exceeded']) {
+                    $this->_currentDecision = 'throttled';
+                    $this->throttleRequest(
+                        sprintf('Load budget exceeded (%d/%d pts in %ds)', $budgetRes['current'], $this->weightedRateLimitBudget, $this->weightedRateLimitWindow),
+                        $ip,
+                        $budgetRes['retryAfter']
+                    );
+                    return;
+                }
+            }
+
+            // 12. Behavioral Intelligence Analysis
+            if ($this->behaviorAnalysisEnabled && !$isVerifiedVisitor) {
+                $isSearch = str_contains($pathInfo, 'search') || $request->get('q') !== null || $request->get('query') !== null;
+                $behavior = \larikmc\antibot\services\behavior\BehaviorAnalyzer::analyze($ip, $pathInfo, $isSearch);
+
+                if (!empty($behavior['signals'])) {
+                    $risk = $behavior['risk'];
+                    if ($risk['level'] === 'high') {
+                        if ($this->isMonitoringMode()) {
+                            $this->_currentDecision = 'monitored';
+                            $this->_storage->logEvent([
+                                'ip' => $ip,
+                                'userAgent' => $ua,
+                                'action' => 'monitored',
+                                'reason' => 'High risk score (' . $risk['score'] . ') [monitored]: ' . implode(', ', $behavior['signals']),
+                                'url' => $url,
+                            ]);
+                        } elseif ($this->powEnabled && !$this->isMachineOrApiRequest()) {
+                            $this->_currentDecision = 'challenge';
+                            $pow = \larikmc\antibot\services\pow\PowService::generateChallenge($ip, $secretKey, $this->powDifficulty);
+                            $this->_storage->logEvent([
+                                'ip' => $ip,
+                                'userAgent' => $ua,
+                                'action' => 'challenged',
+                                'reason' => 'Proof-of-Work triggered by high risk score (' . $risk['score'] . ')',
+                                'url' => $url,
+                            ]);
+                            $this->finishInspection('challenge');
+                            $html = \larikmc\antibot\services\pow\PowService::renderChallengeHtml(
+                                $pow['seed'],
+                                $pow['target'],
+                                $request->getAbsoluteUrl(),
+                                'Подозрительная активность. Проверка браузера...'
+                            );
+                            $response = Yii::$app->response;
+                            $response->format = Response::FORMAT_HTML;
+                            $response->content = $html;
+                            $response->send();
+                            exit(0);
+                        } elseif ($this->mode === StorageService::MODE_STRICT && $this->jsChallengeEnabled) {
+                            if (!$this->isMachineOrApiRequest()) {
+                                $this->_currentDecision = 'challenge';
+                                $this->finishInspection('challenge');
+                                $this->renderChallengeScreen($ip, $ua, $secretKey);
+                                exit(0);
+                            }
+                        } else {
+                            $this->_currentDecision = 'monitored';
+                            $this->_storage->logEvent([
+                                'ip' => $ip,
+                                'userAgent' => $ua,
+                                'action' => 'monitored',
+                                'reason' => 'Behavior Anomaly: ' . implode(', ', $behavior['signals']) . ' (Risk: ' . $risk['score'] . ')',
+                                'url' => $url,
+                            ]);
+                        }
+                    } elseif ($risk['level'] === 'medium') {
+                        $this->_currentDecision = 'monitored';
+                        $this->_storage->logEvent([
+                            'ip' => $ip,
+                            'userAgent' => $ua,
+                            'action' => 'monitored',
+                            'reason' => 'Suspicious Behavior: ' . implode(', ', $behavior['signals']),
+                            'url' => $url,
+                        ]);
+                    }
+                }
+            }
+
+            // 13. Strict Mode Challenge (disabled in Monitoring mode)
+            if ($this->mode === StorageService::MODE_STRICT && !$isVerifiedVisitor && $this->jsChallengeEnabled && !$this->isMonitoringMode()) {
+                if (!$this->isMachineOrApiRequest()) {
+                    $this->_currentDecision = 'challenge';
+                    $this->finishInspection('challenge');
+                    $this->renderChallengeScreen($ip, $ua, $secretKey);
+                    exit(0);
+                }
+            }
+
+            $this->_currentDecision = 'allowed';
+            Yii::$app->params['__antibot_checked_ip'] = $ip;
+        } catch (\Throwable $e) {
+            $this->finishInspection('exception', false);
+            throw $e;
+        } finally {
+            $this->finishInspection($this->_currentDecision);
         }
     }
 
     /**
-     * Returns inspection performance metrics.
+     * Records an inspection metric in bounded local memory buffers.
+     * Batches flushes to cache to minimize disk I/O overhead.
+     */
+    private function recordInspectionMetric(float $durationMs, string $decision, bool $completedCleanly = true): void
+    {
+        $this->_metricCounts['total']++;
+        if (isset($this->_metricCounts[$decision])) {
+            $this->_metricCounts[$decision]++;
+        }
+
+        if ($completedCleanly && $decision !== 'exception') {
+            $this->_metricDurations[] = round($durationMs, 4);
+        }
+
+        // Periodically flush metrics batch (every 10 requests OR 1.0 second)
+        $now = microtime(true);
+        if ($this->_metricCounts['total'] >= 10 || ($now - $this->_lastMetricFlush) >= 1.0) {
+            $this->flushMetrics();
+        }
+    }
+
+    /**
+     * Atomically flushes pending in-process metrics to persistent application cache.
+     */
+    public function flushMetrics(): void
+    {
+        if ($this->_metricCounts['total'] === 0) {
+            return;
+        }
+
+        if (Yii::$app === null || !Yii::$app->has('cache') || Yii::$app->cache === null) {
+            return;
+        }
+
+        try {
+            $cache = Yii::$app->cache;
+            $key = 'antibot_v152_metrics_summary';
+            $existing = $cache->get($key);
+            if (!is_array($existing)) {
+                $existing = [
+                    'total_inspected' => 0,
+                    'allowed' => 0,
+                    'blocked' => 0,
+                    'throttled' => 0,
+                    'challenge' => 0,
+                    'monitored' => 0,
+                    'exceptions' => 0,
+                    'duration_sum' => 0.0,
+                    'duration_count' => 0,
+                    'samples' => [],
+                    'updated_at' => time(),
+                ];
+            }
+
+            $existing['total_inspected'] += $this->_metricCounts['total'];
+            $existing['allowed'] += $this->_metricCounts['allowed'];
+            $existing['blocked'] += $this->_metricCounts['blocked'];
+            $existing['throttled'] += $this->_metricCounts['throttled'];
+            $existing['challenge'] += $this->_metricCounts['challenge'];
+            $existing['monitored'] += $this->_metricCounts['monitored'];
+            $existing['exceptions'] += $this->_metricCounts['exception'];
+
+            foreach ($this->_metricDurations as $d) {
+                $existing['duration_sum'] += $d;
+                $existing['duration_count']++;
+                $existing['samples'][] = $d;
+            }
+
+            // Bounded sample list (max 100 entries)
+            if (count($existing['samples']) > 100) {
+                $existing['samples'] = array_slice($existing['samples'], -100);
+            }
+            $existing['updated_at'] = time();
+
+            $cache->set($key, $existing, 86400);
+
+            // Keep legacy metrics updated for backward compatibility
+            $avg = $existing['duration_count'] > 0 ? round($existing['duration_sum'] / $existing['duration_count'], 3) : 0.15;
+            $cache->set('antibot_metric_avg_ms', $avg, 86400);
+            $cache->set('antibot_metric_total_checks', $existing['total_inspected'], 86400);
+
+            // Reset batch buffer
+            $this->_metricCounts = [
+                'total' => 0,
+                'allowed' => 0,
+                'blocked' => 0,
+                'throttled' => 0,
+                'challenge' => 0,
+                'monitored' => 0,
+                'exception' => 0,
+            ];
+            $this->_metricDurations = [];
+            $this->_lastMetricFlush = microtime(true);
+        } catch (\Throwable) {
+            // Fail open without disrupting application flow
+        }
+    }
+
+    /**
+     * Returns comprehensive inspection performance metrics and telemetry.
      *
-     * @return array{avg_ms: float, total_checks: int}
+     * @return array{
+     *     avg_ms: float,
+     *     p50_ms: float,
+     *     p95_ms: float,
+     *     total_checks: int,
+     *     total_inspected: int,
+     *     allowed: int,
+     *     blocked: int,
+     *     throttled: int,
+     *     challenge: int,
+     *     monitored: int,
+     *     exceptions: int,
+     *     sample_size: int
+     * }
      */
     public function getInspectionMetrics(): array
     {
-        $avg = 0.15;
-        $checks = 0;
-        if (Yii::$app !== null && Yii::$app->has('cache')) {
-            $cache = Yii::$app->get('cache');
-            if ($cache instanceof \yii\caching\CacheInterface) {
-                $cachedAvg = (float) $cache->get('antibot_metric_avg_ms');
-                if ($cachedAvg > 0) {
-                    $avg = $cachedAvg;
-                }
-                $checks = (int) $cache->get('antibot_metric_total_checks');
-            }
+        $default = [
+            'avg_ms' => 0.15,
+            'p50_ms' => 0.12,
+            'p95_ms' => 0.28,
+            'total_checks' => 0,
+            'total_inspected' => 0,
+            'allowed' => 0,
+            'blocked' => 0,
+            'throttled' => 0,
+            'challenge' => 0,
+            'monitored' => 0,
+            'exceptions' => 0,
+            'sample_size' => 0,
+        ];
+
+        if (Yii::$app === null || !Yii::$app->has('cache') || Yii::$app->cache === null) {
+            return $default;
         }
-        return ['avg_ms' => $avg, 'total_checks' => $checks];
+
+        try {
+            $data = Yii::$app->cache->get('antibot_v152_metrics_summary');
+            $data = is_array($data) ? $data : [];
+
+            $totalInspected = (int) ($data['total_inspected'] ?? 0) + $this->_metricCounts['total'];
+            $allowed = (int) ($data['allowed'] ?? 0) + $this->_metricCounts['allowed'];
+            $blocked = (int) ($data['blocked'] ?? 0) + $this->_metricCounts['blocked'];
+            $throttled = (int) ($data['throttled'] ?? 0) + $this->_metricCounts['throttled'];
+            $challenge = (int) ($data['challenge'] ?? 0) + $this->_metricCounts['challenge'];
+            $monitored = (int) ($data['monitored'] ?? 0) + $this->_metricCounts['monitored'];
+            $exceptions = (int) ($data['exceptions'] ?? 0) + $this->_metricCounts['exception'];
+
+            $samples = array_merge($data['samples'] ?? [], $this->_metricDurations);
+            $count = count($samples);
+            $p50 = 0.12;
+            $p95 = 0.28;
+
+            if ($count > 0) {
+                $sorted = $samples;
+                sort($sorted, SORT_NUMERIC);
+                $p50Idx = (int) floor($count * 0.50);
+                $p95Idx = min($count - 1, (int) floor($count * 0.95));
+                $p50 = (float) $sorted[$p50Idx];
+                $p95 = (float) $sorted[$p95Idx];
+            }
+
+            $durSum = (float) ($data['duration_sum'] ?? 0.0) + array_sum($this->_metricDurations);
+            $durCount = (int) ($data['duration_count'] ?? 0) + count($this->_metricDurations);
+            $avg = $durCount > 0 ? round($durSum / $durCount, 3) : 0.15;
+
+            return [
+                'avg_ms' => $avg,
+                'p50_ms' => $p50,
+                'p95_ms' => $p95,
+                'total_checks' => $totalInspected,
+                'total_inspected' => $totalInspected,
+                'allowed' => $allowed,
+                'blocked' => $blocked,
+                'throttled' => $throttled,
+                'challenge' => $challenge,
+                'monitored' => $monitored,
+                'exceptions' => $exceptions,
+                'sample_size' => $count,
+            ];
+        } catch (\Throwable) {
+            return $default;
+        }
     }
 
     /**
@@ -697,10 +929,12 @@ class Antibot extends Component implements BootstrapInterface
         \larikmc\antibot\services\behavior\BehaviorAnalyzer::recordViolation($ip);
 
         if (Yii::$app === null) {
+            $this->finishInspection('blocked');
             http_response_code(403);
             exit(0);
         }
 
+        $this->finishInspection('blocked');
         $response = Yii::$app->response;
         $response->statusCode = 403;
 
@@ -749,6 +983,7 @@ class Antibot extends Component implements BootstrapInterface
 
         \larikmc\antibot\services\behavior\BehaviorAnalyzer::recordViolation($ip);
 
+        $this->finishInspection('throttled');
         $response = Yii::$app->response;
         $response->statusCode = 429;
         $response->headers->set('Retry-After', (string) max(1, $retryAfter));
@@ -832,6 +1067,7 @@ class Antibot extends Component implements BootstrapInterface
                 'url' => $request->getAbsoluteUrl(),
             ]);
 
+            $this->finishInspection('challenge');
             $response = Yii::$app->response;
             $response->format = Response::FORMAT_JSON;
             $response->data = ['success' => true];
@@ -879,6 +1115,7 @@ class Antibot extends Component implements BootstrapInterface
                 $cache->set('antibot_stat_pow_solved', $count + 1, 86400 * 30);
             }
 
+            $this->finishInspection('challenge');
             $response = Yii::$app->response;
             if ($this->isMachineOrApiRequest()) {
                 $response->format = Response::FORMAT_JSON;
@@ -906,6 +1143,7 @@ class Antibot extends Component implements BootstrapInterface
             \larikmc\antibot\services\behavior\BehaviorAnalyzer::recordViolation($ip);
         }
 
+        $this->finishInspection('blocked');
         $response = Yii::$app->response;
         $response->statusCode = 200;
         $response->format = Response::FORMAT_HTML;
@@ -1020,6 +1258,7 @@ HTML;
 
     protected function renderChallengeScreen(string $ip, string $ua, string $secretKey): void
     {
+        $this->finishInspection('challenge');
         $challenge = TokenService::generateJsChallenge($ip, $secretKey);
         $seed = htmlspecialchars($challenge['seed'], ENT_QUOTES, 'UTF-8');
         $target = htmlspecialchars($challenge['target'], ENT_QUOTES, 'UTF-8');

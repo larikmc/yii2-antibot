@@ -54,6 +54,24 @@ class ReverseDnsVerifier
     ];
 
     /**
+     * Known official subnets for Bingbot (published in Microsoft's official bingbot JSON).
+     */
+    public const BINGBOT_CIDRS = [
+        '157.55.39.0/24',
+        '207.46.13.0/24',
+        '40.77.167.0/24',
+        '13.66.139.0/24',
+        '13.66.144.0/24',
+        '52.167.144.0/24',
+        '20.36.108.0/24',
+        '20.40.0.0/16',
+        '20.190.0.0/16',
+        '40.76.0.0/14',
+        '157.55.0.0/16',
+        '207.46.0.0/16',
+    ];
+
+    /**
      * Cache TTL in seconds.
      */
     public static int $cacheVerified = 86400; // 24 hours
@@ -64,6 +82,35 @@ class ReverseDnsVerifier
      * Max uncached DNS lookups allowed per 60-second window across the app to prevent DNS DoS.
      */
     public static int $maxDnsLookupsPerMinute = 25;
+
+    /**
+     * Max concurrent in-flight DNS lookups executing simultaneously across all workers.
+     */
+    public static int $maxConcurrentDnsLookups = 3;
+
+    /**
+     * Resolves the full path to the shared DNS budget file.
+     */
+    public static function resolveDnsBudgetFile(): string
+    {
+        if (Yii::$app !== null && Yii::getAlias('@common', false) !== false) {
+            $sharedDir = Yii::getAlias('@common/runtime');
+            if (!is_dir($sharedDir)) {
+                @mkdir($sharedDir, 0775, true);
+            }
+            return $sharedDir . '/antibot_dns_budget.json';
+        }
+
+        if (Yii::$app !== null && Yii::getAlias('@runtime', false) !== false) {
+            $dir = Yii::getAlias('@runtime');
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+            return $dir . '/antibot_dns_budget.json';
+        }
+
+        return sys_get_temp_dir() . '/antibot_dns_budget.json';
+    }
 
     /**
      * Verifies whether an IP belongs to a legitimate search engine.
@@ -81,6 +128,7 @@ class ReverseDnsVerifier
 
         $cacheKey = 'antibot_rdns_v2_' . md5($ip . '_' . $engine);
 
+        // 1. Check cached verification
         if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
             $cached = Yii::$app->cache->get($cacheKey);
             if (is_string($cached) && in_array($cached, [self::STATUS_VERIFIED, self::STATUS_FAKE, self::STATUS_UNKNOWN], true)) {
@@ -88,16 +136,29 @@ class ReverseDnsVerifier
             }
         }
 
-        // Fast-path: for Googlebot, if IP is NOT in Google's known CIDRs and claims to be Googlebot
-        // we still run DNS, but if DNS budget is exceeded we know it's suspicious
-        if (!self::acquireDnsBudget()) {
-            // DNS budget exhausted, protect PHP-FPM workers from hanging
+        // 2. Pre-filter official CIDR ranges where published (Google & Bing)
+        if ($engine === 'google' || $engine === 'bing') {
+            $knownCidrs = $engine === 'google' ? self::GOOGLEBOT_CIDRS : self::BINGBOT_CIDRS;
+            $inOfficialRange = IpMatcher::match($ip, $knownCidrs);
+            // If outside known official subnets, DNS is required. If budget is constrained,
+            // we will safely yield UNKNOWN rather than allowing workers to starve.
+        }
+
+        // 3. Atomically acquire DNS budget & concurrency slot
+        $slotToken = self::acquireDnsBudgetSlot($ip);
+        if ($slotToken === null) {
+            // DNS budget exhausted, rate limit hit, or max concurrent lookups reached:
+            // Safely return UNKNOWN without blocking PHP-FPM workers!
             return self::STATUS_UNKNOWN;
         }
 
-        $status = self::performTwoWayDns($ip, self::VALID_DOMAINS[$engine]);
+        try {
+            $status = self::performTwoWayDns($ip, self::VALID_DOMAINS[$engine]);
+        } finally {
+            self::releaseDnsBudgetSlot($slotToken);
+        }
 
-        // Cache based on status
+        // 4. Cache result based on status
         if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
             $ttl = match ($status) {
                 self::STATUS_VERIFIED => self::$cacheVerified,
@@ -203,41 +264,195 @@ class ReverseDnsVerifier
     }
 
     /**
-     * Controls concurrency of uncached DNS lookups to prevent PHP-FPM starvation.
+     * Atomically acquires permission to perform an uncached DNS check.
+     *
+     * Enforces two separate limits:
+     * 1. Rate limit: Max lookups per 60-second window across all workers ($maxDnsLookupsPerMinute).
+     * 2. Concurrency limit: Max simultaneous in-flight DNS lookups at any given moment ($maxConcurrentDnsLookups).
+     * 3. In-flight single-flight deduplication: Prevents multiple concurrent checks for the exact same IP.
+     *
+     * Uses bounded non-blocking file locking (LOCK_EX | LOCK_NB) with brief retry to guarantee workers never hang.
+     *
+     * @param string $ip
+     * @return string|null Slot token if acquired; null if budget/concurrency exceeded or locked.
      */
-    protected static function acquireDnsBudget(): bool
+    public static function acquireDnsBudgetSlot(string $ip): ?string
     {
-        static $processBudget = 0;
-        static $processWindow = 0;
-
-        $now = time();
-        if ($now - $processWindow > 60) {
-            $processWindow = $now;
-            $processBudget = 0;
+        $budgetFile = self::resolveDnsBudgetFile();
+        $lockFile = $budgetFile . '.lock';
+        $dir = dirname($budgetFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
         }
 
-        if ($processBudget >= self::$maxDnsLookupsPerMinute) {
-            return false;
+        $fp = @fopen($lockFile, 'c+');
+        if (!$fp) {
+            return null;
         }
-        $processBudget++;
 
-        if (Yii::$app === null || !Yii::$app->has('cache') || Yii::$app->cache === null) {
-            return true;
+        // Bounded non-blocking lock with brief retry (max 3 retries, total wait < 6ms)
+        $locked = false;
+        for ($retry = 0; $retry < 3; $retry++) {
+            if (@flock($fp, LOCK_EX | LOCK_NB)) {
+                $locked = true;
+                break;
+            }
+            usleep(2000); // 2ms
+        }
+
+        if (!$locked) {
+            @fclose($fp);
+            return null; // Cannot acquire lock quickly -> return UNKNOWN, never hang worker!
         }
 
         try {
-            $budgetKey = 'antibot_dns_budget_' . (int) ($now / 60);
-            $count = Yii::$app->cache->get($budgetKey);
-            $count = is_int($count) ? $count : 0;
-
-            if ($count >= self::$maxDnsLookupsPerMinute) {
-                return false;
+            $data = [];
+            if (file_exists($budgetFile)) {
+                $raw = @file_get_contents($budgetFile);
+                if ($raw !== false && trim($raw) !== '') {
+                    $decoded = json_decode($raw, true);
+                    if (is_array($decoded)) {
+                        $data = $decoded;
+                    }
+                }
             }
 
-            Yii::$app->cache->set($budgetKey, $count + 1, 70);
+            $now = time();
+            $nowMicro = microtime(true);
+            $currentWindow = (int) ($now / 60);
+
+            // 1. Rate Limit Window Check
+            $storedWindow = (int) ($data['window'] ?? 0);
+            $windowCount = (int) ($data['count'] ?? 0);
+            if ($storedWindow !== $currentWindow) {
+                $storedWindow = $currentWindow;
+                $windowCount = 0;
+            }
+
+            if ($windowCount >= self::$maxDnsLookupsPerMinute) {
+                return null; // Rate budget exhausted
+            }
+
+            // 2. Concurrency Limit & In-flight Deduplication
+            $activeLeases = is_array($data['active'] ?? null) ? $data['active'] : [];
+
+            // Purge leases older than 5.0 seconds (dead worker / timeout protection)
+            foreach ($activeLeases as $k => $lease) {
+                $leaseTs = (float) ($lease['ts'] ?? 0);
+                if ($nowMicro - $leaseTs > 5.0) {
+                    unset($activeLeases[$k]);
+                }
+            }
+
+            // In-flight single-flight deduplication: check if this exact IP is already resolving!
+            foreach ($activeLeases as $lease) {
+                if (($lease['ip'] ?? '') === $ip) {
+                    return null; // Another worker is resolving this exact IP right now!
+                }
+            }
+
+            // Check concurrency limit
+            if (count($activeLeases) >= self::$maxConcurrentDnsLookups) {
+                return null; // Max concurrent lookups reached!
+            }
+
+            // 3. Claim slot
+            $token = bin2hex(random_bytes(8));
+            $activeLeases[$token] = [
+                'ip' => $ip,
+                'ts' => $nowMicro,
+                'pid' => getmypid(),
+            ];
+            $windowCount++;
+
+            $data = [
+                'window' => $storedWindow,
+                'count' => $windowCount,
+                'active' => $activeLeases,
+            ];
+
+            @file_put_contents($budgetFile, json_encode($data, JSON_UNESCAPED_SLASHES));
+            return $token;
+        } finally {
+            @flock($fp, LOCK_UN);
+            @fclose($fp);
+        }
+    }
+
+    /**
+     * Atomically releases a claimed DNS concurrency slot.
+     *
+     * @param string $token
+     */
+    public static function releaseDnsBudgetSlot(string $token): void
+    {
+        if ($token === '') {
+            return;
+        }
+
+        $budgetFile = self::resolveDnsBudgetFile();
+        $lockFile = $budgetFile . '.lock';
+        $fp = @fopen($lockFile, 'c+');
+        if (!$fp) {
+            return;
+        }
+
+        $locked = false;
+        for ($retry = 0; $retry < 3; $retry++) {
+            if (@flock($fp, LOCK_EX | LOCK_NB)) {
+                $locked = true;
+                break;
+            }
+            usleep(1500);
+        }
+
+        if (!$locked) {
+            @fclose($fp);
+            return;
+        }
+
+        try {
+            if (file_exists($budgetFile)) {
+                $raw = @file_get_contents($budgetFile);
+                if ($raw !== false && trim($raw) !== '') {
+                    $data = json_decode($raw, true);
+                    if (is_array($data) && isset($data['active'][$token])) {
+                        unset($data['active'][$token]);
+                        @file_put_contents($budgetFile, json_encode($data, JSON_UNESCAPED_SLASHES));
+                    }
+                }
+            }
+        } finally {
+            @flock($fp, LOCK_UN);
+            @fclose($fp);
+        }
+    }
+
+    /**
+     * Backward-compatible budget check helper.
+     */
+    public static function acquireDnsBudget(?string $ip = null): bool
+    {
+        $token = self::acquireDnsBudgetSlot($ip ?? '0.0.0.0');
+        if ($token !== null) {
+            self::releaseDnsBudgetSlot($token);
             return true;
-        } catch (\Throwable) {
-            return $processBudget <= 10;
+        }
+        return false;
+    }
+
+    /**
+     * Resets DNS budget state (for testing and diagnostics).
+     */
+    public static function resetBudget(): void
+    {
+        $budgetFile = self::resolveDnsBudgetFile();
+        $lockFile = $budgetFile . '.lock';
+        if (file_exists($budgetFile)) {
+            @unlink($budgetFile);
+        }
+        if (file_exists($lockFile)) {
+            @unlink($lockFile);
         }
     }
 }

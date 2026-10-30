@@ -1,5 +1,6 @@
 /vendor/
 /runtime/
+/tests/runtime/
 composer.lock
 .idea/
 .vscode/

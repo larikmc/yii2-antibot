@@ -15,10 +15,11 @@ use Yii;
  * Implements the standard Three-State Circuit Breaker pattern with persistent cross-process state:
  * - CLOSED: Normal healthy operation.
  * - OPEN: Tripped due to consecutive failures; requests gracefully fail-open without overhead.
- * - HALF_OPEN: Recovery testing period; lets a single probe through to evaluate health.
+ * - HALF_OPEN: Recovery testing period; lets an atomically leased single probe through to evaluate health.
  *
- * State is persisted across independent PHP-FPM requests and CLI workers via shared runtime storage,
- * completely independent of the application Cache component.
+ * All state mutations (reading, evaluating, transitioning, and saving) are performed atomically
+ * under a short-lived file lock to eliminate read-modify-write race conditions across concurrent PHP processes.
+ * The lock is NEVER held while the protected service or operation is executing.
  *
  * @author LarikMC <https://64web.ru>
  * @license MIT
@@ -32,14 +33,6 @@ class CircuitBreaker
     public const DEFAULT_FAILURE_THRESHOLD = 5;
     public const DEFAULT_RECOVERY_TIMEOUT = 30; // seconds
     public const HALF_OPEN_PROBE_INTERVAL = 5;  // seconds between trial probes in HALF_OPEN
-
-    /**
-     * In-process local cache with timestamp to prevent redundant file reads during single request.
-     *
-     * @var array<string, mixed>|null
-     */
-    private static ?array $processLocalStates = null;
-    private static float $lastLocalReadTime = 0.0;
 
     /**
      * Executes an operation protected by the Circuit Breaker.
@@ -82,88 +75,131 @@ class CircuitBreaker
 
     /**
      * Checks if the protected service is available for execution.
-     * Handles OPEN -> HALF_OPEN transitions and throttles concurrent trial probes.
+     *
+     * Performs an atomic check-and-lease operation:
+     * - If CLOSED: returns true.
+     * - If OPEN and recoveryTimeout has elapsed: transitions to HALF_OPEN and grants the probe lease to this process.
+     * - If HALF_OPEN: returns true ONLY to the single process that holds the active lease; other processes return false.
+     *
+     * @param string $service
+     * @param int $recoveryTimeout
+     * @return bool
      */
     public static function isAvailable(string $service = 'default', int $recoveryTimeout = self::DEFAULT_RECOVERY_TIMEOUT): bool
     {
-        $info = self::getServiceInfo($service);
-        $state = $info['state'];
+        return self::atomicStateTransition(function (array &$states) use ($service, $recoveryTimeout): bool {
+            $info = $states[$service] ?? [
+                'state' => self::STATE_CLOSED,
+                'failures' => 0,
+                'lastFailure' => 0,
+                'probeTimestamp' => 0,
+                'probeLeaseHolder' => '',
+            ];
 
-        if ($state === self::STATE_CLOSED) {
-            return true;
-        }
+            $state = $info['state'] ?? self::STATE_CLOSED;
 
-        $now = time();
-
-        if ($state === self::STATE_OPEN) {
-            $lastFailure = (int) ($info['lastFailure'] ?? 0);
-            if ($now - $lastFailure >= $recoveryTimeout) {
-                // Trip to HALF_OPEN to allow trial probe
-                $info['state'] = self::STATE_HALF_OPEN;
-                $info['probeTimestamp'] = $now;
-                self::updateServiceInfo($service, $info);
+            if ($state === self::STATE_CLOSED) {
                 return true;
             }
-            return false;
-        }
 
-        if ($state === self::STATE_HALF_OPEN) {
-            $probeTimestamp = (int) ($info['probeTimestamp'] ?? 0);
-            // Protect against thundering herd: only 1 probe permitted per interval
-            if ($now - $probeTimestamp < self::HALF_OPEN_PROBE_INTERVAL) {
-                return false; // Other concurrent requests take safe fallback while probe runs
+            $now = time();
+
+            if ($state === self::STATE_OPEN) {
+                $lastFailure = (int) ($info['lastFailure'] ?? 0);
+                if ($now - $lastFailure >= $recoveryTimeout) {
+                    // Transition to HALF_OPEN and atomically grant probe lease to this process
+                    $info['state'] = self::STATE_HALF_OPEN;
+                    $info['probeTimestamp'] = $now;
+                    $info['probeLeaseHolder'] = (string) getmypid();
+                    $states[$service] = $info;
+                    return true; // THIS process won the single probe lease!
+                }
+                return false; // Circuit is still in recovery backoff
             }
-            $info['probeTimestamp'] = $now;
-            self::updateServiceInfo($service, $info);
-            return true;
-        }
 
-        return true;
+            if ($state === self::STATE_HALF_OPEN) {
+                $probeTimestamp = (int) ($info['probeTimestamp'] ?? 0);
+                // Protect against thundering herd: only 1 probe permitted per interval
+                if ($now - $probeTimestamp < self::HALF_OPEN_PROBE_INTERVAL) {
+                    // Another process currently holds the active probe lease; fail-open fallback
+                    return false;
+                }
+                // Lease expired (probing worker died or hung): grant new lease!
+                $info['probeTimestamp'] = $now;
+                $info['probeLeaseHolder'] = (string) getmypid();
+                $states[$service] = $info;
+                return true;
+            }
+
+            return true;
+        });
     }
 
     /**
      * Records a successful execution, resetting failure counters and closing circuit.
+     *
+     * @param string $service
      */
     public static function recordSuccess(string $service = 'default'): void
     {
-        $info = [
-            'state' => self::STATE_CLOSED,
-            'failures' => 0,
-            'lastFailure' => 0,
-            'probeTimestamp' => 0,
-        ];
-        self::updateServiceInfo($service, $info);
+        self::atomicStateTransition(function (array &$states) use ($service): void {
+            $states[$service] = [
+                'state' => self::STATE_CLOSED,
+                'failures' => 0,
+                'lastFailure' => 0,
+                'probeTimestamp' => 0,
+                'probeLeaseHolder' => '',
+            ];
+        });
     }
 
     /**
      * Records an execution failure, potentially tripping the circuit to OPEN.
+     *
+     * @param string $service
+     * @param int $failureThreshold
      */
     public static function recordFailure(string $service = 'default', int $failureThreshold = self::DEFAULT_FAILURE_THRESHOLD): void
     {
-        $info = self::getServiceInfo($service);
-        $info['failures'] = ((int) ($info['failures'] ?? 0)) + 1;
-        $info['lastFailure'] = time();
+        self::atomicStateTransition(function (array &$states) use ($service, $failureThreshold): void {
+            $info = $states[$service] ?? [
+                'state' => self::STATE_CLOSED,
+                'failures' => 0,
+                'lastFailure' => 0,
+                'probeTimestamp' => 0,
+                'probeLeaseHolder' => '',
+            ];
+            $info['failures'] = ((int) ($info['failures'] ?? 0)) + 1;
+            $info['lastFailure'] = time();
 
-        // If in HALF_OPEN or failures threshold reached, trip to OPEN
-        if ($info['state'] === self::STATE_HALF_OPEN || $info['failures'] >= $failureThreshold) {
-            $info['state'] = self::STATE_OPEN;
-            $info['probeTimestamp'] = 0;
-        }
+            // If in HALF_OPEN (failed probe) or threshold reached, trip to OPEN
+            if ($info['state'] === self::STATE_HALF_OPEN || $info['failures'] >= $failureThreshold) {
+                $info['state'] = self::STATE_OPEN;
+                $info['probeTimestamp'] = 0;
+                $info['probeLeaseHolder'] = '';
+            }
 
-        self::updateServiceInfo($service, $info);
+            $states[$service] = $info;
+        });
     }
 
     /**
      * Gets the current state of a circuit service ('closed', 'open', 'half_open').
+     *
+     * @param string $service
+     * @return string
      */
     public static function getState(string $service = 'default'): string
     {
-        $info = self::getServiceInfo($service);
-        return $info['state'] ?? self::STATE_CLOSED;
+        $file = self::resolveStateFile();
+        $states = self::loadStatesFromFile($file);
+        return $states[$service]['state'] ?? self::STATE_CLOSED;
     }
 
     /**
      * Resolves the full path to the circuit breaker shared state file.
+     *
+     * @return string
      */
     public static function resolveStateFile(): string
     {
@@ -187,54 +223,54 @@ class CircuitBreaker
     }
 
     /**
-     * Retrieves service state info, using process memory and shared file.
+     * Executes an atomic state mutation under a dedicated file lock.
      *
-     * @return array{state: string, failures: int, lastFailure: int, probeTimestamp: int}
+     * Holds the lock ONLY for reading, evaluating, and writing the small JSON payload (microseconds).
+     * The lock is NEVER held during the execution of protected client services.
+     *
+     * @template R
+     * @param callable(array<string, array<string, mixed>>&): R $callback
+     * @return R
      */
-    private static function getServiceInfo(string $service): array
+    private static function atomicStateTransition(callable $callback)
     {
-        $states = self::loadAllStates();
-        return $states[$service] ?? [
-            'state' => self::STATE_CLOSED,
-            'failures' => 0,
-            'lastFailure' => 0,
-            'probeTimestamp' => 0,
-        ];
-    }
+        $stateFile = self::resolveStateFile();
+        $dir = dirname($stateFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
 
-    private static function updateServiceInfo(string $service, array $info): void
-    {
-        $states = self::loadAllStates();
-        $states[$service] = $info;
-        self::saveAllStates($states);
+        $lockFile = $stateFile . '.lock';
+        $fp = @fopen($lockFile, 'c+');
+        if (!$fp) {
+            // Fallback without lock if file cannot be opened
+            $states = self::loadStatesFromFile($stateFile);
+            $res = $callback($states);
+            self::saveStatesToFile($stateFile, $states);
+            return $res;
+        }
+
+        @flock($fp, LOCK_EX);
+        try {
+            $states = self::loadStatesFromFile($stateFile);
+            $result = $callback($states);
+            self::saveStatesToFile($stateFile, $states);
+            return $result;
+        } finally {
+            @flock($fp, LOCK_UN);
+            @fclose($fp);
+        }
     }
 
     /**
-     * Loads all circuit states across workers.
+     * Loads circuit states from file, safely handling missing or corrupted JSON.
      *
+     * @param string $file
      * @return array<string, array<string, mixed>>
      */
-    private static function loadAllStates(): array
+    private static function loadStatesFromFile(string $file): array
     {
-        $now = microtime(true);
-        if (self::$processLocalStates !== null && ($now - self::$lastLocalReadTime) < 0.25) {
-            return self::$processLocalStates;
-        }
-
-        if (function_exists('apcu_fetch')) {
-            $success = false;
-            $cached = apcu_fetch('__antibot_circuit_states__', $success);
-            if ($success && is_array($cached)) {
-                self::$processLocalStates = $cached;
-                self::$lastLocalReadTime = $now;
-                return $cached;
-            }
-        }
-
-        $file = self::resolveStateFile();
         if (!file_exists($file)) {
-            self::$processLocalStates = [];
-            self::$lastLocalReadTime = $now;
             return [];
         }
 
@@ -243,38 +279,26 @@ class CircuitBreaker
             if ($content !== false && trim($content) !== '') {
                 $decoded = json_decode($content, true);
                 if (is_array($decoded)) {
-                    self::$processLocalStates = $decoded;
-                    self::$lastLocalReadTime = $now;
                     return $decoded;
                 }
             }
         } catch (\Throwable) {
-            // Silently fall back to in-process memory
+            // Corrupted JSON: safely reset to empty array
         }
 
-        self::$processLocalStates = self::$processLocalStates ?? [];
-        self::$lastLocalReadTime = $now;
-        return self::$processLocalStates;
+        return [];
     }
 
     /**
-     * Saves all circuit states to shared cross-process storage.
+     * Saves all circuit states to shared storage.
      *
+     * @param string $file
      * @param array<string, array<string, mixed>> $states
      */
-    private static function saveAllStates(array $states): void
+    private static function saveStatesToFile(string $file, array $states): void
     {
-        self::$processLocalStates = $states;
-        self::$lastLocalReadTime = microtime(true);
-
         if (function_exists('apcu_store')) {
             @apcu_store('__antibot_circuit_states__', $states, 86400);
-        }
-
-        $file = self::resolveStateFile();
-        $dir = dirname($file);
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
         }
 
         try {
@@ -286,13 +310,10 @@ class CircuitBreaker
     }
 
     /**
-     * Manually resets all circuit states (clears shared file, APCu, and memory).
+     * Manually resets all circuit states (clears shared file, lock file, APCu, and memory).
      */
     public static function resetAll(): void
     {
-        self::$processLocalStates = [];
-        self::$lastLocalReadTime = 0.0;
-
         if (function_exists('apcu_delete')) {
             @apcu_delete('__antibot_circuit_states__');
         }
@@ -300,6 +321,10 @@ class CircuitBreaker
         $file = self::resolveStateFile();
         if (file_exists($file)) {
             @unlink($file);
+        }
+        $lockFile = $file . '.lock';
+        if (file_exists($lockFile)) {
+            @unlink($lockFile);
         }
     }
 }
