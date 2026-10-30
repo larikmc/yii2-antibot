@@ -137,6 +137,7 @@ class Antibot extends Component implements BootstrapInterface
     private ?float $_inspectionStartHr = null;
     private string $_currentDecision = 'allowed';
     private bool $_inspectionRecorded = false;
+    private bool $_isBootstrapped = false;
 
     public function init(): void
     {
@@ -150,40 +151,112 @@ class Antibot extends Component implements BootstrapInterface
             $this->_storage->eventsFile = $this->eventsFile;
         }
 
-        // Apply settings from persistent JSON file if present
-        $settings = $this->_storage->loadSettings();
-        $this->enabled = (bool) ($settings['enabled'] ?? $this->enabled);
-        $this->mode = (string) ($settings['mode'] ?? $this->mode);
-        $this->blockAiCrawlers = (bool) ($settings['blockAiCrawlers'] ?? $this->blockAiCrawlers);
-        $this->blockCommercialScrapers = (bool) ($settings['blockCommercialScrapers'] ?? $this->blockCommercialScrapers);
-        $this->blockCliAndLibraries = (bool) ($settings['blockCliAndLibraries'] ?? $this->blockCliAndLibraries);
-        $this->verifySearchBots = (bool) ($settings['verifySearchBots'] ?? $this->verifySearchBots);
-        $this->blockFakeSearchBots = (bool) ($settings['blockFakeSearchBots'] ?? $this->blockFakeSearchBots);
-        $this->rateLimitEnabled = (bool) ($settings['rateLimitEnabled'] ?? $this->rateLimitEnabled);
-        $this->rateLimitMax = (int) ($settings['rateLimitMax'] ?? $this->rateLimitMax);
-        $this->rateLimitWindow = (int) ($settings['rateLimitWindow'] ?? $this->rateLimitWindow);
-        $this->rateLimitBanDuration = (int) ($settings['rateLimitBanDuration'] ?? $this->rateLimitBanDuration);
-        $this->rateLimitAdapter = (string) ($settings['rateLimitAdapter'] ?? $this->rateLimitAdapter);
-        $this->jsChallengeEnabled = (bool) ($settings['jsChallengeEnabled'] ?? $this->jsChallengeEnabled);
-        $this->whitelist = (array) ($settings['whitelist'] ?? $this->whitelist);
-        $this->blacklist = (array) ($settings['blacklist'] ?? $this->blacklist);
-        $this->trustedProxies = (array) ($settings['trustedProxies'] ?? $this->trustedProxies);
-        $this->ipHeaders = (array) ($settings['ipHeaders'] ?? $this->ipHeaders);
-        $this->aiCrawlerPolicies = (array) ($settings['aiCrawlerPolicies'] ?? $this->aiCrawlerPolicies);
-        $this->routeRules = (array) ($settings['routeRules'] ?? $this->routeRules);
-        $this->behaviorAnalysisEnabled = (bool) ($settings['behaviorAnalysisEnabled'] ?? $this->behaviorAnalysisEnabled);
-        $this->weightedRateLimitEnabled = (bool) ($settings['weightedRateLimitEnabled'] ?? $this->weightedRateLimitEnabled);
-        $this->weightedRateLimitBudget = (int) ($settings['weightedRateLimitBudget'] ?? $this->weightedRateLimitBudget);
-        $this->weightedRateLimitWindow = (int) ($settings['weightedRateLimitWindow'] ?? $this->weightedRateLimitWindow);
-        $this->routeWeights = (array) ($settings['routeWeights'] ?? $this->routeWeights);
-        $this->powEnabled = (bool) ($settings['powEnabled'] ?? $this->powEnabled);
-        $this->powDifficulty = (string) ($settings['powDifficulty'] ?? $this->powDifficulty);
-        $this->honeyTrapsEnabled = (bool) ($settings['honeyTrapsEnabled'] ?? $this->honeyTrapsEnabled);
-        $this->trapRoute = (string) ($settings['trapRoute'] ?? $this->trapRoute);
-        $this->customBlockMessage = (string) ($settings['customBlockMessage'] ?? $this->customBlockMessage);
+        // Priority order:
+        // 1. Explicitly saved administrator settings from persistent JSON file.
+        // 2. Yii2 application configuration (already injected on $this before init()).
+        // 3. Component class property defaults.
+        $savedSettings = $this->_storage->getSavedSettings();
+        if (!empty($savedSettings)) {
+            if (isset($savedSettings['enabled'])) {
+                $this->enabled = (bool) $savedSettings['enabled'];
+            }
+            if (isset($savedSettings['mode']) && is_string($savedSettings['mode'])) {
+                $this->mode = $savedSettings['mode'];
+            }
+            if (isset($savedSettings['blockAiCrawlers'])) {
+                $this->blockAiCrawlers = (bool) $savedSettings['blockAiCrawlers'];
+            }
+            if (isset($savedSettings['blockCommercialScrapers'])) {
+                $this->blockCommercialScrapers = (bool) $savedSettings['blockCommercialScrapers'];
+            }
+            if (isset($savedSettings['blockCliAndLibraries'])) {
+                $this->blockCliAndLibraries = (bool) $savedSettings['blockCliAndLibraries'];
+            }
+            if (isset($savedSettings['verifySearchBots'])) {
+                $this->verifySearchBots = (bool) $savedSettings['verifySearchBots'];
+            }
+            if (isset($savedSettings['blockFakeSearchBots'])) {
+                $this->blockFakeSearchBots = (bool) $savedSettings['blockFakeSearchBots'];
+            }
+            if (isset($savedSettings['rateLimitEnabled'])) {
+                $this->rateLimitEnabled = (bool) $savedSettings['rateLimitEnabled'];
+            }
+            if (isset($savedSettings['rateLimitMax'])) {
+                $this->rateLimitMax = (int) $savedSettings['rateLimitMax'];
+            }
+            if (isset($savedSettings['rateLimitWindow'])) {
+                $this->rateLimitWindow = (int) $savedSettings['rateLimitWindow'];
+            }
+            if (isset($savedSettings['rateLimitBanDuration'])) {
+                $this->rateLimitBanDuration = (int) $savedSettings['rateLimitBanDuration'];
+            }
+            if (isset($savedSettings['rateLimitAdapter']) && is_string($savedSettings['rateLimitAdapter'])) {
+                $this->rateLimitAdapter = $savedSettings['rateLimitAdapter'];
+            }
+            if (isset($savedSettings['jsChallengeEnabled'])) {
+                $this->jsChallengeEnabled = (bool) $savedSettings['jsChallengeEnabled'];
+            }
+            if (isset($savedSettings['whitelist']) && is_array($savedSettings['whitelist'])) {
+                $this->whitelist = $savedSettings['whitelist'];
+            }
+            if (isset($savedSettings['blacklist']) && is_array($savedSettings['blacklist'])) {
+                $this->blacklist = $savedSettings['blacklist'];
+            }
+            if (isset($savedSettings['trustedProxies']) && is_array($savedSettings['trustedProxies'])) {
+                $this->trustedProxies = $savedSettings['trustedProxies'];
+            }
+            if (isset($savedSettings['ipHeaders']) && is_array($savedSettings['ipHeaders'])) {
+                $this->ipHeaders = $savedSettings['ipHeaders'];
+            }
+            if (isset($savedSettings['aiCrawlerPolicies']) && is_array($savedSettings['aiCrawlerPolicies'])) {
+                $this->aiCrawlerPolicies = $savedSettings['aiCrawlerPolicies'];
+            }
+            if (isset($savedSettings['routeRules']) && is_array($savedSettings['routeRules'])) {
+                $this->routeRules = $savedSettings['routeRules'];
+            }
+            if (isset($savedSettings['behaviorAnalysisEnabled'])) {
+                $this->behaviorAnalysisEnabled = (bool) $savedSettings['behaviorAnalysisEnabled'];
+            }
+            if (isset($savedSettings['weightedRateLimitEnabled'])) {
+                $this->weightedRateLimitEnabled = (bool) $savedSettings['weightedRateLimitEnabled'];
+            }
+            if (isset($savedSettings['weightedRateLimitBudget'])) {
+                $this->weightedRateLimitBudget = (int) $savedSettings['weightedRateLimitBudget'];
+            }
+            if (isset($savedSettings['weightedRateLimitWindow'])) {
+                $this->weightedRateLimitWindow = (int) $savedSettings['weightedRateLimitWindow'];
+            }
+            if (isset($savedSettings['routeWeights']) && is_array($savedSettings['routeWeights'])) {
+                $this->routeWeights = $savedSettings['routeWeights'];
+            }
+            if (isset($savedSettings['powEnabled'])) {
+                $this->powEnabled = (bool) $savedSettings['powEnabled'];
+            }
+            if (isset($savedSettings['powDifficulty']) && is_string($savedSettings['powDifficulty'])) {
+                $this->powDifficulty = $savedSettings['powDifficulty'];
+            }
+            if (isset($savedSettings['honeyTrapsEnabled'])) {
+                $this->honeyTrapsEnabled = (bool) $savedSettings['honeyTrapsEnabled'];
+            }
+            if (isset($savedSettings['trapRoute']) && is_string($savedSettings['trapRoute'])) {
+                $this->trapRoute = $savedSettings['trapRoute'];
+            }
+            if (isset($savedSettings['customBlockMessage']) && is_string($savedSettings['customBlockMessage'])) {
+                $this->customBlockMessage = $savedSettings['customBlockMessage'];
+            }
+            if (!empty($savedSettings['secretKey']) && is_string($savedSettings['secretKey'])) {
+                $this->secretKey = $savedSettings['secretKey'];
+            }
+        }
 
-        if (!empty($settings['secretKey'])) {
-            $this->secretKey = (string) $settings['secretKey'];
+        // Validate mode safety: never allow an unrecognized mode to secretly become strict
+        $validModes = [
+            StorageService::MODE_MONITORING,
+            StorageService::MODE_STANDARD,
+            StorageService::MODE_STRICT,
+        ];
+        if (!in_array($this->mode, $validModes, true)) {
+            $this->mode = StorageService::MODE_STANDARD;
         }
 
         // Configure RateLimiter adapter
@@ -195,9 +268,17 @@ class Antibot extends Component implements BootstrapInterface
      */
     public function bootstrap($app): void
     {
+        // Enforce strict idempotency: prevent double handler registration when both
+        // Composer extension discovery and manual 'bootstrap' => ['antibot'] are active.
+        if ($this->_isBootstrapped) {
+            return;
+        }
+
         if (!$app instanceof WebApplication || !$this->enabled) {
             return;
         }
+
+        $this->_isBootstrapped = true;
 
         // Phase 1: Fast global URI and IP checks before routing
         $app->on(WebApplication::EVENT_BEFORE_REQUEST, function (): void {
@@ -213,6 +294,11 @@ class Antibot extends Component implements BootstrapInterface
         register_shutdown_function(function (): void {
             $this->finishInspection($this->_currentDecision);
         });
+    }
+
+    public function isBootstrapped(): bool
+    {
+        return $this->_isBootstrapped;
     }
 
     /**

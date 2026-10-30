@@ -106,6 +106,38 @@ class SettingsController extends Controller
         }
 
         $settings = $storage->loadSettings();
+        if (!$storage->hasSavedSettings()) {
+            // Priority 2: When no file was explicitly saved yet, display active Yii2 application configuration
+            $settings['enabled'] = $antibot->enabled;
+            $settings['mode'] = $antibot->mode;
+            $settings['blockAiCrawlers'] = $antibot->blockAiCrawlers;
+            $settings['blockCommercialScrapers'] = $antibot->blockCommercialScrapers;
+            $settings['blockCliAndLibraries'] = $antibot->blockCliAndLibraries;
+            $settings['verifySearchBots'] = $antibot->verifySearchBots;
+            $settings['blockFakeSearchBots'] = $antibot->blockFakeSearchBots;
+            $settings['rateLimitEnabled'] = $antibot->rateLimitEnabled;
+            $settings['rateLimitMax'] = $antibot->rateLimitMax;
+            $settings['rateLimitWindow'] = $antibot->rateLimitWindow;
+            $settings['rateLimitBanDuration'] = $antibot->rateLimitBanDuration;
+            $settings['rateLimitAdapter'] = $antibot->rateLimitAdapter;
+            $settings['jsChallengeEnabled'] = $antibot->jsChallengeEnabled;
+            $settings['whitelist'] = $antibot->whitelist;
+            $settings['blacklist'] = $antibot->blacklist;
+            $settings['trustedProxies'] = $antibot->trustedProxies;
+            $settings['ipHeaders'] = $antibot->ipHeaders;
+            $settings['aiCrawlerPolicies'] = $antibot->aiCrawlerPolicies;
+            $settings['routeRules'] = $antibot->routeRules;
+            $settings['behaviorAnalysisEnabled'] = $antibot->behaviorAnalysisEnabled;
+            $settings['weightedRateLimitEnabled'] = $antibot->weightedRateLimitEnabled;
+            $settings['weightedRateLimitBudget'] = $antibot->weightedRateLimitBudget;
+            $settings['weightedRateLimitWindow'] = $antibot->weightedRateLimitWindow;
+            $settings['routeWeights'] = $antibot->routeWeights;
+            $settings['powEnabled'] = $antibot->powEnabled;
+            $settings['powDifficulty'] = $antibot->powDifficulty;
+            $settings['honeyTrapsEnabled'] = $antibot->honeyTrapsEnabled;
+            $settings['trapRoute'] = $antibot->trapRoute;
+            $settings['customBlockMessage'] = $antibot->customBlockMessage;
+        }
 
         return $this->render('index', [
             'settings' => $settings,

@@ -46,6 +46,9 @@ $this->params['breadcrumbs'] = [
     <!-- Performance & Telemetry Header -->
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div class="d-flex gap-2 flex-wrap">
+            <span class="badge <?= $antibot->mode === 'monitoring' ? 'bg-info text-dark' : ($antibot->mode === 'strict' ? 'bg-danger' : 'bg-primary') ?> border px-3 py-2" title="Действующий режим работы антибота">
+                🛡️ Режим: <strong><?= htmlspecialchars(ucfirst($antibot->mode)) ?></strong>
+            </span>
             <span class="badge bg-light text-dark border px-3 py-2">
                 ⚡ Время проверки: 
                 <?php if (($perf['avg_ms'] ?? null) !== null): ?>
@@ -107,7 +110,12 @@ $this->params['breadcrumbs'] = [
     <?php elseif ($antibot->mode === 'monitoring'): ?>
         <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
             <span class="fs-4 me-2">ℹ️</span>
-            <div><strong>Режим мониторинга (Тест):</strong> Обнаруженные боты логируются, но запросы не блокируются.</div>
+            <div><strong>Режим мониторинга (Monitoring):</strong> Обнаруженные боты логируются, но запросы не блокируются (безопасное внедрение).</div>
+        </div>
+    <?php elseif ($antibot->mode === 'strict'): ?>
+        <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+            <span class="fs-4 me-2">🚨</span>
+            <div><strong>Строгий режим (Strict):</strong> Включена максимальная строгость фильтрации с превентивным вызовом проверок.</div>
         </div>
     <?php endif; ?>
 

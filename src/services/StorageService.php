@@ -81,6 +81,42 @@ class StorageService
     }
 
     /**
+     * Checks whether an explicit settings file exists on disk.
+     */
+    public function hasSavedSettings(): bool
+    {
+        $file = $this->resolveStorageFile();
+        return file_exists($file) && is_file($file);
+    }
+
+    /**
+     * Loads raw explicitly saved settings from disk without merging component defaults.
+     *
+     * @return array<string, mixed> Empty array if no settings file exists or on decode error.
+     */
+    public function getSavedSettings(): array
+    {
+        $file = $this->resolveStorageFile();
+        if (!file_exists($file) || !is_file($file)) {
+            return [];
+        }
+
+        try {
+            $content = file_get_contents($file);
+            if ($content !== false && trim($content) !== '') {
+                $saved = Json::decode($content);
+                if (is_array($saved)) {
+                    return $saved;
+                }
+            }
+        } catch (\Throwable $e) {
+            Yii::warning('Failed to load raw Antibot settings: ' . $e->getMessage(), __METHOD__);
+        }
+
+        return [];
+    }
+
+    /**
      * Loads settings from file with defaults.
      *
      * @return array<string, mixed>

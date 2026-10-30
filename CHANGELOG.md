@@ -2,6 +2,31 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.6] - 2026-10-30
+
+### Configuration & Integration Resilience
+- **Strict Configuration Priority Hierarchy (`Antibot`, `StorageService`):**
+  - Enforced reliable 3-tier configuration resolution:
+    1. Explicitly saved administrator settings from persistent storage file (`antibot.json`).
+    2. Yii2 application configuration (properties injected on component before `init()`).
+    3. Component property defaults.
+  - Eliminated bug where unpersisted storage defaults (`mode => 'standard'`) silently overrode explicit Yii2 application configurations (`mode => 'monitoring'`).
+  - Added `StorageService::hasSavedSettings(): bool` and `StorageService::getSavedSettings(): array` to inspect raw persisted settings without merging defaults.
+  - Added mode validation fallback: unrecognized or malformed modes safely fall back to `standard`, never secretly enabling `strict`.
+- **Idempotent Bootstrap (`Antibot`, `Bootstrap`):**
+  - Added `_isBootstrapped` guard and `isBootstrapped(): bool` getter in `Antibot::bootstrap()`.
+  - Eliminated duplicate event handler registrations (`EVENT_BEFORE_REQUEST` and `EVENT_BEFORE_ACTION`) when both Composer extension discovery (`Bootstrap`) and manual application config `'bootstrap' => ['antibot']` are active.
+  - Prevents duplicate quota consumption, duplicate weighted scoring, duplicate risk evaluation, duplicate event logging, and duplicate shutdown callbacks.
+  - Protected console applications: `Bootstrap::bootstrap()` safely ignores non-web applications (`yii\console\Application`).
+- **Honeypot Convenience Helper (`HoneypotWidget`):**
+  - Added `HoneypotWidget::validateSubmission(): bool` for clean one-line form submission validation.
+- **Documentation & Security Hardening (`README.md`):**
+  - Removed non-existent property `'trustProxyHeaders' => true`.
+  - Replaced overly broad private CIDR ranges in basic configuration example with safe default `'trustedProxies' => []`.
+  - Documented reverse proxy setups, IP spoofing protections, and admin panel access controls (`accessPermission`, `accessRoles`, `accessCallback`).
+  - Added explicit security warnings against using `accessRoles => ['@']`.
+  - Updated Composer version requirement examples to `^1.5.6`.
+
 ## [1.5.5] - 2026-10-30
 
 ### Security & DNS Verification Cache Invalidation

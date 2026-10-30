@@ -20,7 +20,8 @@ class Bootstrap implements BootstrapInterface
      */
     public function bootstrap($app): void
     {
-        if ($app->has('antibot')) {
+        // Only bootstrap for web applications; console commands should not run web inspection.
+        if ($app instanceof \yii\web\Application && $app->has('antibot')) {
             $antibot = $app->get('antibot');
             if ($antibot instanceof Antibot) {
                 $antibot->bootstrap($app);

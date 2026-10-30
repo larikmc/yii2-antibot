@@ -164,6 +164,16 @@ class HoneypotWidget extends Widget
         return self::validate($req->post());
     }
 
+    /**
+     * Quick helper to validate current POST submission for honeypot and timing violations.
+     *
+     * @return bool True if submission is clean; false if bot activity was detected.
+     */
+    public static function validateSubmission(): bool
+    {
+        return self::inspect()['valid'];
+    }
+
     private static function logHoneypotViolation(string $reason): void
     {
         if (Yii::$app !== null && Yii::$app->has('antibot')) {
