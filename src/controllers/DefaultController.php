@@ -71,6 +71,13 @@ class DefaultController extends Controller
         $perf = $antibot->getInspectionMetrics();
         $selfTest = \larikmc\antibot\services\resilience\SelfTest::run($antibot);
 
+        // Visual Analytics Dataset (cached 120s, no public overhead)
+        $analyticsData = \larikmc\antibot\services\analytics\DashboardAnalyticsService::getAnalytics(
+            $storage,
+            \larikmc\antibot\services\analytics\DashboardAnalyticsService::PERIOD_24H,
+            $antibot->mode
+        );
+
         return $this->render('index', [
             'antibot' => $antibot,
             'module' => $this->module,
@@ -85,7 +92,31 @@ class DefaultController extends Controller
             'auditTrail' => $auditTrail,
             'perf' => $perf,
             'selfTest' => $selfTest,
+            'analyticsData' => $analyticsData,
         ]);
+    }
+
+    /**
+     * Returns JSON analytics dataset for dashboard charts (ECharts).
+     * Protected by module's AccessControl behavior.
+     *
+     * @return Response
+     */
+    public function actionAnalyticsData(): Response
+    {
+        $period = (string) $this->request->get('period', '24h');
+        $forceRefresh = (bool) $this->request->get('refresh', false);
+        $antibot = $this->module->getAntibot();
+        $storage = $antibot->getStorage();
+
+        $data = \larikmc\antibot\services\analytics\DashboardAnalyticsService::getAnalytics(
+            $storage,
+            $period,
+            $antibot->mode,
+            $forceRefresh
+        );
+
+        return $this->asJson($data);
     }
 
     /**

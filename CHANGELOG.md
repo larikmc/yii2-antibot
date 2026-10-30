@@ -2,6 +2,31 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.7] - 2026-10-30
+
+### Visual Analytics & UI Polish
+- **Apache ECharts Integration (`AntibotDashboardAsset`, `DashboardAnalyticsService`):**
+  - Integrated official modular Apache ECharts 5.5.1 bundle (`echarts.common.min.js`) locally via Yii2 AssetBundle (`AntibotDashboardAsset`), strictly eliminating external CDN dependencies.
+  - Included Apache License 2.0 (`LICENSE-echarts.txt`) and `NOTICE-echarts.txt`.
+  - Added 4 interactive charts to the administration dashboard:
+    1. *Dynamic of Suspicious Activity (Line / Area Chart)*: Timeline tracking monitored actions, actual blocks, rate limit throttling, and security challenges across 24 hours, 7 days, and available sample history.
+    2. *Event Distribution (Donut Chart)*: Clean ratio of action categories with total events rendered in the ring center, tooltips with percentage of journal events, and empty state support.
+    3. *Main Trigger Reasons (Horizontal Bar Chart)*: Top-8 detection triggers (CLI/libraries, fake bots, AI crawlers, scrapers, rate limit, honeypots) with normalized Russian labels.
+    4. *Top Targeted URLs (Horizontal Bar Chart)*: Top-10 attacked paths, safely sanitized with query parameters, sensitive tokens, and potential XSS sequences removed.
+- **Zero Overhead on Public HTTP Traffic:**
+  - Visual charts execute zero database queries, zero disk writes, and zero aggregation loops on public website visitor requests.
+  - Fast tail reading from `antibot_events.jsonl` using existing `tailFile` in a single pass solely within admin dashboard requests.
+  - Aggregated analytics datasets are cached for 120 seconds with refresh cooldown protection.
+  - Added JSON API endpoint `actionAnalyticsData` protected by module access control for seamless period toggling and manual refresh without full page reloads.
+- **Dashboard UI & Design Polish:**
+  - Modernized card layouts with 12px border radius, subtle borders, and soft shadows.
+  - Added prominent badges for active mode, inspection latency, and honest Best-Effort metrics indicators.
+  - Accessible table fallbacks for no-JS and screen-reader environments.
+- **Documentation Polish (`README.md`):**
+  - Updated headings, badges, and composer dependencies to `v1.5.7`.
+  - Softened unconditional claims (removed "поисковые роботы никогда не блокируются" and fixed "менее 0.25 мс" to realistic measured latencies).
+  - Clarified `trustedProxies` defaults (`[]` for standalone servers, `['127.0.0.1']` only when local reverse proxy like Nginx is active).
+
 ## [1.5.6] - 2026-10-30
 
 ### Configuration & Integration Resilience
