@@ -6,7 +6,8 @@ declare(strict_types=1);
  * Yii2 AntiBot v1.5.2 Security, Concurrency & Resilience Test Suite.
  */
 
-require_once __DIR__ . '/../../yii2-advanced.loc/vendor/autoload.php';
+$loader = require_once __DIR__ . '/../../yii2-advanced.loc/vendor/autoload.php';
+$loader->setPsr4('larikmc\\antibot\\', [dirname(__DIR__) . '/src']);
 require_once __DIR__ . '/../../yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php';
 
 // Mock minimal Yii WebApplication

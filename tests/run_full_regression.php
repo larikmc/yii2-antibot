@@ -6,7 +6,8 @@ declare(strict_types=1);
  * Full Regression Test Suite for larikmc/yii2-antibot (v1.1.0 - v1.5.2)
  */
 
-require_once __DIR__ . '/../../yii2-advanced.loc/vendor/autoload.php';
+$loader = require_once __DIR__ . '/../../yii2-advanced.loc/vendor/autoload.php';
+$loader->setPsr4('larikmc\\antibot\\', [dirname(__DIR__) . '/src']);
 require_once __DIR__ . '/../../yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php';
 
 $_SERVER['SCRIPT_NAME'] = '/index.php';

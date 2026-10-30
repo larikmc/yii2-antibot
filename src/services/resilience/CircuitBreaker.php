@@ -17,9 +17,11 @@ use Yii;
  * - OPEN: Tripped due to consecutive failures; requests gracefully fail-open without overhead.
  * - HALF_OPEN: Recovery testing period; lets an atomically leased single probe through to evaluate health.
  *
- * All state mutations (reading, evaluating, transitioning, and saving) are performed atomically
- * under a short-lived file lock to eliminate read-modify-write race conditions across concurrent PHP processes.
- * The lock is NEVER held while the protected service or operation is executing.
+ * Safety & Atomicity Guarantees:
+ * - All state mutations execute under a non-blocking flock with short bounded retries (max 5ms).
+ * - Never executes un-locked mutations on failure; safely falls back to read-only fail-open mode.
+ * - Single-probe lease with generation token in HALF_OPEN protects against delayed probe collisions.
+ * - Independent of the application Cache subsystem.
  *
  * @author LarikMC <https://64web.ru>
  * @license MIT
@@ -52,17 +54,18 @@ class CircuitBreaker
         int $failureThreshold = self::DEFAULT_FAILURE_THRESHOLD,
         int $recoveryTimeout = self::DEFAULT_RECOVERY_TIMEOUT
     ) {
-        if (!self::isAvailable($service, $recoveryTimeout)) {
+        $leaseToken = null;
+        if (!self::isAvailable($service, $recoveryTimeout, $leaseToken)) {
             // Circuit is OPEN: bypass operation and immediately return fallback
             return $fallback(null);
         }
 
         try {
             $result = $operation();
-            self::recordSuccess($service);
+            self::recordSuccess($service, $leaseToken);
             return $result;
         } catch (\Throwable $e) {
-            self::recordFailure($service, $failureThreshold);
+            self::recordFailure($service, $failureThreshold, $leaseToken);
             if (Yii::$app !== null) {
                 Yii::warning(
                     sprintf('CircuitBreaker caught failure in [%s]: %s', $service, $e->getMessage()),
@@ -78,22 +81,30 @@ class CircuitBreaker
      *
      * Performs an atomic check-and-lease operation:
      * - If CLOSED: returns true.
-     * - If OPEN and recoveryTimeout has elapsed: transitions to HALF_OPEN and grants the probe lease to this process.
+     * - If OPEN and recoveryTimeout has elapsed: transitions to HALF_OPEN and atomically grants probe lease.
      * - If HALF_OPEN: returns true ONLY to the single process that holds the active lease; other processes return false.
      *
      * @param string $service
      * @param int $recoveryTimeout
+     * @param string|null $leaseToken Output parameter receiving the lease token if probe is granted.
      * @return bool
      */
-    public static function isAvailable(string $service = 'default', int $recoveryTimeout = self::DEFAULT_RECOVERY_TIMEOUT): bool
-    {
-        return self::atomicStateTransition(function (array &$states) use ($service, $recoveryTimeout): bool {
+    public static function isAvailable(
+        string $service = 'default',
+        int $recoveryTimeout = self::DEFAULT_RECOVERY_TIMEOUT,
+        ?string &$leaseToken = null
+    ): bool {
+        $leaseToken = null;
+        $capturedToken = null;
+
+        $res = self::atomicStateTransition(function (array &$states) use ($service, $recoveryTimeout, &$capturedToken): bool {
             $info = $states[$service] ?? [
                 'state' => self::STATE_CLOSED,
                 'failures' => 0,
                 'lastFailure' => 0,
                 'probeTimestamp' => 0,
-                'probeLeaseHolder' => '',
+                'probeToken' => '',
+                'generation' => 1,
             ];
 
             $state = $info['state'] ?? self::STATE_CLOSED;
@@ -107,11 +118,14 @@ class CircuitBreaker
             if ($state === self::STATE_OPEN) {
                 $lastFailure = (int) ($info['lastFailure'] ?? 0);
                 if ($now - $lastFailure >= $recoveryTimeout) {
-                    // Transition to HALF_OPEN and atomically grant probe lease to this process
+                    // Transition to HALF_OPEN and atomically grant probe lease
+                    $token = bin2hex(random_bytes(8));
                     $info['state'] = self::STATE_HALF_OPEN;
                     $info['probeTimestamp'] = $now;
-                    $info['probeLeaseHolder'] = (string) getmypid();
+                    $info['probeToken'] = $token;
+                    $info['generation'] = ((int) ($info['generation'] ?? 0)) + 1;
                     $states[$service] = $info;
+                    $capturedToken = $token;
                     return true; // THIS process won the single probe lease!
                 }
                 return false; // Circuit is still in recovery backoff
@@ -124,31 +138,57 @@ class CircuitBreaker
                     // Another process currently holds the active probe lease; fail-open fallback
                     return false;
                 }
-                // Lease expired (probing worker died or hung): grant new lease!
+                // Previous probing worker timed out or died: issue fresh lease!
+                $token = bin2hex(random_bytes(8));
                 $info['probeTimestamp'] = $now;
-                $info['probeLeaseHolder'] = (string) getmypid();
+                $info['probeToken'] = $token;
+                $info['generation'] = ((int) ($info['generation'] ?? 0)) + 1;
                 $states[$service] = $info;
+                $capturedToken = $token;
                 return true;
             }
 
             return true;
         });
+
+        $leaseToken = $capturedToken;
+        return $res;
     }
 
     /**
      * Records a successful execution, resetting failure counters and closing circuit.
+     * Validates generation lease token to prevent delayed old probes from closing a newly opened circuit.
      *
      * @param string $service
+     * @param string|null $leaseToken
      */
-    public static function recordSuccess(string $service = 'default'): void
+    public static function recordSuccess(string $service = 'default', ?string $leaseToken = null): void
     {
-        self::atomicStateTransition(function (array &$states) use ($service): void {
+        self::atomicStateTransition(function (array &$states) use ($service, $leaseToken): void {
+            $info = $states[$service] ?? [
+                'state' => self::STATE_CLOSED,
+                'failures' => 0,
+                'lastFailure' => 0,
+                'probeTimestamp' => 0,
+                'probeToken' => '',
+                'generation' => 1,
+            ];
+
+            // In HALF_OPEN, only the active lease holder is allowed to close the circuit
+            if ($info['state'] === self::STATE_HALF_OPEN) {
+                if ($leaseToken !== null && !empty($info['probeToken']) && $leaseToken !== $info['probeToken']) {
+                    // Stale or expired probe: ignore
+                    return;
+                }
+            }
+
             $states[$service] = [
                 'state' => self::STATE_CLOSED,
                 'failures' => 0,
                 'lastFailure' => 0,
                 'probeTimestamp' => 0,
-                'probeLeaseHolder' => '',
+                'probeToken' => '',
+                'generation' => ((int) ($info['generation'] ?? 0)) + 1,
             ];
         });
     }
@@ -158,25 +198,39 @@ class CircuitBreaker
      *
      * @param string $service
      * @param int $failureThreshold
+     * @param string|null $leaseToken
      */
-    public static function recordFailure(string $service = 'default', int $failureThreshold = self::DEFAULT_FAILURE_THRESHOLD): void
-    {
-        self::atomicStateTransition(function (array &$states) use ($service, $failureThreshold): void {
+    public static function recordFailure(
+        string $service = 'default',
+        int $failureThreshold = self::DEFAULT_FAILURE_THRESHOLD,
+        ?string $leaseToken = null
+    ): void {
+        self::atomicStateTransition(function (array &$states) use ($service, $failureThreshold, $leaseToken): void {
             $info = $states[$service] ?? [
                 'state' => self::STATE_CLOSED,
                 'failures' => 0,
                 'lastFailure' => 0,
                 'probeTimestamp' => 0,
-                'probeLeaseHolder' => '',
+                'probeToken' => '',
+                'generation' => 1,
             ];
+
+            if ($info['state'] === self::STATE_HALF_OPEN) {
+                if ($leaseToken !== null && !empty($info['probeToken']) && $leaseToken !== $info['probeToken']) {
+                    // Stale probe failure: ignore
+                    return;
+                }
+            }
+
             $info['failures'] = ((int) ($info['failures'] ?? 0)) + 1;
             $info['lastFailure'] = time();
 
-            // If in HALF_OPEN (failed probe) or threshold reached, trip to OPEN
+            // If in HALF_OPEN (failed trial probe) or threshold reached, trip to OPEN
             if ($info['state'] === self::STATE_HALF_OPEN || $info['failures'] >= $failureThreshold) {
                 $info['state'] = self::STATE_OPEN;
                 $info['probeTimestamp'] = 0;
-                $info['probeLeaseHolder'] = '';
+                $info['probeToken'] = '';
+                $info['generation'] = ((int) ($info['generation'] ?? 0)) + 1;
             }
 
             $states[$service] = $info;
@@ -223,10 +277,11 @@ class CircuitBreaker
     }
 
     /**
-     * Executes an atomic state mutation under a dedicated file lock.
+     * Executes an atomic state mutation under a dedicated file lock with non-blocking retries.
      *
-     * Holds the lock ONLY for reading, evaluating, and writing the small JSON payload (microseconds).
-     * The lock is NEVER held during the execution of protected client services.
+     * If the lock cannot be acquired within 5ms:
+     * - Strictly avoids performing un-locked writes that could corrupt shared state!
+     * - Falls back to safe in-memory evaluation (fail-open mode) without disrupting the website.
      *
      * @template R
      * @param callable(array<string, array<string, mixed>>&): R $callback
@@ -243,14 +298,32 @@ class CircuitBreaker
         $lockFile = $stateFile . '.lock';
         $fp = @fopen($lockFile, 'c+');
         if (!$fp) {
-            // Fallback without lock if file cannot be opened
+            // Cannot open lock file (e.g. read-only filesystem or permissions error):
+            // Strictly do NOT perform an unlocked write! Evaluate read-only and fail-open.
+            if (Yii::$app !== null) {
+                Yii::warning('CircuitBreaker could not open lock file: ' . $lockFile, __METHOD__);
+            }
             $states = self::loadStatesFromFile($stateFile);
-            $res = $callback($states);
-            self::saveStatesToFile($stateFile, $states);
-            return $res;
+            return $callback($states);
         }
 
-        @flock($fp, LOCK_EX);
+        // Bounded non-blocking lock (max 5 retries x 1ms = 5ms max wait)
+        $locked = false;
+        for ($retry = 0; $retry < 5; $retry++) {
+            if (@flock($fp, LOCK_EX | LOCK_NB)) {
+                $locked = true;
+                break;
+            }
+            usleep(1000); // 1ms
+        }
+
+        if (!$locked) {
+            @fclose($fp);
+            // Lock busy: fail open safely without mutating shared file
+            $states = self::loadStatesFromFile($stateFile);
+            return $callback($states);
+        }
+
         try {
             $states = self::loadStatesFromFile($stateFile);
             $result = $callback($states);
@@ -283,7 +356,7 @@ class CircuitBreaker
                 }
             }
         } catch (\Throwable) {
-            // Corrupted JSON: safely reset to empty array
+            // Corrupted JSON: safely reset to empty array without crashing
         }
 
         return [];

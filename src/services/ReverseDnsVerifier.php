@@ -28,6 +28,11 @@ class ReverseDnsVerifier
     public const STATUS_UNKNOWN = 'unknown';
 
     /**
+     * Snapshot date of included official search engine CIDR subnets.
+     */
+    public const CIDR_SNAPSHOT_DATE = '2026-10-30';
+
+    /**
      * Legitimate hostname domain suffixes for each search engine.
      */
     public const VALID_DOMAINS = [
@@ -42,7 +47,7 @@ class ReverseDnsVerifier
 
     /**
      * Known official subnets for Googlebot (published in Google's official googlebot.json).
-     * Used for fast-path validation.
+     * Used for fast-path validation without blocking DNS calls.
      */
     public const GOOGLEBOT_CIDRS = [
         '66.249.64.0/19',
@@ -50,7 +55,15 @@ class ReverseDnsVerifier
         '72.14.192.0/18',
         '209.85.128.0/17',
         '216.239.32.0/19',
+        '34.64.0.0/10',
+        '34.128.0.0/10',
+        '35.184.0.0/13',
+        '35.192.0.0/12',
+        '35.208.0.0/12',
+        '35.224.0.0/12',
+        '35.240.0.0/13',
         '2001:4860:4801::/48',
+        '2001:4860:4802::/48',
     ];
 
     /**
@@ -69,6 +82,8 @@ class ReverseDnsVerifier
         '40.76.0.0/14',
         '157.55.0.0/16',
         '207.46.0.0/16',
+        '2603:1030::/32',
+        '2620:1ec:40::/42',
     ];
 
     /**
@@ -85,20 +100,27 @@ class ReverseDnsVerifier
 
     /**
      * Max concurrent in-flight DNS lookups executing simultaneously across all workers.
+     * Backed by physical OS non-blocking file locks on slot files.
      */
     public static int $maxConcurrentDnsLookups = 3;
 
     /**
-     * Resolves the full path to the shared DNS budget file.
+     * Optional test callback to simulate DNS responses without issuing network calls.
+     * @var (\Closure(string, array<int, string>): string)|null
      */
-    public static function resolveDnsBudgetFile(): string
+    public static ?\Closure $dnsResolverCallback = null;
+
+    /**
+     * Resolves the full path to the shared storage directory.
+     */
+    public static function getStorageDir(): string
     {
         if (Yii::$app !== null && Yii::getAlias('@common', false) !== false) {
             $sharedDir = Yii::getAlias('@common/runtime');
             if (!is_dir($sharedDir)) {
                 @mkdir($sharedDir, 0775, true);
             }
-            return $sharedDir . '/antibot_dns_budget.json';
+            return $sharedDir;
         }
 
         if (Yii::$app !== null && Yii::getAlias('@runtime', false) !== false) {
@@ -106,14 +128,29 @@ class ReverseDnsVerifier
             if (!is_dir($dir)) {
                 @mkdir($dir, 0775, true);
             }
-            return $dir . '/antibot_dns_budget.json';
+            return $dir;
         }
 
-        return sys_get_temp_dir() . '/antibot_dns_budget.json';
+        return sys_get_temp_dir();
+    }
+
+    /**
+     * Resolves the full path to the shared DNS budget file.
+     */
+    public static function resolveDnsBudgetFile(): string
+    {
+        return self::getStorageDir() . '/antibot_dns_budget.json';
     }
 
     /**
      * Verifies whether an IP belongs to a legitimate search engine.
+     *
+     * Order of evaluation:
+     * 1. Check cached verification result.
+     * 2. Official CIDR pre-filter (Googlebot & Bingbot): If in official snapshot, verify instantly without DNS.
+     * 3. Acquire atomic rate budget and non-blocking concurrency slot (1..3).
+     * 4. Perform PTR + A/AAAA lookup (with strict domain boundary matching).
+     * 5. Cache result and release slot.
      *
      * @param string $ip Client IP address.
      * @param string $engine Search engine key ('yandex', 'google', 'bing', etc.).
@@ -139,14 +176,20 @@ class ReverseDnsVerifier
         // 2. Pre-filter official CIDR ranges where published (Google & Bing)
         if ($engine === 'google' || $engine === 'bing') {
             $knownCidrs = $engine === 'google' ? self::GOOGLEBOT_CIDRS : self::BINGBOT_CIDRS;
-            $inOfficialRange = IpMatcher::match($ip, $knownCidrs);
-            // If outside known official subnets, DNS is required. If budget is constrained,
-            // we will safely yield UNKNOWN rather than allowing workers to starve.
+            if (IpMatcher::match($ip, $knownCidrs)) {
+                // Official CIDR match confirms authentic search engine infrastructure without slow DNS!
+                if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
+                    Yii::$app->cache->set($cacheKey, self::STATUS_VERIFIED, self::$cacheVerified);
+                }
+                return self::STATUS_VERIFIED;
+            }
+            // If outside known official snapshot, do NOT mark FAKE (snapshot may be incomplete or outdated).
+            // Safely proceed to two-way DNS verification below.
         }
 
-        // 3. Atomically acquire DNS budget & concurrency slot
-        $slotToken = self::acquireDnsBudgetSlot($ip);
-        if ($slotToken === null) {
+        // 3. Atomically acquire DNS budget & physical concurrency slot
+        $slotLease = self::acquireDnsBudgetSlot($ip);
+        if ($slotLease === null) {
             // DNS budget exhausted, rate limit hit, or max concurrent lookups reached:
             // Safely return UNKNOWN without blocking PHP-FPM workers!
             return self::STATUS_UNKNOWN;
@@ -155,7 +198,7 @@ class ReverseDnsVerifier
         try {
             $status = self::performTwoWayDns($ip, self::VALID_DOMAINS[$engine]);
         } finally {
-            self::releaseDnsBudgetSlot($slotToken);
+            self::releaseDnsBudgetSlot($slotLease, $ip);
         }
 
         // 4. Cache result based on status
@@ -181,6 +224,7 @@ class ReverseDnsVerifier
 
     /**
      * Performs PTR lookup followed by forward DNS verification.
+     * Supports testing hook through $dnsResolverCallback.
      *
      * @param string $ip
      * @param array<int, string> $allowedSuffixes
@@ -188,8 +232,23 @@ class ReverseDnsVerifier
      */
     protected static function performTwoWayDns(string $ip, array $allowedSuffixes): string
     {
+        $mockRecords = null;
+        if (self::$dnsResolverCallback !== null) {
+            try {
+                $cbResult = (self::$dnsResolverCallback)($ip, $allowedSuffixes);
+                if (is_string($cbResult)) {
+                    return $cbResult;
+                }
+                if (is_array($cbResult)) {
+                    $mockRecords = $cbResult;
+                }
+            } catch (\Throwable) {
+                return self::STATUS_UNKNOWN;
+            }
+        }
+
         // 1. Reverse DNS (IP -> Hostname)
-        $hostname = @gethostbyaddr($ip);
+        $hostname = $mockRecords !== null ? ($mockRecords['host'] ?? false) : @gethostbyaddr($ip);
 
         // If DNS timed out or failed to resolve, it returns false or original IP
         if ($hostname === false || $hostname === $ip) {
@@ -221,24 +280,28 @@ class ReverseDnsVerifier
         // 3. Forward DNS (Hostname -> IPs) to prevent PTR spoofing
         // Supports both IPv4 (A records) and IPv6 (AAAA records)
         $forwardIps = [];
-        if (function_exists('dns_get_record')) {
-            $records = @dns_get_record($hostname, DNS_A + DNS_AAAA);
-            if (is_array($records)) {
-                foreach ($records as $r) {
-                    if (isset($r['ip'])) {
-                        $forwardIps[] = (string) $r['ip'];
-                    }
-                    if (isset($r['ipv6'])) {
-                        $forwardIps[] = (string) $r['ipv6'];
+        if ($mockRecords !== null && isset($mockRecords['ips'])) {
+            $forwardIps = (array) $mockRecords['ips'];
+        } else {
+            if (function_exists('dns_get_record')) {
+                $records = @dns_get_record($hostname, DNS_A + DNS_AAAA);
+                if (is_array($records)) {
+                    foreach ($records as $r) {
+                        if (isset($r['ip'])) {
+                            $forwardIps[] = (string) $r['ip'];
+                        }
+                        if (isset($r['ipv6'])) {
+                            $forwardIps[] = (string) $r['ipv6'];
+                        }
                     }
                 }
             }
-        }
 
-        if (empty($forwardIps)) {
-            $v4 = @gethostbynamel($hostname);
-            if (is_array($v4)) {
-                $forwardIps = $v4;
+            if (empty($forwardIps)) {
+                $v4 = @gethostbynamel($hostname);
+                if (is_array($v4)) {
+                    $forwardIps = $v4;
+                }
             }
         }
 
@@ -264,40 +327,35 @@ class ReverseDnsVerifier
     }
 
     /**
-     * Atomically acquires permission to perform an uncached DNS check.
+     * Atomically acquires permission and a physical concurrency slot to perform an uncached DNS check.
      *
-     * Enforces two separate limits:
-     * 1. Rate limit: Max lookups per 60-second window across all workers ($maxDnsLookupsPerMinute).
-     * 2. Concurrency limit: Max simultaneous in-flight DNS lookups at any given moment ($maxConcurrentDnsLookups).
-     * 3. In-flight single-flight deduplication: Prevents multiple concurrent checks for the exact same IP.
-     *
-     * Uses bounded non-blocking file locking (LOCK_EX | LOCK_NB) with brief retry to guarantee workers never hang.
+     * Concurrency is enforced via OS-level non-blocking file locks on slot files (antibot_dns_slot_1..3.lock).
+     * - The lock stays held for the ENTIRE duration of the DNS check, even if DNS hangs for 15+ seconds.
+     * - No premature expiration while a real DNS call is executing.
+     * - If a worker process crashes, the operating system kernel automatically frees the file lock.
      *
      * @param string $ip
-     * @return string|null Slot token if acquired; null if budget/concurrency exceeded or locked.
+     * @return array{0: int, 1: resource}|null Array with [slotNumber, fileHandle] if acquired; null otherwise.
      */
-    public static function acquireDnsBudgetSlot(string $ip): ?string
+    public static function acquireDnsBudgetSlot(string $ip): ?array
     {
+        $dir = self::getStorageDir();
         $budgetFile = self::resolveDnsBudgetFile();
         $lockFile = $budgetFile . '.lock';
-        $dir = dirname($budgetFile);
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
 
         $fp = @fopen($lockFile, 'c+');
         if (!$fp) {
             return null;
         }
 
-        // Bounded non-blocking lock with brief retry (max 3 retries, total wait < 6ms)
+        // Bounded non-blocking lock with brief retry (max 4 retries, total wait < 5ms)
         $locked = false;
-        for ($retry = 0; $retry < 3; $retry++) {
+        for ($retry = 0; $retry < 4; $retry++) {
             if (@flock($fp, LOCK_EX | LOCK_NB)) {
                 $locked = true;
                 break;
             }
-            usleep(2000); // 2ms
+            usleep(1000); // 1ms
         }
 
         if (!$locked) {
@@ -318,10 +376,9 @@ class ReverseDnsVerifier
             }
 
             $now = time();
-            $nowMicro = microtime(true);
             $currentWindow = (int) ($now / 60);
 
-            // 1. Rate Limit Window Check
+            // 1. Rate Limit Window Check (max 25 / minute)
             $storedWindow = (int) ($data['window'] ?? 0);
             $windowCount = (int) ($data['count'] ?? 0);
             if ($storedWindow !== $currentWindow) {
@@ -333,34 +390,38 @@ class ReverseDnsVerifier
                 return null; // Rate budget exhausted
             }
 
-            // 2. Concurrency Limit & In-flight Deduplication
-            $activeLeases = is_array($data['active'] ?? null) ? $data['active'] : [];
+            // 2. In-flight single-flight deduplication:
+            // Check if this exact IP is already resolving in an active slot
+            $inFlight = is_array($data['in_flight'] ?? null) ? $data['in_flight'] : [];
+            if (isset($inFlight[$ip])) {
+                return null; // Another worker is resolving this exact IP right now!
+            }
 
-            // Purge leases older than 5.0 seconds (dead worker / timeout protection)
-            foreach ($activeLeases as $k => $lease) {
-                $leaseTs = (float) ($lease['ts'] ?? 0);
-                if ($nowMicro - $leaseTs > 5.0) {
-                    unset($activeLeases[$k]);
+            // 3. Try to acquire one of the physical OS concurrency slots (1..$maxConcurrentDnsLookups)
+            $acquiredSlot = null;
+            $acquiredFp = null;
+
+            for ($slot = 1; $slot <= self::$maxConcurrentDnsLookups; $slot++) {
+                $slotLockFile = $dir . "/antibot_dns_slot_{$slot}.lock";
+                $slotFp = @fopen($slotLockFile, 'c+');
+                if ($slotFp && @flock($slotFp, LOCK_EX | LOCK_NB)) {
+                    $acquiredSlot = $slot;
+                    $acquiredFp = $slotFp;
+                    break;
+                }
+                if ($slotFp) {
+                    @fclose($slotFp);
                 }
             }
 
-            // In-flight single-flight deduplication: check if this exact IP is already resolving!
-            foreach ($activeLeases as $lease) {
-                if (($lease['ip'] ?? '') === $ip) {
-                    return null; // Another worker is resolving this exact IP right now!
-                }
+            if ($acquiredSlot === null || $acquiredFp === null) {
+                return null; // All concurrency slots are currently busy!
             }
 
-            // Check concurrency limit
-            if (count($activeLeases) >= self::$maxConcurrentDnsLookups) {
-                return null; // Max concurrent lookups reached!
-            }
-
-            // 3. Claim slot
-            $token = bin2hex(random_bytes(8));
-            $activeLeases[$token] = [
-                'ip' => $ip,
-                'ts' => $nowMicro,
+            // Successfully claimed slot: register IP in in-flight list and increment budget
+            $inFlight[$ip] = [
+                'slot' => $acquiredSlot,
+                'ts' => microtime(true),
                 'pid' => getmypid(),
             ];
             $windowCount++;
@@ -368,11 +429,17 @@ class ReverseDnsVerifier
             $data = [
                 'window' => $storedWindow,
                 'count' => $windowCount,
-                'active' => $activeLeases,
+                'in_flight' => $inFlight,
             ];
 
             @file_put_contents($budgetFile, json_encode($data, JSON_UNESCAPED_SLASHES));
-            return $token;
+
+            return [
+                'slot' => $acquiredSlot,
+                'fp' => $acquiredFp,
+                0 => $acquiredSlot,
+                1 => $acquiredFp,
+            ];
         } finally {
             @flock($fp, LOCK_UN);
             @fclose($fp);
@@ -380,13 +447,28 @@ class ReverseDnsVerifier
     }
 
     /**
-     * Atomically releases a claimed DNS concurrency slot.
+     * Releases physical concurrency slot and clears in-flight IP deduplication.
      *
-     * @param string $token
+     * @param array{slot: int, fp: resource}|array{0: int, 1: resource}|string $slotLease
+     * @param string|null $ip
      */
-    public static function releaseDnsBudgetSlot(string $token): void
+    public static function releaseDnsBudgetSlot($slotLease, ?string $ip = null): void
     {
-        if ($token === '') {
+        $slotNumber = null;
+        $slotFp = null;
+
+        if (is_array($slotLease)) {
+            $slotNumber = isset($slotLease['slot']) ? (int) $slotLease['slot'] : (int) ($slotLease[0] ?? 0);
+            $slotFp = $slotLease['fp'] ?? ($slotLease[1] ?? null);
+        }
+
+        // Release physical OS file lock on the concurrency slot
+        if (is_resource($slotFp)) {
+            @flock($slotFp, LOCK_UN);
+            @fclose($slotFp);
+        }
+
+        if ($ip === null || $ip === '') {
             return;
         }
 
@@ -398,12 +480,12 @@ class ReverseDnsVerifier
         }
 
         $locked = false;
-        for ($retry = 0; $retry < 3; $retry++) {
+        for ($retry = 0; $retry < 4; $retry++) {
             if (@flock($fp, LOCK_EX | LOCK_NB)) {
                 $locked = true;
                 break;
             }
-            usleep(1500);
+            usleep(1000);
         }
 
         if (!$locked) {
@@ -416,8 +498,8 @@ class ReverseDnsVerifier
                 $raw = @file_get_contents($budgetFile);
                 if ($raw !== false && trim($raw) !== '') {
                     $data = json_decode($raw, true);
-                    if (is_array($data) && isset($data['active'][$token])) {
-                        unset($data['active'][$token]);
+                    if (is_array($data) && isset($data['in_flight'][$ip])) {
+                        unset($data['in_flight'][$ip]);
                         @file_put_contents($budgetFile, json_encode($data, JSON_UNESCAPED_SLASHES));
                     }
                 }
@@ -433,26 +515,35 @@ class ReverseDnsVerifier
      */
     public static function acquireDnsBudget(?string $ip = null): bool
     {
-        $token = self::acquireDnsBudgetSlot($ip ?? '0.0.0.0');
-        if ($token !== null) {
-            self::releaseDnsBudgetSlot($token);
+        $slotLease = self::acquireDnsBudgetSlot($ip ?? '0.0.0.0');
+        if ($slotLease !== null) {
+            self::releaseDnsBudgetSlot($slotLease, $ip ?? '0.0.0.0');
             return true;
         }
         return false;
     }
 
     /**
-     * Resets DNS budget state (for testing and diagnostics).
+     * Resets DNS budget state and cleans slot locks (for testing and diagnostics).
      */
     public static function resetBudget(): void
     {
+        $dir = self::getStorageDir();
         $budgetFile = self::resolveDnsBudgetFile();
         $lockFile = $budgetFile . '.lock';
+
         if (file_exists($budgetFile)) {
             @unlink($budgetFile);
         }
         if (file_exists($lockFile)) {
             @unlink($lockFile);
+        }
+
+        for ($slot = 1; $slot <= 10; $slot++) {
+            $sf = $dir . "/antibot_dns_slot_{$slot}.lock";
+            if (file_exists($sf)) {
+                @unlink($sf);
+            }
         }
     }
 }

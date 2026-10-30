@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Reproducible HTTP Load Benchmark Suite for Yii2 AntiBot v1.5.2
+ * Reproducible HTTP Load Benchmark Suite for Yii2 AntiBot v1.5.3
  *
  * Executes multi-concurrency load tests against real local application http://yii2-advanced.loc/
  * using native curl_multi parallel workers with 3-run median aggregation.
@@ -166,7 +166,7 @@ function benchmarkSeries(string $url, int $totalRequests, int $concurrency, arra
 }
 
 echo "=========================================================================\n";
-echo " Yii2 AntiBot v1.5.2 Reproducible HTTP Load Benchmark Suite\n";
+echo " Yii2 AntiBot v1.5.3 Reproducible HTTP Load Benchmark Suite\n";
 echo " Target: {$baseUrl} | Date: " . date('Y-m-d H:i:s') . "\n";
 echo "=========================================================================\n\n";
 
@@ -191,7 +191,7 @@ echo str_repeat("-", 85) . "\n";
 
 $concurrencyResults = [];
 foreach ($concurrencyLevels as $c => $reqCount) {
-    $res = benchmarkSeries($baseUrl, $reqCount, $c, ['User-Agent' => 'Mozilla/5.0 (Benchmark/1.5.2)']);
+    $res = benchmarkSeries($baseUrl, $reqCount, $c, ['User-Agent' => 'Mozilla/5.0 (Benchmark/1.5.3)']);
     $err5xx = 0;
     foreach ($res['status_counts'] as $code => $cnt) {
         if ($code >= 500) {
@@ -226,7 +226,7 @@ $baseAvg = 0.0;
 $modeResults = [];
 foreach ($modes as $modeName => $cfg) {
     configureAntibot($cfg['mode'], $cfg['enabled'], $cfg['pow'], $cfg['behavior']);
-    $res = benchmarkSeries($baseUrl, 100, 25, ['User-Agent' => 'Mozilla/5.0 (Benchmark/1.5.2)']);
+    $res = benchmarkSeries($baseUrl, 100, 25, ['User-Agent' => 'Mozilla/5.0 (Benchmark/1.5.3)']);
     $modeResults[$modeName] = $res;
 
     if ($modeName === 'Disabled') {

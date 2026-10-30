@@ -2,6 +2,41 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.3] - 2026-10-30
+
+### Reliability, Concurrency & DNS Slot Safety
+- **Physical OS-Level File Locking for DNS Slots (`ReverseDnsVerifier`):**
+  - Eliminated arbitrary 5-second TTL in-flight lease cleanup that prematurely expired active reverse DNS queries during slow network or DNS resolution.
+  - Implemented physical OS file locks on dedicated slot files (`antibot_dns_slot_{1..3}.lock`) using non-blocking flock (`LOCK_EX | LOCK_NB`).
+  - Active lookups hold the lock for their exact execution duration; locks are guaranteed to be released by the OS kernel even if the PHP-FPM worker or CLI process crashes.
+  - Added `ReverseDnsVerifier::$dnsResolverCallback` closure hook for unit testing and simulated slow DNS lookup latency.
+- **Search Engine Official CIDR Fast-Path (`ReverseDnsVerifier`):**
+  - Activated official CIDR pre-filtering: requests originating from verified Googlebot (`GOOGLEBOT_CIDRS`) and Bingbot (`BINGBOT_CIDRS`) IP subnets (snapshot: 2026-10-30) are verified immediately (`STATUS_VERIFIED`) with 0 DNS queries and cached for 24 hours.
+  - IPs outside the official CIDR snapshot safely fall back to two-way Reverse DNS verification without false blocks.
+  - Preserved mandatory two-way Reverse DNS for Yandex.
+- **Circuit Breaker Generation Tokens & Non-Blocking State Mutations (`CircuitBreaker`):**
+  - Replaced blocking `flock(LOCK_EX)` with non-blocking bounded retry (`LOCK_EX | LOCK_NB`, max 5ms) during state updates.
+  - Eliminated unsafe unlocked writes: if the lock file cannot be acquired or opened, the engine falls back to safe read-only fail-open evaluation without mutating or corrupting shared files.
+  - Introduced cryptographic `probeToken` and monotonic `generation` counter: stale probes from expired or delayed workers cannot close or modify the circuit after re-tripping.
+
+### Performance & Telemetry Persistence
+- **Cross-Process Atomic File Persistence for Metrics (`Antibot`):**
+  - Replaced FileCache read-modify-write and batch buffering with cross-process atomic file persistence directly to `@runtime/antibot_metrics.json`.
+  - Used non-blocking bounded locking (`LOCK_EX | LOCK_NB`) ensuring exact counting and zero metric loss under 100 concurrent requests without requiring Redis or background daemons.
+  - Added tracking for all 7 decision categories: `total_inspected`, `allowed`, `blocked`, `throttled`, `challenge`, `monitored`, and `exceptions`.
+  - Implemented dynamic p50 and p95 latency percentile calculations using bounded reservoir sampling (up to 500 samples).
+  - Added `Antibot::resetMetrics()` and `Antibot::resolveMetricsFile()` public helpers.
+- **Yii2 FileCache `multiGet()` Analysis:**
+  - Audited Yii2 `FileCache::multiGet()` implementation; confirmed that `multiGet()` loops over `getValue()` on disk with separate file opens and locks, explaining disk I/O characteristics under heavy concurrency on Windows/NTFS.
+
+### Diagnostics & UI
+- **SelfTest Audit v1.5.3 (`SelfTest`):**
+  - Added diagnostic verification of Circuit Breaker generation tokens and lock file accessibility.
+  - Added checks for physical OS DNS slot locks, official search engine CIDR snapshots, and single-flight deduplication.
+  - Verified inspection telemetry persistence file and zero-loss counters.
+- **Admin Dashboard KPI Telemetry:**
+  - Updated telemetry header in `views/default/index.php` to display real-time counts for allowed, blocked, throttled, challenge, monitored, and exceptions.
+
 ## [1.5.2] - 2026-10-30
 
 ### Reliability & Concurrency Fixes

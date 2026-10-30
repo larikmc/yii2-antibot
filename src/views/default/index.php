@@ -52,10 +52,16 @@ $this->params['breadcrumbs'] = [
             </span>
             <span class="badge bg-light text-secondary border px-3 py-2">
                 Всего проверено: <strong><?= (int) ($perf['total_checks'] ?? 0) ?></strong>
-                <span class="text-success ms-1">✓ <?= (int) ($perf['allowed'] ?? 0) ?></span>,
-                <span class="text-danger ms-1">✗ <?= (int) ($perf['blocked'] ?? 0) ?></span>,
-                <span class="text-warning ms-1">⏱ <?= (int) ($perf['throttled'] ?? 0) ?></span>,
-                <span class="text-info ms-1">🧩 <?= (int) ($perf['challenge'] ?? 0) ?></span>
+                <span class="text-success ms-1" title="Разрешено">✓ <?= (int) ($perf['allowed'] ?? 0) ?></span>,
+                <span class="text-danger ms-1" title="Заблокировано">✗ <?= (int) ($perf['blocked'] ?? 0) ?></span>,
+                <span class="text-warning ms-1" title="Ограничено (Rate Limit)">⏱ <?= (int) ($perf['throttled'] ?? 0) ?></span>,
+                <span class="text-info ms-1" title="Капча/PoW Challenge">🧩 <?= (int) ($perf['challenge'] ?? 0) ?></span>
+                <?php if (($perf['monitored'] ?? 0) > 0): ?>
+                    , <span class="text-primary ms-1" title="Мониторинг">👁 <?= (int) $perf['monitored'] ?></span>
+                <?php endif; ?>
+                <?php if (($perf['exceptions'] ?? 0) > 0): ?>
+                    , <span class="text-danger fw-bold ms-1" title="Исключения">💥 <?= (int) $perf['exceptions'] ?></span>
+                <?php endif; ?>
             </span>
         </div>
     </div>

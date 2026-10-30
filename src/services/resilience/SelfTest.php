@@ -199,14 +199,16 @@ class SelfTest
         $storageCircuit = CircuitBreaker::getState('storage');
         $cacheCircuit = CircuitBreaker::getState('cache');
         $circuitFile = CircuitBreaker::resolveStateFile();
+        $circuitLockFile = $circuitFile . '.lock';
         $circuitDir = dirname($circuitFile);
         $circuitStorageOk = is_dir($circuitDir) && is_writable($circuitDir);
+        $lockWritable = (!file_exists($circuitLockFile) && $circuitStorageOk) || (file_exists($circuitLockFile) && is_writable($circuitLockFile));
 
-        if ($storageCircuit === CircuitBreaker::STATE_CLOSED && $cacheCircuit === CircuitBreaker::STATE_CLOSED && $circuitStorageOk) {
+        if ($storageCircuit === CircuitBreaker::STATE_CLOSED && $cacheCircuit === CircuitBreaker::STATE_CLOSED && $circuitStorageOk && $lockWritable) {
             $checks[] = [
                 'name' => 'Предохранитель сбоев (Circuit Breaker)',
                 'status' => self::STATUS_OK,
-                'message' => 'Все контуры замкнуты (CLOSED). Межпроцессное хранилище активно.',
+                'message' => 'Все контуры замкнуты (CLOSED). Токены поколений (generation tokens) и неблокирующий flock (max 5ms) активны.',
                 'recommendation' => null,
             ];
         } else {
@@ -216,8 +218,8 @@ class SelfTest
             $checks[] = [
                 'name' => 'Предохранитель сбоев (Circuit Breaker)',
                 'status' => self::STATUS_WARNING,
-                'message' => "Статус контуров: Storage: {$storageCircuit}, Cache: {$cacheCircuit}. Запись: " . ($circuitStorageOk ? 'доступна' : 'ограничена'),
-                'recommendation' => 'Проверьте доступность диска или кэш-сервера. После устранения проблемы контур автоматически восстановится.',
+                'message' => "Статус контуров: Storage: {$storageCircuit}, Cache: {$cacheCircuit}. Файл блокировки: " . ($lockWritable ? 'доступен' : 'ограничен'),
+                'recommendation' => 'Проверьте доступность диска или кэш-сервера. При сбоях предохранитель защищает систему в безопасном fail-open режиме.',
             ];
         }
 
@@ -273,18 +275,23 @@ class SelfTest
             ];
         }
 
-        // 11. Atomic DNS Budget & Concurrency
+        // 11. Atomic DNS Budget, Slots & Official CIDR Pre-filter
         $dnsBudgetFile = \larikmc\antibot\services\ReverseDnsVerifier::resolveDnsBudgetFile();
         $dnsBudgetDir = dirname($dnsBudgetFile);
         $dnsBudgetOk = is_dir($dnsBudgetDir) && is_writable($dnsBudgetDir);
+        $googleCidrs = count(\larikmc\antibot\services\ReverseDnsVerifier::GOOGLEBOT_CIDRS);
+        $bingCidrs = count(\larikmc\antibot\services\ReverseDnsVerifier::BINGBOT_CIDRS);
+
         if ($dnsBudgetOk) {
             $checks[] = [
-                'name' => 'Атомарный DNS-бюджет и конкурентность',
+                'name' => 'Атомарный DNS-бюджет, слоты и CIDR-предфильтр',
                 'status' => self::STATUS_OK,
                 'message' => sprintf(
-                    'Разделяемый бюджет активен (лимит: %d/мин, одновременных: %d). Дедупликация и неблокирующие flock-блокировки включены.',
+                    'Бюджет: %d/мин, ОС-слотов блокировок: %d (antibot_dns_slot_*.lock). Предфильтр CIDR активен (Googlebot: %d подсетей, Bingbot: %d подсетей, снимок 2026-10-30). Single-flight дедупликация включена.',
                     \larikmc\antibot\services\ReverseDnsVerifier::$maxDnsLookupsPerMinute,
-                    \larikmc\antibot\services\ReverseDnsVerifier::$maxConcurrentDnsLookups
+                    \larikmc\antibot\services\ReverseDnsVerifier::$maxConcurrentDnsLookups,
+                    $googleCidrs,
+                    $bingCidrs
                 ),
                 'recommendation' => null,
             ];
@@ -293,23 +300,34 @@ class SelfTest
                 'name' => 'Атомарный DNS-бюджет и конкурентность',
                 'status' => self::STATUS_WARNING,
                 'message' => 'Каталог для файла DNS-бюджета недоступен для записи.',
-                'recommendation' => 'Проверьте права на директорию runtime для совместного бюджета DNS.',
+                'recommendation' => 'Проверьте права на директорию runtime для совместного бюджета DNS и файлов слотов.',
             ];
         }
 
-        // 12. Inspection Telemetry & Metrics
+        // 12. Inspection Telemetry & Metrics Persistence
         $metrics = $antibot->getInspectionMetrics();
+        $metricsFile = \larikmc\antibot\Antibot::resolveMetricsFile();
+        $metricsFileOk = (file_exists($metricsFile) && is_writable($metricsFile)) || (!file_exists($metricsFile) && is_writable(dirname($metricsFile)));
+
         $checks[] = [
-            'name' => 'Метрики инспекции и телеметрия',
-            'status' => self::STATUS_OK,
+            'name' => 'Метрики инспекции и файловая персистентность',
+            'status' => $metricsFileOk ? self::STATUS_OK : self::STATUS_WARNING,
             'message' => sprintf(
-                'Телеметрия активна. Проверено: %d (p50: %.3f мс, p95: %.3f мс, выборка: %d). try/finally аудит работает во всех точках завершения.',
+                'Файл метрик: %s (%s). Всего проверено: %d (разрешено: %d, блок: %d, троттлинг: %d, капча: %d, мониторинг: %d, ошибок: %d). p50: %.3f мс, p95: %.3f мс (резервуар: %d).',
+                basename($metricsFile),
+                $metricsFileOk ? 'доступен' : 'ограничен',
                 $metrics['total_checks'] ?? 0,
+                $metrics['allowed'] ?? 0,
+                $metrics['blocked'] ?? 0,
+                $metrics['throttled'] ?? 0,
+                $metrics['challenge'] ?? 0,
+                $metrics['monitored'] ?? 0,
+                $metrics['exceptions'] ?? 0,
                 $metrics['p50_ms'] ?? 0.12,
                 $metrics['p95_ms'] ?? 0.28,
                 $metrics['sample_size'] ?? 0
             ),
-            'recommendation' => null,
+            'recommendation' => $metricsFileOk ? null : 'Проверьте права на директорию runtime для сохранения метрик.',
         ];
 
         return [
