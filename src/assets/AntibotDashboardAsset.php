@@ -28,6 +28,10 @@ class AntibotDashboardAsset extends AssetBundle
         'js/dashboard-charts.js',
     ];
 
+    public $publishOptions = [
+        'forceCopy' => true,
+    ];
+
     public $depends = [
         \yii\web\YiiAsset::class,
     ];

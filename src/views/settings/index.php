@@ -23,32 +23,40 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
 ?>
 
 <div class="antibot-settings">
-    <!-- Modern Header -->
-    <div class="antibot-header d-flex align-items-center justify-content-between flex-wrap gap-3">
-        <div>
-            <h1 class="antibot-title">
-                <span>⚙️</span> Настройки правил защиты
-            </h1>
-            <p class="antibot-subtitle">Управление сигнатурами, фильтрами поисковиков, AI-парсерами и лимитами</p>
+    <!-- Modern Integrated Header Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 p-4 bg-white">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); color: #4f46e5; display: inline-flex; align-items: center; justify-content: center; font-size: 1.75rem; box-shadow: inset 0 1px 2px rgba(255,255,255,0.8), 0 2px 6px rgba(79,70,229,0.15); flex-shrink: 0;">
+                    ⚙️
+                </div>
+                <div>
+                    <h1 class="h4 fw-bold mb-0 text-dark" style="letter-spacing: -0.02em;">Настройки правил защиты</h1>
+                    <p class="text-muted small mb-0 mt-1">Управление сигнатурами, фильтрами поисковиков, AI-парсерами и лимитами</p>
+                </div>
+            </div>
+            <div>
+                <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm">
+                    ← В дашборд
+                </a>
+            </div>
         </div>
-        <div>
-            <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
-                ← В дашборд
-            </a>
-        </div>
-    </div>
 
-    <!-- Navigation Tabs -->
-    <div class="antibot-nav-pills">
-        <a href="<?= Url::to(['/antibot/default/index']) ?>" class="antibot-nav-link">
-            📊 Мониторинг и Аналитика
-        </a>
-        <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="antibot-nav-link active">
-            ⚙️ Настройки правил
-        </a>
-        <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="antibot-nav-link">
-            📋 Списки IP (White/Black)
-        </a>
+        <!-- Modern Segmented Navigation Tabs -->
+        <hr class="my-3 text-muted opacity-25">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1">
+            <div class="d-inline-flex p-1 bg-light border rounded-pill gap-1 shadow-sm">
+                <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
+                    📊 Мониторинг и Аналитика
+                </a>
+                <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-primary rounded-pill px-4 py-2 fw-semibold text-decoration-none shadow-sm">
+                    ⚙️ Настройки правил
+                </a>
+                <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
+                    📋 Списки IP (White/Black)
+                </a>
+            </div>
+        </div>
     </div>
 
     <form method="post" action="<?= Url::to(['/antibot/settings/index']) ?>">

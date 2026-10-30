@@ -36,78 +36,148 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
 ?>
 
 <div class="antibot-dashboard">
-    <!-- Modern Header & Top Navigation -->
-    <div class="antibot-header d-flex align-items-center justify-content-between flex-wrap gap-3">
-        <div>
-            <h1 class="antibot-title">
-                <span>🛡️</span> Антибот-защита
-                <span class="antibot-badge-mode antibot-badge-mode-<?= Html::encode($antibot->mode) ?> ms-2">
-                    <?= Html::encode(ucfirst($antibot->mode)) ?>
-                </span>
-            </h1>
-            <p class="antibot-subtitle">Мониторинг трафика, отсечение ботов, верификация поисковиков и аналитика</p>
+    <!-- Modern Integrated Header Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4 p-4 bg-white">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); color: #4f46e5; display: inline-flex; align-items: center; justify-content: center; font-size: 1.75rem; box-shadow: inset 0 1px 2px rgba(255,255,255,0.8), 0 2px 6px rgba(79,70,229,0.15); flex-shrink: 0;">
+                    🛡️
+                </div>
+                <div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <h1 class="h4 fw-bold mb-0 text-dark" style="letter-spacing: -0.02em;">Антибот-защита</h1>
+                        <span class="badge bg-light text-muted border rounded-pill px-2 py-1 small fw-normal">v1.5.7</span>
+                        <span class="badge <?= $antibot->mode === 'monitoring' ? 'bg-info bg-opacity-10 text-info border border-info border-opacity-25' : ($antibot->mode === 'strict' ? 'bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25' : 'bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25') ?> rounded-pill px-3 py-1 d-inline-flex align-items-center gap-2" style="font-size: 0.82rem; font-weight: 600;">
+                            <span style="width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; box-shadow: 0 0 6px currentColor;"></span>
+                            Режим: <?= Html::encode(ucfirst($antibot->mode)) ?>
+                        </span>
+                    </div>
+                    <p class="text-muted small mb-0 mt-1">Автономный модуль поведенческой защиты, фильтрации ботов, верификации поисковиков и аналитики</p>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <?php if (!empty($events)): ?>
+                    <?= Html::beginForm(['/antibot/default/clear-events'], 'post', ['class' => 'd-inline']) ?>
+                        <?= Html::submitButton('🗑️ Очистить журнал', [
+                            'class' => 'btn btn-outline-danger btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm',
+                            'data-confirm' => 'Вы уверены, что хотите очистить журнал событий?',
+                        ]) ?>
+                    <?= Html::endForm() ?>
+                <?php endif; ?>
+                <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm">
+                    ⚙️ Настройки правил
+                </a>
+            </div>
         </div>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-            <?php if (!empty($events)): ?>
-                <?= Html::beginForm(['/antibot/default/clear-events'], 'post', ['class' => 'd-inline']) ?>
-                    <?= Html::submitButton('🗑️ Очистить журнал', [
-                        'class' => 'btn btn-outline-danger btn-sm rounded-pill px-3',
-                        'data-confirm' => 'Вы уверены, что хотите очистить журнал событий?',
-                    ]) ?>
-                <?= Html::endForm() ?>
-            <?php endif; ?>
-        </div>
-    </div>
 
-    <!-- Navigation Tabs -->
-    <div class="antibot-nav-pills">
-        <a href="<?= Url::to(['/antibot/default/index']) ?>" class="antibot-nav-link active">
-            📊 Мониторинг и Аналитика
-        </a>
-        <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="antibot-nav-link">
-            ⚙️ Настройки правил
-        </a>
-        <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="antibot-nav-link">
-            📋 Списки IP (White/Black)
-        </a>
+        <!-- Modern Segmented Navigation Tabs -->
+        <hr class="my-3 text-muted opacity-25">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1">
+            <div class="d-inline-flex p-1 bg-light border rounded-pill gap-1 shadow-sm">
+                <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-sm btn-primary rounded-pill px-4 py-2 fw-semibold text-decoration-none shadow-sm">
+                    📊 Мониторинг и Аналитика
+                </a>
+                <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
+                    ⚙️ Настройки правил
+                </a>
+                <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
+                    📋 Списки IP (White/Black)
+                </a>
+            </div>
+            <div class="d-flex align-items-center gap-2 text-muted small">
+                <span class="d-none d-md-inline">Статус модуля:</span>
+                <span class="badge <?= $antibot->enabled ? 'bg-success bg-opacity-10 text-success border border-success border-opacity-25' : 'bg-secondary bg-opacity-10 text-secondary border' ?> rounded-pill px-3 py-1 fw-semibold">
+                    <?= $antibot->enabled ? '● Активен' : '○ Отключен' ?>
+                </span>
+            </div>
+        </div>
     </div>
 
     <!-- Active Mode & System Status Alerts -->
     <?php if ($module->hasInsecureAccessConfig()): ?>
-        <div class="alert alert-danger d-flex align-items-center mb-4 rounded-3 border-0 shadow-sm" role="alert">
-            <span class="fs-4 me-3">⚠️</span>
-            <div>
-                <strong>Предупреждение безопасности доступа:</strong>
-                Модуль настроен с ролью <code>['@']</code> (панель доступна любому авторизованному клиенту).
-                Рекомендуется настроить RBAC-разрешение <code>antibot.manage</code> или ограничить роли: <code>'accessRoles' => ['admin']</code>.
+        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-danger">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width: 40px; height: 40px; border-radius: 10px; background: #fee2e2; color: #b91c1c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                    ⚠️
+                </div>
+                <div>
+                    <strong class="text-dark">Предупреждение безопасности доступа:</strong>
+                    <div class="small text-muted">Модуль настроен с ролью <code>['@']</code> (доступен любому авторизованному клиенту). Рекомендуется настроить RBAC-разрешение <code>antibot.manage</code> или ограничить роли: <code>'accessRoles' => ['admin']</code>.</div>
+                </div>
             </div>
         </div>
     <?php endif; ?>
 
     <?php if ($antibot->hasSecretKeyWarning()): ?>
-        <div class="alert alert-warning d-flex align-items-center mb-4 rounded-3 border-0 shadow-sm" role="alert">
-            <span class="fs-4 me-3">🔑</span>
-            <div>
-                <strong>Предупреждение ключа подписи:</strong>
-                Не задан собственный <code>$secretKey</code> антибота. Используется автоматически сгенерированный локальный ключ.
+        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-warning">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width: 40px; height: 40px; border-radius: 10px; background: #fef3c7; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                    🔑
+                </div>
+                <div>
+                    <strong class="text-dark">Предупреждение ключа подписи:</strong>
+                    <div class="small text-muted">Не задан собственный <code>$secretKey</code> антибота. Используется автоматически сгенерированный локальный ключ.</div>
+                </div>
             </div>
         </div>
     <?php endif; ?>
 
     <?php if (!$antibot->enabled): ?>
-        <div class="alert alert-warning d-flex align-items-center mb-4 rounded-3 border-0 shadow-sm" role="alert">
-            <span class="fs-4 me-2">⚠️</span>
-            <div><strong>Защита выключена!</strong> Модуль находится в неактивном состоянии. Перейдите в настройки, чтобы включить защиту.</div>
+        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-warning">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #fef3c7; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                        ⚠️
+                    </div>
+                    <div>
+                        <strong class="text-dark">Модуль защиты выключен:</strong>
+                        <span class="text-muted ms-1">Трафик не фильтруется. Перейдите в настройки правил для включения.</span>
+                    </div>
+                </div>
+                <div>
+                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-warning rounded-pill px-3 py-1 fw-semibold text-dark shadow-sm">
+                        Включить защиту →
+                    </a>
+                </div>
+            </div>
         </div>
     <?php elseif ($antibot->mode === 'monitoring'): ?>
-        <div class="alert alert-info d-flex align-items-center mb-4 rounded-3 border-0 shadow-sm" role="alert">
-            <span class="fs-4 me-2">ℹ️</span>
-            <div><strong>Режим мониторинга (Monitoring):</strong> Обнаруженные боты фиксируются в журнале, но запросы не блокируются (HTTP 200). Безопасное тестирование без риска для посетителей.</div>
+        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-info">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                        ℹ️
+                    </div>
+                    <div>
+                        <strong class="text-dark">Режим мониторинга (Monitoring):</strong>
+                        <span class="text-muted ms-1">Подозрительные боты и скраперы фиксируются в журнале, но запросы не блокируются (HTTP 200). Безопасное тестирование без риска для посетителей сайта.</span>
+                    </div>
+                </div>
+                <div>
+                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-semibold shadow-sm">
+                        Изменить режим →
+                    </a>
+                </div>
+            </div>
         </div>
     <?php elseif ($antibot->mode === 'strict'): ?>
-        <div class="alert alert-danger d-flex align-items-center mb-4 rounded-3 border-0 shadow-sm" role="alert">
-            <span class="fs-4 me-2">🚨</span>
-            <div><strong>Строгий режим (Strict):</strong> Включена повышенная строгость фильтрации с превентивным отсечением подозрительных клиентов.</div>
+        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-danger">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #fee2e2; color: #b91c1c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                        🚨
+                    </div>
+                    <div>
+                        <strong class="text-dark">Строгий режим (Strict):</strong>
+                        <span class="text-muted ms-1">Включена повышенная строгость фильтрации с обязательным превентивным отсечением подозрительных клиентов.</span>
+                    </div>
+                </div>
+                <div>
+                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-1 fw-semibold shadow-sm">
+                        Изменить режим →
+                    </a>
+                </div>
+            </div>
         </div>
     <?php endif; ?>
 
