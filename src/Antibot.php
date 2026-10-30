@@ -128,6 +128,7 @@ class Antibot extends Component implements BootstrapInterface
 
     public const METRIC_SAMPLE_RESERVOIR_CAPACITY = 100;
     public const METRIC_RECORDING_MODE = 'best_effort';
+    public const SAMPLE_STRATEGY_VERSION = 2;
     private static int $_metricDroppedRecords = 0;
 
     private StorageService $_storage;
@@ -721,6 +722,7 @@ class Antibot extends Component implements BootstrapInterface
             if (empty($data)) {
                 $data = [
                     'recording_mode' => self::METRIC_RECORDING_MODE,
+                    'sample_strategy_version' => self::SAMPLE_STRATEGY_VERSION,
                     'total_inspected' => 0,
                     'allowed' => 0,
                     'blocked' => 0,
@@ -732,9 +734,20 @@ class Antibot extends Component implements BootstrapInterface
                     'duration_sum' => 0.0,
                     'duration_count' => 0,
                     'sample_capacity' => self::METRIC_SAMPLE_RESERVOIR_CAPACITY,
+                    'sample_seen_count' => 0,
                     'samples' => [],
                     'updated_at' => time(),
                 ];
+            }
+
+            // Migration from v1 (pre-Algorithm R) to v2
+            $currentStrategyVersion = (int) ($data['sample_strategy_version'] ?? 1);
+            if ($currentStrategyVersion < self::SAMPLE_STRATEGY_VERSION) {
+                // Reset legacy biased sample and observation counter, while strictly preserving
+                // all historical totals (total_inspected, allowed, blocked, duration_sum, etc.)
+                $data['sample_strategy_version'] = self::SAMPLE_STRATEGY_VERSION;
+                $data['samples'] = [];
+                $data['sample_seen_count'] = 0;
             }
 
             if (self::$_metricDroppedRecords > 0) {
@@ -755,15 +768,24 @@ class Antibot extends Component implements BootstrapInterface
                 $data['duration_sum'] = ((float) ($data['duration_sum'] ?? 0.0)) + $durationMs;
                 $data['duration_count'] = ((int) ($data['duration_count'] ?? 0)) + 1;
 
+                // Reservoir Sampling: Algorithm R
+                $data['sample_seen_count'] = ((int) ($data['sample_seen_count'] ?? 0)) + 1;
+                $n = $data['sample_seen_count'];
+                $capacity = self::METRIC_SAMPLE_RESERVOIR_CAPACITY;
+
                 if (!isset($data['samples']) || !is_array($data['samples'])) {
                     $data['samples'] = [];
                 }
 
-                if (count($data['samples']) < self::METRIC_SAMPLE_RESERVOIR_CAPACITY) {
-                    $data['samples'][] = round($durationMs, 4);
+                $roundedDuration = round($durationMs, 4);
+
+                if (count($data['samples']) < $capacity) {
+                    $data['samples'][] = $roundedDuration;
                 } else {
-                    $idx = mt_rand(0, self::METRIC_SAMPLE_RESERVOIR_CAPACITY - 1);
-                    $data['samples'][$idx] = round($durationMs, 4);
+                    $j = random_int(1, $n);
+                    if ($j <= $capacity) {
+                        $data['samples'][$j - 1] = $roundedDuration;
+                    }
                 }
             }
             $data['updated_at'] = time();
@@ -798,6 +820,7 @@ class Antibot extends Component implements BootstrapInterface
         }
         $empty = [
             'recording_mode' => self::METRIC_RECORDING_MODE,
+            'sample_strategy_version' => self::SAMPLE_STRATEGY_VERSION,
             'total_checks' => 0,
             'total_inspected' => 0,
             'allowed' => 0,
@@ -810,6 +833,7 @@ class Antibot extends Component implements BootstrapInterface
             'duration_sum' => 0.0,
             'duration_count' => 0,
             'sample_capacity' => self::METRIC_SAMPLE_RESERVOIR_CAPACITY,
+            'sample_seen_count' => 0,
             'samples' => [],
             'updated_at' => time(),
         ];
@@ -821,9 +845,9 @@ class Antibot extends Component implements BootstrapInterface
      * Returns comprehensive inspection performance metrics and telemetry.
      *
      * @return array{
-     *     avg_ms: float,
-     *     p50_ms: float,
-     *     p95_ms: float,
+     *     avg_ms: ?float,
+     *     p50_ms: ?float,
+     *     p95_ms: ?float,
      *     total_checks: int,
      *     total_inspected: int,
      *     allowed: int,
@@ -833,18 +857,21 @@ class Antibot extends Component implements BootstrapInterface
      *     monitored: int,
      *     exceptions: int,
      *     dropped_records: int,
+     *     dropped_records_status: string,
      *     recording_mode: string,
      *     sample_size: int,
      *     sample_capacity: int,
-     *     sample_strategy: string
+     *     sample_seen_count: int,
+     *     sample_strategy: string,
+     *     sample_strategy_version: int
      * }
      */
     public function getInspectionMetrics(): array
     {
         $default = [
-            'avg_ms' => 0.15,
-            'p50_ms' => 0.12,
-            'p95_ms' => 0.28,
+            'avg_ms' => null,
+            'p50_ms' => null,
+            'p95_ms' => null,
             'total_checks' => 0,
             'total_inspected' => 0,
             'allowed' => 0,
@@ -854,10 +881,13 @@ class Antibot extends Component implements BootstrapInterface
             'monitored' => 0,
             'exceptions' => 0,
             'dropped_records' => 0,
+            'dropped_records_status' => 'exact_count_unknown',
             'recording_mode' => self::METRIC_RECORDING_MODE,
             'sample_size' => 0,
             'sample_capacity' => self::METRIC_SAMPLE_RESERVOIR_CAPACITY,
-            'sample_strategy' => 'Reservoir Sampling (Uniform N=' . self::METRIC_SAMPLE_RESERVOIR_CAPACITY . ')',
+            'sample_seen_count' => 0,
+            'sample_strategy' => 'Reservoir Sampling Algorithm R (Capacity=' . self::METRIC_SAMPLE_RESERVOIR_CAPACITY . ')',
+            'sample_strategy_version' => self::SAMPLE_STRATEGY_VERSION,
         ];
 
         $metricsFile = self::resolveMetricsFile();
@@ -875,11 +905,20 @@ class Antibot extends Component implements BootstrapInterface
                 return $default;
             }
 
-            $total = (int) ($data['total_inspected'] ?? 0);
+            $strategyVersion = (int) ($data['sample_strategy_version'] ?? 1);
             $samples = is_array($data['samples'] ?? null) ? $data['samples'] : [];
+            $sampleSeen = (int) ($data['sample_seen_count'] ?? 0);
+
+            // Backward compatibility / migration for legacy samples
+            if ($strategyVersion < self::SAMPLE_STRATEGY_VERSION) {
+                $samples = [];
+                $sampleSeen = 0;
+            }
+
+            $total = (int) ($data['total_inspected'] ?? 0);
             $count = count($samples);
-            $p50 = 0.12;
-            $p95 = 0.28;
+            $p50 = null;
+            $p95 = null;
 
             if ($count > 0) {
                 $sorted = $samples;
@@ -892,7 +931,7 @@ class Antibot extends Component implements BootstrapInterface
 
             $durCount = (int) ($data['duration_count'] ?? 0);
             $durSum = (float) ($data['duration_sum'] ?? 0.0);
-            $avg = $durCount > 0 ? round($durSum / $durCount, 3) : 0.15;
+            $avg = $durCount > 0 ? round($durSum / $durCount, 3) : null;
 
             return [
                 'avg_ms' => $avg,
@@ -907,10 +946,13 @@ class Antibot extends Component implements BootstrapInterface
                 'monitored' => (int) ($data['monitored'] ?? 0),
                 'exceptions' => (int) ($data['exceptions'] ?? 0),
                 'dropped_records' => (int) ($data['dropped_records'] ?? 0),
+                'dropped_records_status' => 'exact_count_unknown',
                 'recording_mode' => (string) ($data['recording_mode'] ?? self::METRIC_RECORDING_MODE),
                 'sample_size' => $count,
                 'sample_capacity' => self::METRIC_SAMPLE_RESERVOIR_CAPACITY,
-                'sample_strategy' => 'Reservoir Sampling (Uniform N=' . self::METRIC_SAMPLE_RESERVOIR_CAPACITY . ')',
+                'sample_seen_count' => $sampleSeen,
+                'sample_strategy' => 'Reservoir Sampling Algorithm R (Capacity=' . self::METRIC_SAMPLE_RESERVOIR_CAPACITY . ')',
+                'sample_strategy_version' => self::SAMPLE_STRATEGY_VERSION,
             ];
         } catch (\Throwable) {
             return $default;

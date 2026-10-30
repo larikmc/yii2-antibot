@@ -2,6 +2,27 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.5] - 2026-10-30
+
+### Security & DNS Verification Cache Invalidation
+- **Cache Namespace Isolation v3 (`ReverseDnsVerifier`):**
+  - Incremented search bot verification cache prefix from `antibot_rdns_v2_` to `antibot_rdns_v3_` (`CACHE_PREFIX = 'antibot_rdns_v3_'`, `CACHE_VERSION = 'v3'`).
+  - Completely invalidates any pre-v1.5.4 false-positive `STATUS_VERIFIED` entries for third-party cloud IPs (Google Cloud, Azure) without flushing the broader Yii Cache or affecting other application components.
+  - Added public helper `ReverseDnsVerifier::buildCacheKey(string $ip, string $engine): string`.
+  - Preserved standard TTLs (86400s verified/fake, 300s unknown) and states. Old cache entries are never read or used as trusted fallbacks.
+
+### Resilience & Telemetry Accuracy
+- **Reservoir Sampling Algorithm R (`Antibot`):**
+  - Replaced flawed uniform-index replacement (`mt_rand(0, 99)`) with the mathematically correct Reservoir Sampling Algorithm R.
+  - Each item $N$ in the stream is selected with exact uniform probability $K/N$ where $K = 100$ (`METRIC_SAMPLE_RESERVOIR_CAPACITY`), ensuring all requests across the stream have equal representation regardless of observation order.
+  - Introduced strategy versioning (`SAMPLE_STRATEGY_VERSION = 2`) and independent observation counter `sample_seen_count`.
+  - Non-destructive migration: when reading legacy v1 sample data, the biased `samples` array and seen count are reset, while strictly preserving historical totals (`total_inspected`, `allowed`, `blocked`, `duration_count`, `duration_sum`).
+- **Elimination of Fabricated Metrics Defaults & Honest Best-Effort Disclosure (`Antibot`, `views/default/index.php`, `SelfTest`):**
+  - Eliminated fabricated default floating-point numbers (`0.15`, `0.12`, `0.28`) when no measurement data exists. `getInspectionMetrics()` now returns `avg_ms: ?float`, `p50_ms: ?float`, `p95_ms: ?float`, evaluating strictly to `null` on empty baselines.
+  - Updated admin dashboard to display `Нет данных` instead of fictitious latencies.
+  - Disclosed `dropped_records_status = 'exact_count_unknown'`: documented that `dropped_records` is a best-effort partial diagnostic counter for recorded lock timeouts, rather than a universal guarantee of zero loss.
+  - Updated SelfTest diagnostics to report cache namespace `antibot_rdns_v3_` and Algorithm R sampling details.
+
 ## [1.5.4] - 2026-10-30
 
 ### Security & Search Engine Verification

@@ -28,6 +28,14 @@ class ReverseDnsVerifier
     public const STATUS_UNKNOWN = 'unknown';
 
     /**
+     * Cache version and prefix for verified search bot lookups.
+     * v3 ensures that any stale cached records from prior versions with broad cloud subnets
+     * are completely invalidated without flushing the general application cache.
+     */
+    public const CACHE_VERSION = 'v3';
+    public const CACHE_PREFIX = 'antibot_rdns_v3_';
+
+    /**
      * Snapshot date and official sources of search engine crawler subnets.
      */
     public const CIDR_SNAPSHOT_DATE = '2026-10-30';
@@ -462,6 +470,18 @@ class ReverseDnsVerifier
     }
 
     /**
+     * Builds the versioned cache key for a search bot verification result.
+     *
+     * @param string $ip Client IP.
+     * @param string $engine Search engine key.
+     * @return string
+     */
+    public static function buildCacheKey(string $ip, string $engine): string
+    {
+        return self::CACHE_PREFIX . md5($ip . '_' . strtolower($engine));
+    }
+
+    /**
      * Verifies whether an IP belongs to a legitimate search engine.
      *
      * Order of evaluation:
@@ -482,7 +502,7 @@ class ReverseDnsVerifier
             return self::STATUS_UNKNOWN;
         }
 
-        $cacheKey = 'antibot_rdns_v2_' . md5($ip . '_' . $engine);
+        $cacheKey = self::buildCacheKey($ip, $engine);
 
         // 1. Check cached verification
         if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {

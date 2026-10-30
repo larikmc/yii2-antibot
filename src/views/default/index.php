@@ -47,8 +47,13 @@ $this->params['breadcrumbs'] = [
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div class="d-flex gap-2 flex-wrap">
             <span class="badge bg-light text-dark border px-3 py-2">
-                ⚡ Время проверки: <strong><?= number_format((float) ($perf['avg_ms'] ?? 0.15), 3) ?> мс</strong>
-                (p50: <?= number_format((float) ($perf['p50_ms'] ?? 0.12), 3) ?> мс, p95: <?= number_format((float) ($perf['p95_ms'] ?? 0.28), 3) ?> мс)
+                ⚡ Время проверки: 
+                <?php if (($perf['avg_ms'] ?? null) !== null): ?>
+                    <strong><?= number_format((float) $perf['avg_ms'], 3) ?> мс</strong>
+                    (p50: <?= ($perf['p50_ms'] ?? null) !== null ? number_format((float) $perf['p50_ms'], 3) . ' мс' : 'нет данных' ?>, p95: <?= ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95_ms'], 3) . ' мс' : 'нет данных' ?>)
+                <?php else: ?>
+                    <strong>Нет данных</strong>
+                <?php endif; ?>
             </span>
             <span class="badge bg-light text-secondary border px-3 py-2">
                 Всего проверено: <strong><?= (int) ($perf['total_checks'] ?? 0) ?></strong>
@@ -63,10 +68,10 @@ $this->params['breadcrumbs'] = [
                     , <span class="text-danger fw-bold ms-1" title="Исключения">💥 <?= (int) $perf['exceptions'] ?></span>
                 <?php endif; ?>
             </span>
-            <span class="badge bg-light text-muted border px-3 py-2" title="Режим учета статистики">
-                📊 Режим: <strong>Best-Effort</strong> (выборка: <?= (int) ($perf['sample_size'] ?? 0) ?>/<?= (int) ($perf['sample_capacity'] ?? 100) ?>)
+            <span class="badge bg-light text-muted border px-3 py-2" title="Режим учета статистики: Best-Effort">
+                📊 Режим: <strong>Best-Effort</strong> (выборка: <?= (int) ($perf['sample_size'] ?? 0) ?>/<?= (int) ($perf['sample_capacity'] ?? 100) ?>, наблюдений: <?= (int) ($perf['sample_seen_count'] ?? 0) ?>)
                 <?php if (($perf['dropped_records'] ?? 0) > 0): ?>
-                    <span class="text-warning ms-1" title="Пропущено записей при конкурентной блокировке диска">⚠️ Пропущено: <?= (int) $perf['dropped_records'] ?></span>
+                    <span class="text-warning ms-1" title="Частично зафиксированные отказы блокировки диска. Точное число пропусков при авариях неизвестно (Best-Effort)">⚠️ Зафиксировано отказов: <?= (int) $perf['dropped_records'] ?> (точное число неизвестно)</span>
                 <?php endif; ?>
             </span>
         </div>

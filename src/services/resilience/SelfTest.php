@@ -287,11 +287,12 @@ class SelfTest
                 'name' => 'Атомарный DNS-бюджет, слоты и CIDR-предфильтр',
                 'status' => self::STATUS_OK,
                 'message' => sprintf(
-                    'Бюджет: %d/мин, ОС-слотов блокировок: %d (antibot_dns_slot_*.lock). Предфильтр точных CIDR активен (Googlebot: %d подсетей [common-crawlers], Bingbot: %d подсетей [bingbot.json], снимок 2026-10-30). Синхронизированная дедупликация активна.',
+                    'Бюджет: %d/мин, ОС-слотов блокировок: %d (antibot_dns_slot_*.lock). Предфильтр точных CIDR активен (Googlebot: %d подсетей, Bingbot: %d подсетей). Кэш-пространство: %s. Синхронизированная дедупликация активна.',
                     \larikmc\antibot\services\ReverseDnsVerifier::$maxDnsLookupsPerMinute,
                     \larikmc\antibot\services\ReverseDnsVerifier::$maxConcurrentDnsLookups,
                     $googleCidrs,
-                    $bingCidrs
+                    $bingCidrs,
+                    \larikmc\antibot\services\ReverseDnsVerifier::CACHE_PREFIX
                 ),
                 'recommendation' => null,
             ];
@@ -309,11 +310,14 @@ class SelfTest
         $metricsFile = \larikmc\antibot\Antibot::resolveMetricsFile();
         $metricsFileOk = (file_exists($metricsFile) && is_writable($metricsFile)) || (!file_exists($metricsFile) && is_writable(dirname($metricsFile)));
 
+        $p50Display = $metrics['p50_ms'] !== null ? sprintf('%.3f мс', $metrics['p50_ms']) : 'нет данных';
+        $p95Display = $metrics['p95_ms'] !== null ? sprintf('%.3f мс', $metrics['p95_ms']) : 'нет данных';
+
         $checks[] = [
             'name' => 'Метрики инспекции и файловая персистентность',
             'status' => $metricsFileOk ? self::STATUS_OK : self::STATUS_WARNING,
             'message' => sprintf(
-                'Файл: %s (%s). Режим: %s. Учтено: %d (разрешено: %d, блок: %d, троттлинг: %d, капча: %d, мониторинг: %d, ошибок: %d, пропущено из-за lock: %d). p50: %.3f мс, p95: %.3f мс (выборка: %d/%d, алгоритм: %s).',
+                'Файл: %s (%s). Режим: %s. Учтено: %d (разрешено: %d, блок: %d, троттлинг: %d, капча: %d, мониторинг: %d, ошибок: %d, отказов lock: %d). p50: %s, p95: %s (выборка: %d/%d, наблюдений: %d, алгоритм: %s).',
                 basename($metricsFile),
                 $metricsFileOk ? 'доступен' : 'ограничен',
                 $metrics['recording_mode'] ?? 'best_effort',
@@ -325,10 +329,11 @@ class SelfTest
                 $metrics['monitored'] ?? 0,
                 $metrics['exceptions'] ?? 0,
                 $metrics['dropped_records'] ?? 0,
-                $metrics['p50_ms'] ?? 0.12,
-                $metrics['p95_ms'] ?? 0.28,
+                $p50Display,
+                $p95Display,
                 $metrics['sample_size'] ?? 0,
                 $metrics['sample_capacity'] ?? 100,
+                $metrics['sample_seen_count'] ?? 0,
                 $metrics['sample_strategy'] ?? 'Reservoir Sampling'
             ),
             'recommendation' => $metricsFileOk ? null : 'Проверьте права на директорию runtime для сохранения метрик.',
