@@ -34,8 +34,11 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
+    public const VERSION = '1.5.9';
+
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;
+    public string $language = 'auto'; // 'auto', 'ru', 'en'
 
     public bool $blockAiCrawlers = true;
     public bool $blockCommercialScrapers = true;
@@ -213,6 +216,9 @@ class Antibot extends Component implements BootstrapInterface
             }
             if (isset($savedSettings['autoTrustLocalProxy'])) {
                 $this->autoTrustLocalProxy = (bool) $savedSettings['autoTrustLocalProxy'];
+            }
+            if (isset($savedSettings['language']) && is_string($savedSettings['language'])) {
+                $this->language = $savedSettings['language'];
             }
             if (isset($savedSettings['ipHeaders']) && is_array($savedSettings['ipHeaders'])) {
                 $this->ipHeaders = $savedSettings['ipHeaders'];

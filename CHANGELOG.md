@@ -2,6 +2,31 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.9] - 2026-11-04
+
+### Bilingual Localization & Russian Reason/Action Formatting
+- **Full Russian & English Localization (`I18n` Service):**
+  - Added dedicated `larikmc\antibot\services\I18n` service for intelligent bilingual localization.
+  - Automatic language detection based on application locale `Yii::$app->language` (automatically selects Russian for `ru`, `ru-RU`, `be`, `uk`, `kk`).
+  - Added interactive `[ RU | EN ]` one-click switcher pill in the admin dashboard header.
+  - Added persistent configuration option `'language' => 'auto'|'ru'|'en'` in admin settings and `Antibot::$language`.
+- **Human-Friendly Event Actions & Reasons (Live Feed & Analytics):**
+  - Translated all technical security reasons into clear, intelligible Russian with descriptive category badges:
+    - *Fake search bots:* `[Фейк-бот] Поддельный бот (выдаёт себя за Яндекс)`
+    - *Authentic search crawlers:* `[Поисковик] Подлинный поисковый робот: Яндекс`
+    - *Commercial scrapers:* `[Скрапер] Коммерческий парсер / скрапер: PetalBot`
+    - *Automated scripts/CLI:* `[CLI / Скрипт] Автоматическая утилита / скрипт: cURL`
+    - *AI bots:* `[AI-бот] AI-краулер (нейросеть): GPTBot`
+    - *Browser checks:* `[Проверка OK] Браузерная проверка успешно решена (JS Challenge)`
+    - *Rate limits:* `[Лимит] Превышен лимит частоты запросов (60 req/min)`
+    - *Behavioral anomalies:* `[Поведение] Поведенческая аномалия: серия быстрых запросов (флуд)`
+    - *Honey traps / Honeypots:* `[Ловушка] Переход по скрытой ссылке-ловушке (HoneyTrap)`
+  - Translated action status badges with intuitive icons:
+    - `👁️ Мониторинг`, `⛔ Заблокирован`, `⏱️ Лимит превышен`, `🤖 Поисковик (OK)`, `✅ Проверка пройдена`.
+- **Version Constants & Test Suite:**
+  - Added `Module::VERSION` and `Antibot::VERSION` (`1.5.9`).
+  - Added comprehensive test suite `tests/test_v159.php` (29 assertions) covering language detection, action/reason formatting, and settings persistence.
+
 ## [1.5.8] - 2026-11-04
 
 ### Automatic Reverse Proxy Detection & Plug-and-Play Experience

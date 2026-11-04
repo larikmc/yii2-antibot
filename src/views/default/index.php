@@ -17,7 +17,10 @@ declare(strict_types=1);
 /** @var int $simWindow */
 /** @var string $simUa */
 /** @var array<int, array<string, mixed>> $auditTrail */
+/** @var string|null $currentLang */
 
+use larikmc\antibot\Module;
+use larikmc\antibot\services\I18n;
 use yii\helpers\Html;
 use yii\helpers\Json;
 use yii\helpers\Url;
@@ -46,13 +49,17 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                 <div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <h1 class="h4 fw-bold mb-0 text-dark" style="letter-spacing: -0.02em;">Антибот-защита</h1>
-                        <span class="badge bg-light text-muted border rounded-pill px-2 py-1 small fw-normal">v1.5.7</span>
+                        <span class="badge bg-light text-muted border rounded-pill px-2 py-1 small fw-normal">v<?= Module::VERSION ?></span>
+                        <div class="btn-group btn-group-sm rounded-pill border overflow-hidden ms-1 shadow-sm" role="group" aria-label="Язык / Language">
+                            <a href="<?= Url::current(['lang' => 'ru']) ?>" class="btn btn-sm <?= ($currentLang ?? 'ru') === 'ru' ? 'btn-primary text-white' : 'btn-light text-muted' ?> px-2 py-0 fw-bold" style="font-size: 0.72rem;">RU</a>
+                            <a href="<?= Url::current(['lang' => 'en']) ?>" class="btn btn-sm <?= ($currentLang ?? 'ru') === 'en' ? 'btn-primary text-white' : 'btn-light text-muted' ?> px-2 py-0 fw-bold" style="font-size: 0.72rem;">EN</a>
+                        </div>
                         <span class="badge <?= $antibot->mode === 'monitoring' ? 'bg-info bg-opacity-10 text-info border border-info border-opacity-25' : ($antibot->mode === 'strict' ? 'bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25' : 'bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25') ?> rounded-pill px-3 py-1 d-inline-flex align-items-center gap-2" style="font-size: 0.82rem; font-weight: 600;">
                             <span style="width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; box-shadow: 0 0 6px currentColor;"></span>
-                            Режим: <?= Html::encode(ucfirst($antibot->mode)) ?>
+                            <?= ($currentLang ?? 'ru') === 'en' ? 'Mode: ' . Html::encode(ucfirst($antibot->mode)) : 'Режим: ' . match($antibot->mode) { 'monitoring' => 'Мониторинг', 'strict' => 'Строгий (Блокировка)', default => 'Стандартный' } ?>
                         </span>
                     </div>
-                    <p class="text-muted small mb-0 mt-1">Автономный модуль поведенческой защиты, фильтрации ботов, верификации поисковиков и аналитики</p>
+                    <p class="text-muted small mb-0 mt-1"><?= ($currentLang ?? 'ru') === 'en' ? 'Autonomous behavioral anti-bot protection, crawler filtering, search engine verification and visual analytics' : 'Автономный модуль поведенческой защиты, фильтрации ботов, верификации поисковиков и аналитики' ?></p>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -667,15 +674,8 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                             <?php foreach ($events as $event): ?>
                                 <?php
                                     $action = (string) ($event['action'] ?? '');
-                                    $badgeClass = match ($action) {
-                                        'blocked' => 'bg-danger',
-                                        'throttled' => 'bg-warning text-dark',
-                                        'allowed_search_bot' => 'bg-success',
-                                        'monitored' => 'bg-info text-dark',
-                                        'challenged' => 'bg-secondary',
-                                        'challenge_passed' => 'bg-primary',
-                                        default => 'bg-secondary',
-                                    };
+                                    $actionData = I18n::formatAction($action, $currentLang ?? null);
+                                    $reasonData = I18n::formatReason((string) ($event['reason'] ?? ''), $currentLang ?? null);
                                     $ip = (string) ($event['ip'] ?? '');
                                 ?>
                                 <tr>
@@ -686,9 +686,17 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                                         <code class="fw-bold px-2 py-1 bg-light rounded-2 border"><?= Html::encode($ip) ?></code>
                                     </td>
                                     <td>
-                                        <span class="badge <?= $badgeClass ?> rounded-pill px-2 py-1"><?= Html::encode(strtoupper($action)) ?></span>
+                                        <span class="badge <?= $actionData['badgeClass'] ?> rounded-pill px-2 py-1 shadow-sm d-inline-flex align-items-center gap-1" title="<?= Html::encode($actionData['description']) ?>">
+                                            <span><?= $actionData['icon'] ?></span>
+                                            <span><?= Html::encode($actionData['label']) ?></span>
+                                        </span>
                                     </td>
-                                    <td class="small fw-semibold"><?= Html::encode($event['reason'] ?? '') ?></td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <span class="badge bg-light text-secondary border small rounded-pill px-2 py-0" style="font-size: 0.72rem; font-weight: 600;"><?= Html::encode($reasonData['badge']) ?></span>
+                                            <span class="small fw-semibold text-dark" title="<?= Html::encode($reasonData['raw']) ?>"><?= Html::encode($reasonData['title']) ?></span>
+                                        </div>
+                                    </td>
                                     <td class="small text-muted text-truncate" style="max-width: 300px;" title="<?= Html::encode($event['userAgent'] ?? '') ?>">
                                         <?= Html::encode($event['userAgent'] ?? '—') ?>
                                     </td>

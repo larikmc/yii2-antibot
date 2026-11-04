@@ -21,6 +21,8 @@ use yii\filters\AccessControl;
  */
 class Module extends BaseModule
 {
+    public const VERSION = '1.5.9';
+
     /**
      * @var string Controller namespace for this module.
      */

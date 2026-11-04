@@ -158,6 +158,7 @@ class StorageService
             'blacklist' => [],
             'trustedProxies' => [],
             'autoTrustLocalProxy' => true,
+            'language' => 'auto',
             'ipHeaders' => ['CF-Connecting-IP', 'X-Forwarded-For', 'X-Real-IP'],
             'aiCrawlerPolicies' => [],
             'routeRules' => [],

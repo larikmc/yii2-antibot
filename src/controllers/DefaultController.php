@@ -45,6 +45,14 @@ class DefaultController extends Controller
      */
     public function actionIndex()
     {
+        $langParam = $this->request->get('lang');
+        if (in_array($langParam, ['ru', 'en'], true)) {
+            if (Yii::$app !== null && Yii::$app->has('session', true)) {
+                Yii::$app->session->set('antibot_language', $langParam);
+            }
+            return $this->redirect(['index']);
+        }
+
         $antibot = $this->module->getAntibot();
         $storage = $antibot->getStorage();
         $settings = $storage->loadSettings();
@@ -93,6 +101,7 @@ class DefaultController extends Controller
             'perf' => $perf,
             'selfTest' => $selfTest,
             'analyticsData' => $analyticsData,
+            'currentLang' => \larikmc\antibot\services\I18n::getLanguage(),
         ]);
     }
 

@@ -1,7 +1,7 @@
 # Yii2 Antibot (`larikmc/yii2-antibot`)
 
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE.md)
-[![Latest Version](https://img.shields.io/badge/release-v1.5.8-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.5.8)
+[![Latest Version](https://img.shields.io/badge/release-v1.5.9-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.5.9)
 [![PHP](https://img.shields.io/badge/PHP-8.0%20|%208.1%20|%208.2%20|%208.3%20|%208.4%20|%208.5-blue)](https://php.net)
 [![Yii2](https://img.shields.io/badge/Yii2-2.0.x-orange.svg)](https://yiiframework.com)
 
@@ -10,9 +10,23 @@
 
 ---
 
-## ⚡ Ключевые возможности v1.5.8
+## ⚡ Ключевые возможности v1.5.9
 
-### 1. Автоматическое определение Reverse Proxy (Nginx / HestiaCP / cPanel / Docker) (v1.5.8)
+### 1. Двуязычная локализация и понятные причины событий на русском (v1.5.9)
+- **Умная локализация (`I18n` Service):**
+  - Автоматическое определение языка по `Yii::$app->language` (для русскоязычных сайтов сразу включается полноценный русский язык).
+  - Интерактивный переключатель `[ RU | EN ]` в шапке панели управления и опция выбора языка в настройках.
+- **Человекопонятный журнал Live Feed:**
+  - Все технические причины и действия переводятся на понятный русский язык с категоризацией:
+    - *Поддельные поисковики:* `[Фейк-бот] Поддельный бот (выдаёт себя за Яндекс)`
+    - *Настоящие поисковики:* `[Поисковик] Подлинный поисковый робот: Яндекс`
+    - *Парсеры и скраперы:* `[Скрапер] Коммерческий парсер / скрапер: PetalBot`
+    - *Утилиты и скрипты:* `[CLI / Скрипт] Автоматическая утилита / скрипт: cURL`
+    - *Нейросети и AI-боты:* `[AI-бот] AI-краулер (нейросеть): GPTBot`
+    - *Браузерные проверки:* `[Проверка OK] Браузерная проверка успешно решена (JS Challenge)`
+  - Действия снабжены иконками и понятными статусами: `👁️ Мониторинг`, `⛔ Заблокирован`, `⏱️ Лимит превышен`, `🤖 Поисковик (OK)`, `✅ Проверка пройдена`.
+
+### 2. Автоматическое определение Reverse Proxy (Nginx / HestiaCP / cPanel / Docker) (v1.5.8)
 - **Plug-and-Play работа «из коробки» (`autoTrustLocalProxy`):**
   - Модуль по умолчанию (`autoTrustLocalProxy = true`) автоматически доверяет локальным прокси-серверам (`127.0.0.1`, `::1`, `SERVER_ADDR`, `LOCAL_ADDR`).
   - При работе сайта в связке Nginx + Apache / PHP-FPM реальный IP посетителя или бота мгновенно и безошибочно извлекается из `X-Forwarded-For` / `X-Real-IP` без ручной настройки IP сервера.
@@ -127,7 +141,7 @@
 ## 📦 Установка
 
 ```bash
-composer require larikmc/yii2-antibot:^1.5.8
+composer require larikmc/yii2-antibot:^1.5.9
 ```
 
 Или добавьте в ваш `composer.json`:
@@ -135,7 +149,7 @@ composer require larikmc/yii2-antibot:^1.5.8
 ```json
 {
     "require": {
-        "larikmc/yii2-antibot": "^1.5.8"
+        "larikmc/yii2-antibot": "^1.5.9"
     }
 }
 ```

@@ -112,6 +112,18 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                                 </label>
                             </div>
                         </div>
+
+                        <div class="row g-3 mt-2 pt-2 border-top">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Язык интерфейса и журнала событий (Language):</label>
+                                <select name="AntibotSetting[language]" class="form-select form-select-sm rounded-3">
+                                    <option value="auto" <?= ($settings['language'] ?? 'auto') === 'auto' ? 'selected' : '' ?>>Автоопределение (по языку сайта)</option>
+                                    <option value="ru" <?= ($settings['language'] ?? '') === 'ru' ? 'selected' : '' ?>>Русский (Russian)</option>
+                                    <option value="en" <?= ($settings['language'] ?? '') === 'en' ? 'selected' : '' ?>>English</option>
+                                </select>
+                                <div class="form-text text-muted small mt-1">Определяет язык названий действий и причин срабатываний в журнале Live Feed и на графиках.</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
