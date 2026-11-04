@@ -8,15 +8,7 @@ declare(strict_types=1);
 /** @var array<string, mixed> $stats */
 /** @var array<int, array<string, mixed>> $events */
 /** @var array<string, mixed> $perf */
-/** @var array<string, mixed> $selfTest */
 /** @var array<string, mixed> $analyticsData */
-/** @var array<int, array<string, mixed>> $recommendations */
-/** @var array<string, mixed>|null $simResult */
-/** @var string $simType */
-/** @var int $simMax */
-/** @var int $simWindow */
-/** @var string $simUa */
-/** @var array<int, array<string, mixed>> $auditTrail */
 /** @var string|null $currentLang */
 
 use larikmc\antibot\Module;
@@ -34,8 +26,7 @@ $this->params['breadcrumbs'] = [
 ];
 
 $perfTotal = (int) ($perf['total_checks'] ?? 0);
-$perfAvg = ($perf['avg_ms'] ?? null) !== null ? number_format((float) $perf['avg_ms'], 3) : null;
-$perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95_ms'], 3) : null;
+$activeLang = $currentLang ?? 'ru';
 ?>
 
 <div class="antibot-dashboard">
@@ -50,16 +41,20 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <h1 class="h4 fw-bold mb-0 text-dark" style="letter-spacing: -0.02em;">Антибот-защита</h1>
                         <span class="badge bg-light text-muted border rounded-pill px-2 py-1 small fw-normal">v<?= Module::VERSION ?></span>
-                        <div class="btn-group btn-group-sm rounded-pill border overflow-hidden ms-1 shadow-sm" role="group" aria-label="Язык / Language">
-                            <a href="<?= Url::current(['lang' => 'ru']) ?>" class="btn btn-sm <?= ($currentLang ?? 'ru') === 'ru' ? 'btn-primary text-white' : 'btn-light text-muted' ?> px-2 py-0 fw-bold" style="font-size: 0.72rem;">RU</a>
-                            <a href="<?= Url::current(['lang' => 'en']) ?>" class="btn btn-sm <?= ($currentLang ?? 'ru') === 'en' ? 'btn-primary text-white' : 'btn-light text-muted' ?> px-2 py-0 fw-bold" style="font-size: 0.72rem;">EN</a>
+                        <div class="antibot-lang-pill">
+                            <a href="<?= Url::current(['lang' => 'ru']) ?>" class="<?= $activeLang === 'ru' ? 'active' : '' ?>">RU</a>
+                            <a href="<?= Url::current(['lang' => 'en']) ?>" class="<?= $activeLang === 'en' ? 'active' : '' ?>">EN</a>
                         </div>
                         <span class="badge <?= $antibot->mode === 'monitoring' ? 'bg-info bg-opacity-10 text-info border border-info border-opacity-25' : ($antibot->mode === 'strict' ? 'bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25' : 'bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25') ?> rounded-pill px-3 py-1 d-inline-flex align-items-center gap-2" style="font-size: 0.82rem; font-weight: 600;">
                             <span style="width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; box-shadow: 0 0 6px currentColor;"></span>
-                            <?= ($currentLang ?? 'ru') === 'en' ? 'Mode: ' . Html::encode(ucfirst($antibot->mode)) : 'Режим: ' . match($antibot->mode) { 'monitoring' => 'Мониторинг', 'strict' => 'Строгий (Блокировка)', default => 'Стандартный' } ?>
+                            <?= $activeLang === 'en' ? 'Mode: ' . Html::encode(ucfirst($antibot->mode)) : 'Режим: ' . match($antibot->mode) { 'monitoring' => 'Мониторинг', 'strict' => 'Строгий (Блокировка)', default => 'Стандартный' } ?>
                         </span>
                     </div>
-                    <p class="text-muted small mb-0 mt-1"><?= ($currentLang ?? 'ru') === 'en' ? 'Autonomous behavioral anti-bot protection, crawler filtering, search engine verification and visual analytics' : 'Автономный модуль поведенческой защиты, фильтрации ботов, верификации поисковиков и аналитики' ?></p>
+                    <p class="text-muted small mb-0 mt-1">
+                        <?= $activeLang === 'en'
+                            ? 'Autonomous behavioral anti-bot protection, crawler filtering, search engine verification and visual analytics'
+                            : 'Автономный модуль поведенческой защиты, фильтрации ботов, верификации поисковиков и аналитики' ?>
+                    </p>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -77,12 +72,15 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
             </div>
         </div>
 
-        <!-- Modern Segmented Navigation Tabs -->
+        <!-- Modern Segmented Navigation Tabs (4 Tabs) -->
         <hr class="my-3 text-muted opacity-25">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1">
             <div class="d-inline-flex p-1 bg-light border rounded-pill gap-1 shadow-sm">
                 <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-sm btn-primary rounded-pill px-4 py-2 fw-semibold text-decoration-none shadow-sm">
-                    📊 Мониторинг и Аналитика
+                    📊 Мониторинг и Журнал
+                </a>
+                <a href="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
+                    🩺 Диагностика и Советник
                 </a>
                 <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
                     ⚙️ Настройки правил
@@ -188,7 +186,7 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
         </div>
     <?php endif; ?>
 
-    <!-- LEVEL 1: Modern SaaS KPI Cards Grid -->
+    <!-- LEVEL 1: Compact 4 KPI Cards Grid -->
     <div class="row g-3 mb-4">
         <!-- 1. Total Checks -->
         <div class="col-sm-6 col-lg-3">
@@ -224,7 +222,7 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
             </div>
         </div>
 
-        <!-- 3. Blocked (403) -->
+        <!-- 3. Blocked (403) or Monitored -->
         <div class="col-sm-6 col-lg-3">
             <div class="antibot-kpi-card">
                 <div>
@@ -245,24 +243,7 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
             </div>
         </div>
 
-        <!-- 4. Rate Limited (429) -->
-        <div class="col-sm-6 col-lg-3">
-            <div class="antibot-kpi-card">
-                <div>
-                    <div class="antibot-kpi-top">
-                        <span class="antibot-kpi-label">Rate Limit (429)</span>
-                        <div class="antibot-kpi-icon-wrap antibot-kpi-icon-warning">⚡</div>
-                    </div>
-                    <div class="antibot-kpi-value text-warning"><?= number_format((int) ($stats['throttled'] ?? 0)) ?></div>
-                </div>
-                <div class="antibot-kpi-footer">
-                    <span>Адаптер <code><?= Html::encode($antibot->rateLimitAdapter) ?></code></span>
-                    <span class="text-muted"><?= (int) $antibot->rateLimitWindow ?>с окн.</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- 5. Search Bots (SEO) -->
+        <!-- 4. Search Bots (SEO) -->
         <div class="col-sm-6 col-lg-3">
             <div class="antibot-kpi-card">
                 <div>
@@ -278,69 +259,9 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                 </div>
             </div>
         </div>
-
-        <!-- 6. Latency (Avg & p95) -->
-        <div class="col-sm-6 col-lg-3">
-            <div class="antibot-kpi-card">
-                <div>
-                    <div class="antibot-kpi-top">
-                        <span class="antibot-kpi-label">Время проверки</span>
-                        <div class="antibot-kpi-icon-wrap antibot-kpi-icon-info">⏱️</div>
-                    </div>
-                    <div class="antibot-kpi-value">
-                        <?= $perfAvg !== null ? $perfAvg . ' <small style="font-size:1rem;font-weight:normal;color:#64748b;">мс</small>' : '<small class="text-muted fs-6">Нет данных</small>' ?>
-                    </div>
-                </div>
-                <div class="antibot-kpi-footer">
-                    <span>p95 перцентиль</span>
-                    <strong class="text-dark"><?= $perfP95 !== null ? $perfP95 . ' мс' : '—' ?></strong>
-                </div>
-            </div>
-        </div>
-
-        <!-- 7. Traps & Challenges -->
-        <div class="col-sm-6 col-lg-3">
-            <div class="antibot-kpi-card">
-                <div>
-                    <div class="antibot-kpi-top">
-                        <span class="antibot-kpi-label">Ловушки / PoW</span>
-                        <div class="antibot-kpi-icon-wrap antibot-kpi-icon-primary">🍯</div>
-                    </div>
-                    <div class="antibot-kpi-value">
-                        <?= (int) ($stats['trapHits'] ?? 0) ?>
-                        <small class="fs-6 text-muted fw-normal">/ <?= (int) ($stats['powSolved'] ?? 0) ?></small>
-                    </div>
-                </div>
-                <div class="antibot-kpi-footer">
-                    <span>Honey URLs & Формы</span>
-                    <span class="text-muted">PoW: <?= Html::encode($antibot->powDifficulty) ?></span>
-                </div>
-            </div>
-        </div>
-
-        <!-- 8. Mode & Engine Status -->
-        <div class="col-sm-6 col-lg-3">
-            <div class="antibot-kpi-card">
-                <div>
-                    <div class="antibot-kpi-top">
-                        <span class="antibot-kpi-label">Защитный профиль</span>
-                        <div class="antibot-kpi-icon-wrap antibot-kpi-icon-primary">🛡️</div>
-                    </div>
-                    <div class="antibot-kpi-value">
-                        <span class="antibot-badge-mode antibot-badge-mode-<?= Html::encode($antibot->mode) ?>">
-                            <?= Html::encode(ucfirst($antibot->mode)) ?>
-                        </span>
-                    </div>
-                </div>
-                <div class="antibot-kpi-footer">
-                    <span>Статус системы</span>
-                    <span class="text-success fw-bold"><?= $antibot->enabled ? '● Активен' : '○ Отключен' ?></span>
-                </div>
-            </div>
-        </div>
     </div>
 
-    <!-- LEVEL 2: Chart #1 — Wide Timeline Dynamics Chart (Line / Area) -->
+    <!-- LEVEL 2: Chart #1 — Wide Timeline Dynamics Chart (Line / Area, compact 260px) -->
     <div class="antibot-card mb-4">
         <div class="antibot-card-header">
             <div>
@@ -498,159 +419,16 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
         </div>
     </div>
 
-    <!-- Heuristic Rule Advisor Section -->
-    <?php if (!empty($recommendations)): ?>
-        <div class="antibot-card mb-4 border-start border-4 border-primary">
-            <div class="antibot-card-header">
-                <div class="d-flex align-items-center gap-2">
-                    <h5 class="antibot-card-title">💡 Эвристический советник правил (Rule Advisor)</h5>
-                    <span class="badge bg-primary rounded-pill"><?= count($recommendations) ?></span>
-                </div>
-            </div>
-            <div class="antibot-card-body">
-                <div class="row g-3">
-                    <?php foreach ($recommendations as $rec): ?>
-                        <?php
-                            $alertClass = match ($rec['severity'] ?? 'info') {
-                                'danger' => 'alert-danger',
-                                'warning' => 'alert-warning',
-                                default => 'alert-info',
-                            };
-                        ?>
-                        <div class="col-12">
-                            <div class="alert <?= $alertClass ?> mb-0 d-flex justify-content-between align-items-center flex-wrap gap-2 rounded-3 border-0 shadow-sm">
-                                <div>
-                                    <div class="fw-bold fs-6 mb-1"><?= Html::encode($rec['title']) ?></div>
-                                    <div class="small mb-1"><?= Html::encode($rec['description']) ?></div>
-                                    <div class="small text-muted font-monospace">Основание: <?= Html::encode($rec['reason']) ?></div>
-                                </div>
-                                <div>
-                                    <?= Html::beginForm(['/antibot/default/apply-recommendation'], 'post', ['class' => 'd-inline']) ?>
-                                        <?= Html::hiddenInput('rec_id', $rec['id']) ?>
-                                        <?php if (!empty($rec['suggestedConfig']['blacklist_add'])): ?>
-                                            <?= Html::hiddenInput('ip', $rec['suggestedConfig']['blacklist_add']) ?>
-                                        <?php endif; ?>
-                                        <?= Html::submitButton('Применить рекомендацию', [
-                                            'class' => 'btn btn-sm btn-dark rounded-pill px-3 shadow-sm',
-                                            'data-confirm' => 'Применить это правило к конфигурации сайта?',
-                                        ]) ?>
-                                    <?= Html::endForm() ?>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <!-- Rule Simulator Section -->
-    <div class="antibot-card mb-4">
-        <div class="antibot-card-header">
-            <div>
-                <h5 class="antibot-card-title">🧪 Симулятор правил ("Что-Если" анализ)</h5>
-                <p class="text-muted small mb-0">Проверьте влияние гипотетических лимитов на реальный поток запросов без изменения настроек</p>
-            </div>
-        </div>
-        <div class="antibot-card-body">
-            <form method="get" action="<?= Url::to(['/antibot/default/index']) ?>" class="row g-3 align-items-end mb-3">
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">Тип проверки:</label>
-                    <select name="sim_type" class="form-select form-select-sm rounded-3">
-                        <option value="ratelimit" <?= ($simType ?? '') === 'ratelimit' ? 'selected' : '' ?>>Частота запросов (Rate Limit)</option>
-                        <option value="ua" <?= ($simType ?? '') === 'ua' ? 'selected' : '' ?>>Маска User-Agent</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">Макс. запросов / Шаблон UA:</label>
-                    <?php if (($simType ?? '') === 'ua'): ?>
-                        <input type="text" name="sim_ua" class="form-control form-control-sm rounded-3" value="<?= Html::encode($simUa ?? 'Python') ?>">
-                    <?php else: ?>
-                        <input type="number" name="sim_max" class="form-control form-control-sm rounded-3" value="<?= (int) ($simMax ?? 20) ?>" min="1" max="1000">
-                    <?php endif; ?>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-bold">Окно (сек):</label>
-                    <input type="number" name="sim_window" class="form-control form-control-sm rounded-3" value="<?= (int) ($simWindow ?? 60) ?>" min="5" max="3600">
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-sm btn-primary rounded-3 w-100">Запустить симуляцию</button>
-                </div>
-            </form>
-
-            <?php if (!empty($simResult)): ?>
-                <div class="p-3 rounded-3 bg-light border">
-                    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-                        <div>
-                            <strong>Результат симуляции:</strong> <?= Html::encode($simResult['notice']) ?>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <span class="badge bg-secondary rounded-pill">Выборка: <?= (int) $simResult['sampleSize'] ?> событий</span>
-                            <span class="badge bg-danger rounded-pill">Было бы заблокировано: <?= (int) $simResult['wouldBlock'] ?> (<?= $simResult['impactPercent'] ?>%)</span>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- Self-Test Diagnostics Section -->
-    <?php if (!empty($selfTest)): ?>
-        <div class="antibot-card mb-4">
-            <div class="antibot-card-header">
-                <div class="d-flex align-items-center gap-2">
-                    <h5 class="antibot-card-title">🩺 Состояние системы и самодиагностика (Self-Test)</h5>
-                </div>
-                <?php
-                    $overallBadge = match ($selfTest['overall'] ?? 'ok') {
-                        'fail' => 'bg-danger',
-                        'warning' => 'bg-warning text-dark',
-                        default => 'bg-success',
-                    };
-                ?>
-                <span class="badge <?= $overallBadge ?> text-uppercase rounded-pill px-3 py-1"><?= Html::encode($selfTest['overall'] ?? 'OK') ?></span>
-            </div>
-            <div class="antibot-card-body">
-                <div class="row g-3">
-                    <?php foreach ($selfTest['checks'] ?? [] as $chk): ?>
-                        <?php
-                            $chkBadge = match ($chk['status'] ?? 'ok') {
-                                'fail' => 'text-danger',
-                                'warning' => 'text-warning',
-                                default => 'text-success',
-                            };
-                            $chkIcon = match ($chk['status'] ?? 'ok') {
-                                'fail' => '❌',
-                                'warning' => '⚠️',
-                                default => '✅',
-                            };
-                        ?>
-                        <div class="col-md-6">
-                            <div class="p-3 rounded-3 bg-light border h-100">
-                                <div class="d-flex align-items-center mb-1">
-                                    <span class="me-2"><?= $chkIcon ?></span>
-                                    <strong class="<?= $chkBadge ?>"><?= Html::encode($chk['name']) ?></strong>
-                                </div>
-                                <div class="small text-muted mb-1"><?= Html::encode($chk['message']) ?></div>
-                                <?php if (!empty($chk['recommendation'])): ?>
-                                    <div class="small text-danger">Совет: <?= Html::encode($chk['recommendation']) ?></div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <!-- Live Event Feed Table -->
+    <!-- LEVEL 5: Live Event Feed Table (Directly visible below the charts!) -->
     <div class="antibot-card mb-4">
         <div class="antibot-card-header">
             <div>
                 <h5 class="antibot-card-title">Журнал последних событий (Live Feed)</h5>
                 <span class="text-muted small">Зафиксированные подозрительные обращения</span>
             </div>
-            <span class="badge bg-light text-dark border rounded-pill px-3 py-1">JSON Lines (.jsonl)</span>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-dark border rounded-pill px-3 py-1">JSON Lines (.jsonl)</span>
+            </div>
         </div>
         <div class="antibot-card-body p-0">
             <?php if (empty($events)): ?>
@@ -674,8 +452,8 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                             <?php foreach ($events as $event): ?>
                                 <?php
                                     $action = (string) ($event['action'] ?? '');
-                                    $actionData = I18n::formatAction($action, $currentLang ?? null);
-                                    $reasonData = I18n::formatReason((string) ($event['reason'] ?? ''), $currentLang ?? null);
+                                    $actionData = I18n::formatAction($action, $activeLang);
+                                    $reasonData = I18n::formatReason((string) ($event['reason'] ?? ''), $activeLang);
                                     $ip = (string) ($event['ip'] ?? '');
                                 ?>
                                 <tr>

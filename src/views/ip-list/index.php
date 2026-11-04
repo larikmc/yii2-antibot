@@ -8,6 +8,8 @@ declare(strict_types=1);
 /** @var array<int, string> $trustedProxies */
 /** @var \larikmc\antibot\Antibot|null $antibot */
 
+use larikmc\antibot\Module;
+use larikmc\antibot\services\I18n;
 use yii\helpers\Html;
 use yii\helpers\Url;
 
@@ -29,23 +31,33 @@ $this->params['breadcrumbs'] = [
                     📋
                 </div>
                 <div>
-                    <h1 class="h4 fw-bold mb-0 text-dark" style="letter-spacing: -0.02em;">Списки IP адресов и подсетей</h1>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <h1 class="h4 fw-bold mb-0 text-dark" style="letter-spacing: -0.02em;">Списки IP адресов и подсетей</h1>
+                        <span class="badge bg-light text-muted border rounded-pill px-2 py-1 small fw-normal">v<?= Module::VERSION ?></span>
+                        <div class="antibot-lang-pill">
+                            <a href="<?= Url::current(['lang' => 'ru']) ?>" class="<?= (I18n::getLanguage()) === 'ru' ? 'active' : '' ?>">RU</a>
+                            <a href="<?= Url::current(['lang' => 'en']) ?>" class="<?= (I18n::getLanguage()) === 'en' ? 'active' : '' ?>">EN</a>
+                        </div>
+                    </div>
                     <p class="text-muted small mb-0 mt-1">Белые списки, черные списки и диапазоны доверенных прокси (поддерживается нотация CIDR)</p>
                 </div>
             </div>
             <div>
                 <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm">
-                    ← В дашборд
+                    ← В мониторинг
                 </a>
             </div>
         </div>
 
-        <!-- Modern Segmented Navigation Tabs -->
+        <!-- Modern Segmented Navigation Tabs (4 Tabs) -->
         <hr class="my-3 text-muted opacity-25">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1">
             <div class="d-inline-flex p-1 bg-light border rounded-pill gap-1 shadow-sm">
                 <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
-                    📊 Мониторинг и Аналитика
+                    📊 Мониторинг и Журнал
+                </a>
+                <a href="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
+                    🩺 Диагностика и Советник
                 </a>
                 <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
                     ⚙️ Настройки правил

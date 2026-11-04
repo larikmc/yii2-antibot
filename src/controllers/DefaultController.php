@@ -39,26 +39,49 @@ class DefaultController extends Controller
     }
 
     /**
-     * Dashboard page showing traffic metrics, rule recommendations, and real-time logs.
+     * Dashboard page showing traffic metrics, visual analytics charts, and live event feed.
      *
-     * @return Response|string
+     * @return string
      */
-    public function actionIndex()
+    public function actionIndex(): string
     {
-        $langParam = $this->request->get('lang');
-        if (in_array($langParam, ['ru', 'en'], true)) {
-            if (Yii::$app !== null && Yii::$app->has('session', true)) {
-                Yii::$app->session->set('antibot_language', $langParam);
-            }
-            return $this->redirect(['index']);
-        }
+        $antibot = $this->module->getAntibot();
+        $storage = $antibot->getStorage();
 
+        $stats = $storage->getStatistics(1000);
+        $events = $storage->getRecentEvents(100);
+        $perf = $antibot->getInspectionMetrics();
+
+        // Visual Analytics Dataset (cached 120s, no public overhead)
+        $analyticsData = \larikmc\antibot\services\analytics\DashboardAnalyticsService::getAnalytics(
+            $storage,
+            \larikmc\antibot\services\analytics\DashboardAnalyticsService::PERIOD_24H,
+            $antibot->mode
+        );
+
+        return $this->render('index', [
+            'antibot' => $antibot,
+            'module' => $this->module,
+            'stats' => $stats,
+            'events' => $events,
+            'perf' => $perf,
+            'analyticsData' => $analyticsData,
+            'currentLang' => \larikmc\antibot\services\I18n::getLanguage(),
+        ]);
+    }
+
+    /**
+     * System diagnostics, heuristic rule advisor, rule simulator, and audit trail.
+     *
+     * @return string
+     */
+    public function actionDiagnostics(): string
+    {
         $antibot = $this->module->getAntibot();
         $storage = $antibot->getStorage();
         $settings = $storage->loadSettings();
 
-        $stats = $storage->getStatistics(1000);
-        $events = $storage->getRecentEvents(100);
+        $events = $storage->getRecentEvents(200);
 
         // Advisor Recommendations
         $recommendations = \larikmc\antibot\services\advisor\RuleAdvisor::generateRecommendations($events, $settings);
@@ -75,22 +98,13 @@ class DefaultController extends Controller
         };
 
         // Audit Trail and Metrics
-        $auditTrail = $storage->getAuditTrail(8);
+        $auditTrail = $storage->getAuditTrail(15);
         $perf = $antibot->getInspectionMetrics();
         $selfTest = \larikmc\antibot\services\resilience\SelfTest::run($antibot);
 
-        // Visual Analytics Dataset (cached 120s, no public overhead)
-        $analyticsData = \larikmc\antibot\services\analytics\DashboardAnalyticsService::getAnalytics(
-            $storage,
-            \larikmc\antibot\services\analytics\DashboardAnalyticsService::PERIOD_24H,
-            $antibot->mode
-        );
-
-        return $this->render('index', [
+        return $this->render('diagnostics', [
             'antibot' => $antibot,
             'module' => $this->module,
-            'stats' => $stats,
-            'events' => $events,
             'recommendations' => $recommendations,
             'simResult' => $simResult,
             'simType' => $simType,
@@ -100,7 +114,6 @@ class DefaultController extends Controller
             'auditTrail' => $auditTrail,
             'perf' => $perf,
             'selfTest' => $selfTest,
-            'analyticsData' => $analyticsData,
             'currentLang' => \larikmc\antibot\services\I18n::getLanguage(),
         ]);
     }
@@ -170,7 +183,7 @@ class DefaultController extends Controller
             Yii::$app->session->setFlash('success', 'Дифференцированный бюджет нагрузки (Weighted Limiter) включен.');
         }
 
-        return $this->redirect(['index']);
+        return $this->redirect(['diagnostics']);
     }
 
     /**
@@ -195,7 +208,7 @@ class DefaultController extends Controller
             }
         }
 
-        return $this->redirect(['index']);
+        return $this->redirect(Yii::$app->request->referrer ?: ['index']);
     }
 
     /**
@@ -220,7 +233,7 @@ class DefaultController extends Controller
             }
         }
 
-        return $this->redirect(['index']);
+        return $this->redirect(Yii::$app->request->referrer ?: ['index']);
     }
 
     /**
@@ -233,6 +246,6 @@ class DefaultController extends Controller
         $antibot = $this->module->getAntibot();
         $antibot->getStorage()->clearEvents();
         Yii::$app->session->setFlash('success', 'Журнал событий успешно очищен.');
-        return $this->redirect(['index']);
+        return $this->redirect(Yii::$app->request->referrer ?: ['index']);
     }
 }

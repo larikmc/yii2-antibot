@@ -2,6 +2,27 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.10] - 2026-11-04
+
+### Ergonomic UI Overhaul, Dedicated Diagnostics Tab & Compact Dashboards
+- **Dedicated Diagnostics & Rule Advisor Tab (`default/diagnostics`):**
+  - Created a dedicated action `actionDiagnostics()` and view `src/views/default/diagnostics.php` to separate troubleshooting and rule simulation from real-time monitoring.
+  - Relocated Self-Test system diagnostic cards, Heuristic Rule Advisor recommendations, Rule Simulator ("Что-Если" what-if analysis), and Audit Trail into this view.
+  - Added clear, plain Russian explanations for the Rule Advisor and Rule Simulator so administrators immediately understand their purpose and how to use them without risk.
+- **Instant Live Feed Visibility on Monitoring View (`default/index`):**
+  - Moved the Live Event Feed table («Журнал последних событий») directly underneath the analytics charts, eliminating the need to scroll through pages of tools to inspect recent visitor requests.
+- **Compact KPI Metrics Row:**
+  - Reduced top KPI card clutter from 8 oversized cards to 4 sharp, high-impact cards (Проинспектировано, Событий в журнале, Заблокировано 403 / Мониторинг, Поисковики SEO).
+  - Compacted CSS padding (`0.85rem 1.15rem`), metric font size (`1.6rem`), and icon wraps (`36px`), saving over 220px of vertical space.
+- **Balanced Chart Heights:**
+  - Reduced ECharts timeline dynamics chart and action distribution heights to compact `250-260px` for optimal screen ergonomics.
+- **Sleek Language Switcher Pill (`.antibot-lang-pill`):**
+  - Redesigned the language switch into a clean, modern pill control that sits neatly in the header without disrupting flex layout.
+  - Added global language handling in `Module::beforeAction()` that seamlessly switches language on any page and redirects to a clean URL.
+  - Integrated 4-tab segmented navigation bar consistently across `default/index`, `default/diagnostics`, `settings/index`, and `ip-list/index`.
+- **Test Suite:**
+  - Added `tests/test_v1510.php` (10 passed) validating controller action routing, view integrity, and version alignment.
+
 ## [1.5.9] - 2026-11-04
 
 ### Bilingual Localization & Russian Reason/Action Formatting
