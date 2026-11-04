@@ -319,11 +319,17 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                         </h2>
                     </div>
                     <div class="antibot-card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="autoTrustLocalProxy" name="AntibotSetting[autoTrustLocalProxy]" value="1" <?= !empty($settings['autoTrustLocalProxy']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold small" for="autoTrustLocalProxy">Автоматически доверять локальным reverse proxy (127.0.0.1, SERVER_ADDR)</label>
+                            <div class="form-text text-muted small mt-1">Рекомендуется для Nginx + Apache / PHP-FPM (HestiaCP, cPanel, Docker). Модуль автоматически распознает реальный IP посетителя из заголовков <code>X-Forwarded-For</code> / <code>X-Real-IP</code> без необходимости вручную вводить IP сервера.</div>
+                        </div>
+
                         <div class="mb-0">
-                            <label class="form-label small fw-bold">IP или CIDR подсети доверенных прокси:</label>
-                            <textarea name="AntibotSetting[trustedProxies]" class="form-control font-monospace small rounded-3" rows="3" placeholder="127.0.0.1&#10;10.0.0.0/8"><?= Html::encode($trustedProxiesStr) ?></textarea>
-                            <div class="form-text text-danger mt-2">
-                                <strong>Безопасность:</strong> Если список пуст, заголовки <code>X-Forwarded-For</code> строго игнорируются для защиты от подмены IP.
+                            <label class="form-label small fw-bold">Дополнительные IP или CIDR подсети доверенных прокси (по одному на строку):</label>
+                            <textarea name="AntibotSetting[trustedProxies]" class="form-control font-monospace small rounded-3" rows="3" placeholder="10.0.0.0/8&#10;173.245.48.0/20"><?= Html::encode($trustedProxiesStr) ?></textarea>
+                            <div class="form-text text-muted mt-2">
+                                <strong>Безопасность:</strong> Указывайте внешние балансировщики или Cloudflare. Заголовки прокси принимаются только от доверенных узлов для строгой защиты от подмены IP.
                             </div>
                         </div>
                     </div>

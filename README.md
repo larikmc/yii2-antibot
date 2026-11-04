@@ -1,7 +1,7 @@
 # Yii2 Antibot (`larikmc/yii2-antibot`)
 
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE.md)
-[![Latest Version](https://img.shields.io/badge/release-v1.5.7-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.5.7)
+[![Latest Version](https://img.shields.io/badge/release-v1.5.8-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.5.8)
 [![PHP](https://img.shields.io/badge/PHP-8.0%20|%208.1%20|%208.2%20|%208.3%20|%208.4%20|%208.5-blue)](https://php.net)
 [![Yii2](https://img.shields.io/badge/Yii2-2.0.x-orange.svg)](https://yiiframework.com)
 
@@ -10,9 +10,19 @@
 
 ---
 
-## ⚡ Ключевые возможности v1.5.7
+## ⚡ Ключевые возможности v1.5.8
 
-### 1. Интерактивная визуальная аналитика на Apache ECharts (v1.5.7)
+### 1. Автоматическое определение Reverse Proxy (Nginx / HestiaCP / cPanel / Docker) (v1.5.8)
+- **Plug-and-Play работа «из коробки» (`autoTrustLocalProxy`):**
+  - Модуль по умолчанию (`autoTrustLocalProxy = true`) автоматически доверяет локальным прокси-серверам (`127.0.0.1`, `::1`, `SERVER_ADDR`, `LOCAL_ADDR`).
+  - При работе сайта в связке Nginx + Apache / PHP-FPM реальный IP посетителя или бота мгновенно и безошибочно извлекается из `X-Forwarded-For` / `X-Real-IP` без ручной настройки IP сервера.
+  - Решена проблема, когда все посетители и боты отображались под локальным адресом сервера.
+- **Строгая защита от подмены IP (Anti-Spoofing):**
+  - Если запрос поступает напрямую от внешнего клиента в обход доверенного прокси, любые заголовки `X-Forwarded-For` или `CF-Connecting-IP` строго игнорируются, а IP берется исключительно из `REMOTE_ADDR`.
+  - Подделка локальных адресов (`127.0.0.1`, `::1`) внутри цепочки прокси-заголовков гарантированно отбрасывается.
+  - В панели управления добавлен удобный переключатель автоопределения прокси и индикация текущего распознанного адреса.
+
+### 2. Интерактивная визуальная аналитика на Apache ECharts
 - **4 информативных графика в административной панели:**
   1. *Динамика подозрительной активности (Line/Area Chart)*: временные ряды мониторинга, реальных блокировок, Rate Limit и проверок (Challenge). Переключатель периодов: **24 часа** (почасовая группировка), **7 дней**, **Вся доступная история**. События со статусом `simulated: true` строго отображаются как мониторинг и не искажают статистику реальных блокировок.
   2. *Распределение действий (Donut Chart)*: соотношение категорий действий в учтённых событиях журнала с выводом общего числа событий в центре кольца и расчётом процентов.
@@ -50,10 +60,10 @@
   - Встроенный guard `_isBootstrapped` гарантирует однократную регистрацию обработчиков событий `EVENT_BEFORE_REQUEST` и `EVENT_BEFORE_ACTION`, даже если модуль зарегистрирован одновременно через Composer extension bootstrap и массив `bootstrap => ['antibot']`.
   - Консольные команды (`yii\console\Application`) изолированы от запуска веб-антибота.
 
-### 4. Защита от подмены IP и безопасные прокси (`trustedProxies`)
-- Заголовки прокси (`CF-Connecting-IP`, `X-Forwarded-For`, `X-Real-IP`) принимаются **только** от доверенных прокси-серверов (`trustedProxies`, поддерживается нотация CIDR).
-- По умолчанию список `trustedProxies` пуст (`[]`): заголовки прокси строго игнорируются, клиентский IP берётся только из `REMOTE_ADDR`.
-- Значение `['127.0.0.1']` следует указывать **только** тогда, когда перед сайтом действительно работает локальный обратный прокси (Nginx), который корректно очищает входящие заголовки `X-Forwarded-For`.
+### 4. Защита от подмены IP и автоматические прокси (`autoTrustLocalProxy` & `trustedProxies`)
+- По умолчанию включена опция `autoTrustLocalProxy = true`: модуль автоматически определяет и доверяет локальным обратным прокси (`127.0.0.1`, `::1`, `SERVER_ADDR`, `LOCAL_ADDR`). При работе с Nginx / HestiaCP / cPanel заголовки `X-Forwarded-For` и `X-Real-IP` корректно разворачиваются автоматически.
+- Заголовки прокси (`CF-Connecting-IP`, `X-Forwarded-For`, `X-Real-IP`) принимаются **только** от доверенных прокси-серверов. Если соединение прямое (внешний IP в `REMOTE_ADDR`), заголовки прокси строго игнорируются для защиты от подделки.
+- Для внешних балансировщиков или Cloudflare используйте список `trustedProxies` (поддерживается нотация CIDR, например `173.245.48.0/20`).
 - Исключена подмена loopback-адресов (`127.0.0.1`, `::1`): заголовочные loopback-адреса отбрасываются.
 
 ### 5. Адаптивный Rate Limiter и Weighted Rate Limiter
@@ -117,7 +127,7 @@
 ## 📦 Установка
 
 ```bash
-composer require larikmc/yii2-antibot:^1.5.7
+composer require larikmc/yii2-antibot:^1.5.8
 ```
 
 Или добавьте в ваш `composer.json`:
@@ -125,7 +135,7 @@ composer require larikmc/yii2-antibot:^1.5.7
 ```json
 {
     "require": {
-        "larikmc/yii2-antibot": "^1.5.7"
+        "larikmc/yii2-antibot": "^1.5.8"
     }
 }
 ```
@@ -143,15 +153,11 @@ composer require larikmc/yii2-antibot:^1.5.7
         'enabled' => true,
         'mode' => 'monitoring', // Рекомендуется 'monitoring' для первого запуска (только логирование без блокировок)
         
-        // Опциональный ключ HMAC (по умолчанию генерируется автоматически):
-        // 'secretKey' => 'your-secure-random-32-byte-secret-key',
+        // Автоматическое определение локального Nginx/reverse proxy включено по умолчанию:
+        // 'autoTrustLocalProxy' => true,
         
-        // Доверенные прокси (Reverse Proxies):
-        // По умолчанию список пуст ([]): заголовки X-Forwarded-For и CF-Connecting-IP строго
-        // игнорируются, клиентский IP берётся только из REMOTE_ADDR (защита от подмены IP).
-        // Если сайт работает за локальным Nginx на том же сервере: ['127.0.0.1']
-        // Если сайт за внешним балансировщиком/CDN: укажите точные доверенные IP балансировщиков.
-        'trustedProxies' => [],
+        // Дополнительные внешние прокси/CDN (например Cloudflare):
+        // 'trustedProxies' => ['173.245.48.0/20'],
     ],
 ],
 ```

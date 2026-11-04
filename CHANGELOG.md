@@ -2,6 +2,24 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.8] - 2026-11-04
+
+### Automatic Reverse Proxy Detection & Plug-and-Play Experience
+- **Auto-Trust Local Reverse Proxies (`autoTrustLocalProxy`):**
+  - Added new configuration property `public bool $autoTrustLocalProxy = true` in `larikmc\antibot\Antibot`.
+  - Automatically identifies local reverse proxies (Nginx + Apache, PHP-FPM, Docker, HestiaCP, cPanel, ISPmanager) by including loopback addresses (`127.0.0.1`, `::1`), `$_SERVER['SERVER_ADDR']`, and `$_SERVER['LOCAL_ADDR']` in the effective trusted proxy list.
+  - Automatically unwraps `X-Forwarded-For`, `X-Real-IP`, and `CF-Connecting-IP` when the connection originates from the server's own front-end proxy, completely solving the issue where all visitors and bots were recorded under the server's internal/external IP address (`188.120.233.91`).
+- **Strict Anti-Spoofing Security Architecture:**
+  - Preserved uncompromising security guarantees: if an external client connects directly (where `REMOTE_ADDR` does not match an effective trusted proxy), all proxy headers are strictly discarded and client IP is taken solely from `REMOTE_ADDR`.
+  - Spoofed loopback IPs (`127.0.0.1`, `::1`) in proxy headers are strictly rejected across all headers.
+  - Added fallback header resolution from `$_SERVER` environment if `Yii::$app->request->headers` is absent or null.
+- **Admin Panel & Settings UI Polish:**
+  - Added modern switch toggle for `autoTrustLocalProxy` under the «8. Доверенные прокси (Proxies)» section in admin settings (`SettingsController`, `views/settings/index.php`).
+  - Added auto-trust status indicator and detected server IP badge in IP lists management view (`views/ip-list/index.php`).
+  - Persisted in storage file defaults via `StorageService`.
+- **Test Suite:**
+  - Added dedicated test suite `tests/test_v158.php` covering automatic reverse proxy detection, multi-hop chains, loopback rejection, anti-spoofing guarantees, and settings persistence.
+
 ## [1.5.7] - 2026-10-30
 
 ### Visual Analytics & UI Polish

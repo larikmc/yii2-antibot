@@ -79,6 +79,7 @@ class IpListController extends Controller
             'whitelist' => (array) ($settings['whitelist'] ?? []),
             'blacklist' => (array) ($settings['blacklist'] ?? []),
             'trustedProxies' => (array) ($settings['trustedProxies'] ?? []),
+            'antibot' => $antibot,
         ]);
     }
 

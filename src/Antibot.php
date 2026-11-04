@@ -57,9 +57,15 @@ class Antibot extends Component implements BootstrapInterface
 
     /**
      * @var array<int, string> Explicit list of trusted reverse proxy IPs or CIDR subnets.
-     * When empty, proxy headers (X-Forwarded-For, CF-Connecting-IP) are NEVER trusted, preventing IP spoofing.
+     * When empty and $autoTrustLocalProxy is false, proxy headers (X-Forwarded-For, CF-Connecting-IP) are NEVER trusted, preventing IP spoofing.
      */
     public array $trustedProxies = [];
+
+    /**
+     * @var bool Whether to automatically trust local reverse proxy addresses (127.0.0.1, ::1, SERVER_ADDR, LOCAL_ADDR).
+     * Enabled by default for Nginx + Apache / PHP-FPM environments (HestiaCP, cPanel, Docker) so client IP is accurately extracted.
+     */
+    public bool $autoTrustLocalProxy = true;
 
     /**
      * @var array<int, string> Headers to inspect when REMOTE_ADDR is in $trustedProxies.
@@ -205,6 +211,9 @@ class Antibot extends Component implements BootstrapInterface
             if (isset($savedSettings['trustedProxies']) && is_array($savedSettings['trustedProxies'])) {
                 $this->trustedProxies = $savedSettings['trustedProxies'];
             }
+            if (isset($savedSettings['autoTrustLocalProxy'])) {
+                $this->autoTrustLocalProxy = (bool) $savedSettings['autoTrustLocalProxy'];
+            }
             if (isset($savedSettings['ipHeaders']) && is_array($savedSettings['ipHeaders'])) {
                 $this->ipHeaders = $savedSettings['ipHeaders'];
             }
@@ -302,8 +311,41 @@ class Antibot extends Component implements BootstrapInterface
     }
 
     /**
+     * Returns the effective list of trusted proxy IPs / CIDRs.
+     * Merges user-configured $trustedProxies with auto-detected local reverse proxy addresses
+     * (127.0.0.1, ::1, $_SERVER['SERVER_ADDR'], $_SERVER['LOCAL_ADDR']) when $autoTrustLocalProxy is enabled.
+     *
+     * @return array<int, string>
+     */
+    public function getEffectiveTrustedProxies(): array
+    {
+        $proxies = $this->trustedProxies;
+
+        if ($this->autoTrustLocalProxy) {
+            $proxies[] = '127.0.0.1';
+            $proxies[] = '::1';
+
+            if (!empty($_SERVER['SERVER_ADDR'])) {
+                $serverAddr = $this->sanitizeIp((string) $_SERVER['SERVER_ADDR']);
+                if ($serverAddr !== '') {
+                    $proxies[] = $serverAddr;
+                }
+            }
+
+            if (!empty($_SERVER['LOCAL_ADDR'])) {
+                $localAddr = $this->sanitizeIp((string) $_SERVER['LOCAL_ADDR']);
+                if ($localAddr !== '') {
+                    $proxies[] = $localAddr;
+                }
+            }
+        }
+
+        return array_values(array_unique($proxies));
+    }
+
+    /**
      * Safely resolves the client IP address.
-     * Prevents IP spoofing by validating $_SERVER['REMOTE_ADDR'] against $trustedProxies.
+     * Prevents IP spoofing by validating $_SERVER['REMOTE_ADDR'] against trusted proxies.
      * Rejects invalid IPs and prevents header-spoofed loopback addresses.
      */
     public function resolveClientIp(): string
@@ -316,18 +358,27 @@ class Antibot extends Component implements BootstrapInterface
             return '0.0.0.0';
         }
 
+        $effectiveProxies = $this->getEffectiveTrustedProxies();
+
         // Strict: If no trusted proxies configured, or REMOTE_ADDR is not trusted, ONLY use REMOTE_ADDR
-        if (empty($this->trustedProxies) || !IpMatcher::match($remoteAddr, $this->trustedProxies)) {
+        if (empty($effectiveProxies) || !IpMatcher::match($remoteAddr, $effectiveProxies)) {
             return $remoteAddr;
         }
 
         $request = Yii::$app !== null ? Yii::$app->request : null;
-        if ($request === null) {
-            return $remoteAddr;
-        }
 
         foreach ($this->ipHeaders as $header) {
-            $val = $request->headers->get($header);
+            $val = null;
+            if ($request !== null && isset($request->headers)) {
+                $val = $request->headers->get($header);
+            }
+            if ($val === null) {
+                $serverKey = 'HTTP_' . str_replace('-', '_', strtoupper($header));
+                if (isset($_SERVER[$serverKey])) {
+                    $val = (string) $_SERVER[$serverKey];
+                }
+            }
+
             if ($val !== null && trim($val) !== '') {
                 $ips = array_map('trim', explode(',', $val));
                 // Walk from right to left to find the first untrusted client IP
@@ -341,7 +392,7 @@ class Antibot extends Component implements BootstrapInterface
                     if (self::isLoopbackIp($cand)) {
                         continue;
                     }
-                    if (!IpMatcher::match($cand, $this->trustedProxies)) {
+                    if (!IpMatcher::match($cand, $effectiveProxies)) {
                         return $cand;
                     }
                 }

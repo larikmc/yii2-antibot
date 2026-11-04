@@ -91,6 +91,7 @@ class SettingsController extends Controller
                 'trapRoute' => trim((string) ($post['trapRoute'] ?? 'antibot/trap')),
                 'jsChallengeEnabled' => !empty($post['jsChallengeEnabled']),
                 'trustedProxies' => array_values(array_unique($trustedProxies)),
+                'autoTrustLocalProxy' => !empty($post['autoTrustLocalProxy']),
                 'aiCrawlerPolicies' => $cleanAiPolicies,
                 'customBlockMessage' => trim((string) ($post['customBlockMessage'] ?? 'Access Denied: Automated bot activity detected.')),
             ];
@@ -124,6 +125,7 @@ class SettingsController extends Controller
             $settings['whitelist'] = $antibot->whitelist;
             $settings['blacklist'] = $antibot->blacklist;
             $settings['trustedProxies'] = $antibot->trustedProxies;
+            $settings['autoTrustLocalProxy'] = $antibot->autoTrustLocalProxy;
             $settings['ipHeaders'] = $antibot->ipHeaders;
             $settings['aiCrawlerPolicies'] = $antibot->aiCrawlerPolicies;
             $settings['routeRules'] = $antibot->routeRules;

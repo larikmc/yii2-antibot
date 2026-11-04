@@ -6,6 +6,7 @@ declare(strict_types=1);
 /** @var array<int, string> $whitelist */
 /** @var array<int, string> $blacklist */
 /** @var array<int, string> $trustedProxies */
+/** @var \larikmc\antibot\Antibot|null $antibot */
 
 use yii\helpers\Html;
 use yii\helpers\Url;
@@ -179,6 +180,16 @@ $this->params['breadcrumbs'] = [
                             <button type="submit" class="btn btn-primary rounded-end-3 px-3">+ Добавить</button>
                         </div>
                     </form>
+
+                    <?php if (isset($antibot) && $antibot->autoTrustLocalProxy): ?>
+                        <div class="alert alert-info py-2 px-3 small rounded-3 mb-3 d-flex align-items-center gap-2">
+                            <span>⚡</span>
+                            <div>
+                                <strong>Авто-доверие локальному прокси активно:</strong><br>
+                                Локальные адреса (<code>127.0.0.1</code>, <code>::1</code><?= !empty($_SERVER['SERVER_ADDR']) ? ', <code>' . Html::encode($_SERVER['SERVER_ADDR']) . '</code>' : '' ?>) распознаются автоматически.
+                            </div>
+                        </div>
+                    <?php endif; ?>
 
                     <!-- Список -->
                     <h6 class="fw-bold small text-muted text-uppercase mb-2">Активные прокси-узлы:</h6>

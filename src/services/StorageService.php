@@ -45,6 +45,18 @@ class StorageService
     private ?array $_cachedSettings = null;
 
     /**
+     * @param array<string, mixed> $config
+     */
+    public function __construct(array $config = [])
+    {
+        foreach ($config as $name => $value) {
+            if (property_exists($this, $name)) {
+                $this->$name = $value;
+            }
+        }
+    }
+
+    /**
      * Resolves the full path to the settings file.
      */
     public function resolveStorageFile(): string
@@ -145,6 +157,7 @@ class StorageService
             'whitelist' => ['127.0.0.1', '::1'],
             'blacklist' => [],
             'trustedProxies' => [],
+            'autoTrustLocalProxy' => true,
             'ipHeaders' => ['CF-Connecting-IP', 'X-Forwarded-For', 'X-Real-IP'],
             'aiCrawlerPolicies' => [],
             'routeRules' => [],
