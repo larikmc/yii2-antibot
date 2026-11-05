@@ -229,10 +229,10 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                 <?= Html::encode(I18n::t('diag_simulator_how', $activeLang)) ?>
             </div>
 
-            <form method="get" action="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="row g-3 align-items-end mb-3">
+            <form method="get" action="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="row g-3 align-items-end mb-3 antibot-sim-form">
                 <div class="col-md-3">
                     <label class="form-label small fw-bold"><?= Html::encode(I18n::t('diag_sim_check_type', $activeLang)) ?></label>
-                    <select name="sim_type" class="form-select form-select-sm rounded-3">
+                    <select name="sim_type" class="form-select rounded-3">
                         <option value="ratelimit" <?= ($simType ?? '') === 'ratelimit' ? 'selected' : '' ?>><?= Html::encode(I18n::t('diag_sim_opt_ratelimit', $activeLang)) ?></option>
                         <option value="ua" <?= ($simType ?? '') === 'ua' ? 'selected' : '' ?>><?= Html::encode(I18n::t('diag_sim_opt_ua', $activeLang)) ?></option>
                     </select>
@@ -240,17 +240,17 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                 <div class="col-md-3">
                     <label class="form-label small fw-bold"><?= Html::encode(I18n::t('diag_sim_max_or_ua', $activeLang)) ?></label>
                     <?php if (($simType ?? '') === 'ua'): ?>
-                        <input type="text" name="sim_ua" class="form-control form-control-sm rounded-3" value="<?= Html::encode($simUa ?? 'Python') ?>">
+                        <input type="text" name="sim_ua" class="form-control rounded-3" value="<?= Html::encode($simUa ?? 'Python') ?>">
                     <?php else: ?>
-                        <input type="number" name="sim_max" class="form-control form-control-sm rounded-3" value="<?= (int) ($simMax ?? 20) ?>" min="1" max="1000">
+                        <input type="number" name="sim_max" class="form-control rounded-3" value="<?= (int) ($simMax ?? 20) ?>" min="1" max="1000">
                     <?php endif; ?>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small fw-bold"><?= Html::encode(I18n::t('diag_sim_window', $activeLang)) ?></label>
-                    <input type="number" name="sim_window" class="form-control form-control-sm rounded-3" value="<?= (int) ($simWindow ?? 60) ?>" min="5" max="3600">
+                    <input type="number" name="sim_window" class="form-control rounded-3" value="<?= (int) ($simWindow ?? 60) ?>" min="5" max="3600">
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-sm btn-primary rounded-3 w-100"><?= Html::encode(I18n::t('diag_sim_run_btn', $activeLang)) ?></button>
+                    <button type="submit" class="btn btn-primary rounded-3 w-100"><?= Html::encode(I18n::t('diag_sim_run_btn', $activeLang)) ?></button>
                 </div>
             </form>
 

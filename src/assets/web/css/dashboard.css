@@ -980,6 +980,28 @@ body.dark .antibot-sticky-bar {
     box-shadow: 0 6px 22px rgba(49, 137, 247, 0.5) !important;
 }
 
+/* Rule Simulator Form Controls Alignment */
+.antibot-sim-form .btn {
+    height: 42px !important;
+    min-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    padding: 0 16px !important;
+    border-radius: 10px !important;
+    box-sizing: border-box !important;
+}
+
+.antibot-sim-form .form-control,
+.antibot-sim-form .form-select {
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: 10px !important;
+    box-sizing: border-box !important;
+}
+
 .antibot-ip-item {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.85rem;
