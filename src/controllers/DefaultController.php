@@ -101,6 +101,21 @@ class DefaultController extends Controller
             default => \larikmc\antibot\services\advisor\RuleSimulator::simulateRateLimit($events, $simMax, $simWindow),
         };
 
+        if ($this->request->isAjax) {
+            $response = Yii::$app->response;
+            $response->format = Response::FORMAT_JSON;
+            $response->data = [
+                'success' => true,
+                'result' => $simResult,
+                'simType' => $simType,
+                'simMax' => $simMax,
+                'simWindow' => $simWindow,
+                'simUa' => $simUa,
+                'timestamp' => date('H:i:s'),
+            ];
+            return $response;
+        }
+
         // Audit Trail and Metrics
         $auditTrail = $storage->getAuditTrail(15);
         $perf = $antibot->getInspectionMetrics();
@@ -120,6 +135,42 @@ class DefaultController extends Controller
             'selfTest' => $selfTest,
             'currentLang' => \larikmc\antibot\services\I18n::getLanguage(),
         ]);
+    }
+
+    /**
+     * AJAX endpoint for Rule Simulator "What-If" analysis.
+     *
+     * @return Response
+     */
+    public function actionSimulate(): Response
+    {
+        $antibot = $this->module->getAntibot();
+        $storage = $antibot->getStorage();
+        $events = $storage->getRecentEvents(500);
+
+        $simType = $this->request->get('sim_type', 'ratelimit');
+        $simMax = (int) $this->request->get('sim_max', 20);
+        $simWindow = (int) $this->request->get('sim_window', 60);
+        $simUa = trim((string) $this->request->get('sim_ua', 'Python'));
+        $lang = \larikmc\antibot\services\I18n::getLanguage();
+
+        $simResult = match ($simType) {
+            'ua' => \larikmc\antibot\services\advisor\RuleSimulator::simulateUserAgentBlock($events, $simUa, $lang),
+            default => \larikmc\antibot\services\advisor\RuleSimulator::simulateRateLimit($events, $simMax, $simWindow, $lang),
+        };
+
+        $response = Yii::$app->response;
+        $response->format = Response::FORMAT_JSON;
+        $response->data = [
+            'success' => true,
+            'result' => $simResult,
+            'simType' => $simType,
+            'simMax' => $simMax,
+            'simWindow' => $simWindow,
+            'simUa' => $simUa,
+            'timestamp' => date('H:i:s'),
+        ];
+        return $response;
     }
 
     /**

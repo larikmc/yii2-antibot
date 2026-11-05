@@ -229,45 +229,128 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                 <?= Html::encode(I18n::t('diag_simulator_how', $activeLang)) ?>
             </div>
 
-            <form method="get" action="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="row g-3 align-items-end mb-3 antibot-sim-form">
+            <form method="get" action="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="row g-3 align-items-end mb-3 antibot-sim-form" id="antibotSimForm">
                 <div class="col-md-3">
-                    <label class="form-label small fw-bold"><?= Html::encode(I18n::t('diag_sim_check_type', $activeLang)) ?></label>
-                    <select name="sim_type" class="form-select rounded-3">
+                    <label class="form-label small fw-bold" for="simTypeSelect"><?= Html::encode(I18n::t('diag_sim_check_type', $activeLang)) ?></label>
+                    <select name="sim_type" id="simTypeSelect" class="form-select rounded-3">
                         <option value="ratelimit" <?= ($simType ?? '') === 'ratelimit' ? 'selected' : '' ?>><?= Html::encode(I18n::t('diag_sim_opt_ratelimit', $activeLang)) ?></option>
                         <option value="ua" <?= ($simType ?? '') === 'ua' ? 'selected' : '' ?>><?= Html::encode(I18n::t('diag_sim_opt_ua', $activeLang)) ?></option>
                     </select>
                 </div>
+                <div class="col-md-4" id="simMaxCol" style="<?= ($simType ?? '') === 'ua' ? 'display: none;' : '' ?>">
+                    <label class="form-label small fw-bold" for="simMaxInput"><?= Html::encode(I18n::t('diag_sim_max_or_ua', $activeLang)) ?></label>
+                    <input type="number" id="simMaxInput" name="sim_max" class="form-control rounded-3" value="<?= (int) ($simMax ?? 20) ?>" min="1" max="1000">
+                </div>
+                <div class="col-md-2" id="simWindowCol" style="<?= ($simType ?? '') === 'ua' ? 'display: none;' : '' ?>">
+                    <label class="form-label small fw-bold" for="simWindowInput"><?= Html::encode(I18n::t('diag_sim_window', $activeLang)) ?></label>
+                    <input type="number" id="simWindowInput" name="sim_window" class="form-control rounded-3" value="<?= (int) ($simWindow ?? 60) ?>" min="5" max="3600">
+                </div>
+                <div class="col-md-6" id="simUaCol" style="<?= ($simType ?? '') === 'ua' ? '' : 'display: none;' ?>">
+                    <label class="form-label small fw-bold" for="simUaInput"><?= Html::encode(I18n::t('diag_sim_max_or_ua', $activeLang)) ?></label>
+                    <input type="text" id="simUaInput" name="sim_ua" class="form-control rounded-3" placeholder="Python, cURL, SemrushBot" value="<?= Html::encode($simUa ?? 'Python') ?>">
+                </div>
                 <div class="col-md-3">
-                    <label class="form-label small fw-bold"><?= Html::encode(I18n::t('diag_sim_max_or_ua', $activeLang)) ?></label>
-                    <?php if (($simType ?? '') === 'ua'): ?>
-                        <input type="text" name="sim_ua" class="form-control rounded-3" value="<?= Html::encode($simUa ?? 'Python') ?>">
-                    <?php else: ?>
-                        <input type="number" name="sim_max" class="form-control rounded-3" value="<?= (int) ($simMax ?? 20) ?>" min="1" max="1000">
-                    <?php endif; ?>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-bold"><?= Html::encode(I18n::t('diag_sim_window', $activeLang)) ?></label>
-                    <input type="number" name="sim_window" class="form-control rounded-3" value="<?= (int) ($simWindow ?? 60) ?>" min="5" max="3600">
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary rounded-3 w-100"><?= Html::encode(I18n::t('diag_sim_run_btn', $activeLang)) ?></button>
+                    <button type="submit" id="simRunBtn" class="btn btn-primary rounded-3 w-100">
+                        <span id="simBtnIcon" class="me-1">⚡</span>
+                        <span id="simBtnText"><?= Html::encode(I18n::t('diag_sim_run_btn', $activeLang)) ?></span>
+                    </button>
                 </div>
             </form>
 
-            <?php if (!empty($simResult)): ?>
-                <div class="p-3 rounded-3 border" style="background: var(--ab-surface); border-color: var(--ab-line) !important;">
-                    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-                        <div>
-                            <strong><?= Html::encode(I18n::t('diag_sim_res_title', $activeLang)) ?></strong>
-                            <span class="text-muted ms-1"><?= Html::encode($simResult['notice']) ?></span>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <span class="badge badge-soft-secondary rounded-pill"><?= Html::encode(I18n::t('diag_sim_sample', $activeLang)) ?> <?= (int) $simResult['sampleSize'] ?></span>
-                            <span class="badge badge-soft-danger rounded-pill"><?= Html::encode(I18n::t('diag_sim_would_block', $activeLang)) ?> <?= (int) $simResult['wouldBlock'] ?> (<?= $simResult['impactPercent'] ?>%)</span>
-                        </div>
-                    </div>
+            <!-- Real-time Progress Bar Box -->
+            <div id="simProgressBox" class="antibot-sim-progress-box">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-semibold small d-flex align-items-center text-primary">
+                        <span class="spinner-grow spinner-grow-sm text-primary me-2" role="status"></span>
+                        <span id="simStepText"><?= Html::encode(I18n::t('diag_sim_step1', $activeLang)) ?></span>
+                    </span>
+                    <span class="fw-bold text-primary small" id="simPercentText">25%</span>
                 </div>
-            <?php endif; ?>
+                <div class="progress antibot-sim-progress-bar-wrap">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="simProgressBar" style="width: 25%;"></div>
+                </div>
+            </div>
+
+            <!-- Dynamic Simulation Result Card -->
+            <div id="simResultContainer" class="mt-3">
+                <?php if (!empty($simResult)): ?>
+                    <?php
+                    $v = $simResult['verdict'] ?? 'safe';
+                    $badgeClass = match ($v) {
+                        'safe' => 'badge-soft-success',
+                        'mild' => 'badge-soft-info',
+                        'moderate' => 'badge-soft-warning',
+                        'high_risk' => 'badge-soft-danger',
+                        default => 'badge-soft-secondary',
+                    };
+                    $vTitle = $simResult['verdictTitle'] ?? match ($v) {
+                        'safe' => I18n::t('diag_sim_safe_badge', $activeLang),
+                        'mild' => I18n::t('diag_sim_mild_badge', $activeLang),
+                        'moderate' => I18n::t('diag_sim_mod_badge', $activeLang),
+                        'high_risk' => I18n::t('diag_sim_risk_badge', $activeLang),
+                        default => 'Готово',
+                    };
+                    $blockColor = (int) ($simResult['wouldBlock'] ?? 0) > 0 ? 'text-danger' : 'text-success';
+                    ?>
+                    <div class="antibot-sim-result-card">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="badge <?= $badgeClass ?> rounded-pill px-3 py-1 fw-bold"><?= Html::encode($vTitle) ?></span>
+                                <span class="text-muted small">⏱️ <?= date('H:i:s') ?></span>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <span class="badge badge-soft-secondary rounded-pill px-2 py-1 small"><?= Html::encode(I18n::t('diag_sim_sample', $activeLang)) ?> <strong><?= (int) ($simResult['sampleSize'] ?? 0) ?></strong></span>
+                                <span class="badge badge-soft-danger rounded-pill px-2 py-1 small"><?= Html::encode(I18n::t('diag_sim_would_block', $activeLang)) ?> <strong><?= (int) ($simResult['wouldBlock'] ?? 0) ?> (<?= $simResult['impactPercent'] ?? 0 ?>%)</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="antibot-sim-notice mb-3 text-dark fw-semibold">
+                            <?= Html::encode($simResult['notice'] ?? '') ?>
+                        </div>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-sm-3 col-6">
+                                <div class="antibot-sim-stat-box">
+                                    <div class="small text-muted"><?= Html::encode(I18n::t('diag_sim_sample', $activeLang)) ?></div>
+                                    <div class="antibot-sim-stat-val text-primary"><?= (int) ($simResult['sampleSize'] ?? 0) ?></div>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 col-6">
+                                <div class="antibot-sim-stat-box">
+                                    <div class="small text-muted"><?= Html::encode(I18n::t('diag_sim_would_block', $activeLang)) ?></div>
+                                    <div class="antibot-sim-stat-val <?= $blockColor ?>"><?= (int) ($simResult['wouldBlock'] ?? 0) ?> <span class="fs-6 fw-normal">(<?= $simResult['impactPercent'] ?? 0 ?>%)</span></div>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 col-6">
+                                <div class="antibot-sim-stat-box">
+                                    <div class="small text-muted"><?= Html::encode(I18n::t('diag_sim_affected_ips', $activeLang)) ?></div>
+                                    <div class="antibot-sim-stat-val text-dark"><?= count($simResult['affectedIps'] ?? []) ?></div>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 col-6">
+                                <div class="antibot-sim-stat-box">
+                                    <div class="small text-muted">SEO Поисковики</div>
+                                    <div class="antibot-sim-stat-val text-success"><?= (int) ($simResult['searchBotsImpacted'] ?? 0) ?> <span class="fs-6 fw-normal">(<?= Html::encode(I18n::t('diag_sim_search_protected', $activeLang)) ?>)</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <?php if (!empty($simResult['affectedIps']) || !empty($simResult['affectedRoutes'])): ?>
+                            <div class="p-2 px-3 mt-2 rounded-3 small border" style="background: rgba(113, 157, 235, 0.04); border-color: var(--ab-line) !important;">
+                                <div class="text-muted mb-1 fw-semibold">Затронутые клиенты и маршруты:</div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <?php foreach (array_slice($simResult['affectedIps'] ?? [], 0, 5, true) as $affIp => $affCount): ?>
+                                        <span class="badge bg-light text-dark border font-monospace">IP: <?= Html::encode($affIp) ?> (<?= $affCount ?>)</span>
+                                    <?php endforeach; ?>
+                                    <?php foreach (array_slice($simResult['affectedRoutes'] ?? [], 0, 5, true) as $affRoute => $affCount): ?>
+                                        <span class="badge bg-light text-muted border font-monospace"><?= Html::encode($affRoute) ?> (<?= $affCount ?>)</span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 
@@ -370,3 +453,230 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
         </div>
     </div>
 </div>
+
+<?php
+$simUrlJson = json_encode(Url::to(['/antibot/default/simulate']));
+$step1Json = json_encode(I18n::t('diag_sim_step1', $activeLang));
+$step2Json = json_encode(I18n::t('diag_sim_step2', $activeLang));
+$step3Json = json_encode(I18n::t('diag_sim_step3', $activeLang));
+$runningJson = json_encode(I18n::t('diag_sim_running', $activeLang));
+$runBtnJson = json_encode(I18n::t('diag_sim_run_btn', $activeLang));
+$sampleLabelJson = json_encode(I18n::t('diag_sim_sample', $activeLang));
+$wouldBlockLabelJson = json_encode(I18n::t('diag_sim_would_block', $activeLang));
+$affectedIpsJson = json_encode(I18n::t('diag_sim_affected_ips', $activeLang));
+$searchProtectedJson = json_encode(I18n::t('diag_sim_search_protected', $activeLang));
+
+$js = <<<JS
+(function() {
+    var form = document.getElementById('antibotSimForm');
+    if (!form) return;
+
+    var typeSelect = document.getElementById('simTypeSelect');
+    var maxCol = document.getElementById('simMaxCol');
+    var windowCol = document.getElementById('simWindowCol');
+    var uaCol = document.getElementById('simUaCol');
+    var runBtn = document.getElementById('simRunBtn');
+    var btnIcon = document.getElementById('simBtnIcon');
+    var btnText = document.getElementById('simBtnText');
+    var progressBox = document.getElementById('simProgressBox');
+    var progressBar = document.getElementById('simProgressBar');
+    var stepText = document.getElementById('simStepText');
+    var percentText = document.getElementById('simPercentText');
+    var resultContainer = document.getElementById('simResultContainer');
+
+    function updateFormVisibility() {
+        if (!typeSelect) return;
+        var isUa = (typeSelect.value === 'ua');
+        if (maxCol) maxCol.style.display = isUa ? 'none' : '';
+        if (windowCol) windowCol.style.display = isUa ? 'none' : '';
+        if (uaCol) uaCol.style.display = isUa ? '' : 'none';
+    }
+
+    if (typeSelect) {
+        typeSelect.addEventListener('change', updateFormVisibility);
+        updateFormVisibility();
+    }
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        if (runBtn) runBtn.disabled = true;
+        if (btnIcon) btnIcon.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        if (btnText) btnText.textContent = {$runningJson};
+
+        if (resultContainer) resultContainer.innerHTML = '';
+        if (progressBox) progressBox.style.display = 'block';
+        if (progressBar) progressBar.style.width = '25%';
+        if (percentText) percentText.textContent = '25%';
+        if (stepText) stepText.textContent = {$step1Json};
+
+        var simType = typeSelect ? typeSelect.value : 'ratelimit';
+        var maxVal = document.getElementById('simMaxInput') ? document.getElementById('simMaxInput').value : '20';
+        var windowVal = document.getElementById('simWindowInput') ? document.getElementById('simWindowInput').value : '60';
+        var uaVal = document.getElementById('simUaInput') ? document.getElementById('simUaInput').value : 'Python';
+
+        var params = new URLSearchParams({
+            sim_type: simType,
+            sim_max: maxVal,
+            sim_window: windowVal,
+            sim_ua: uaVal
+        });
+
+        var url = {$simUrlJson} + '?' + params.toString();
+
+        var step2Timer = setTimeout(function() {
+            if (progressBar) progressBar.style.width = '65%';
+            if (percentText) percentText.textContent = '65%';
+            if (stepText) stepText.textContent = {$step2Json};
+        }, 200);
+
+        var step3Timer = setTimeout(function() {
+            if (progressBar) progressBar.style.width = '90%';
+            if (percentText) percentText.textContent = '90%';
+            if (stepText) stepText.textContent = {$step3Json};
+        }, 420);
+
+        var startTime = Date.now();
+
+        fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            var elapsed = Date.now() - startTime;
+            var remain = Math.max(0, 650 - elapsed);
+
+            setTimeout(function() {
+                if (progressBar) progressBar.style.width = '100%';
+                if (percentText) percentText.textContent = '100%';
+
+                setTimeout(function() {
+                    if (progressBox) progressBox.style.display = 'none';
+                    renderResult(data.result, data.timestamp || new Date().toLocaleTimeString());
+                    resetBtn();
+                }, 180);
+            }, remain);
+        })
+        .catch(function(err) {
+            clearTimeout(step2Timer);
+            clearTimeout(step3Timer);
+            if (progressBox) progressBox.style.display = 'none';
+            if (resultContainer) {
+                resultContainer.innerHTML = '<div class="alert alert-danger rounded-3 py-2 px-3 small">Ошибка: ' + (err.message || 'Network error') + '</div>';
+            }
+            resetBtn();
+        });
+    });
+
+    function resetBtn() {
+        if (runBtn) runBtn.disabled = false;
+        if (btnIcon) btnIcon.textContent = '⚡';
+        if (btnText) btnText.textContent = {$runBtnJson};
+    }
+
+    function renderResult(res, timeStr) {
+        if (!resultContainer || !res) return;
+
+        var v = res.verdict || 'safe';
+        var badgeClass = 'badge-soft-secondary';
+        var blockColor = (res.wouldBlock > 0) ? 'text-danger' : 'text-success';
+
+        if (v === 'safe') badgeClass = 'badge-soft-success';
+        else if (v === 'mild') badgeClass = 'badge-soft-info';
+        else if (v === 'moderate') badgeClass = 'badge-soft-warning';
+        else if (v === 'high_risk') badgeClass = 'badge-soft-danger';
+
+        var vTitle = res.verdictTitle || v;
+        var sampleLabel = {$sampleLabelJson};
+        var wouldBlockLabel = {$wouldBlockLabelJson};
+        var affectedIpsLabel = {$affectedIpsJson};
+        var searchBotsLabel = 'SEO Поисковики';
+        var searchBotsStatus = (res.searchBotsImpacted === 0)
+            ? '0 <span class="fs-6 fw-normal">(' + {$searchProtectedJson} + ')</span>'
+            : res.searchBotsImpacted + ' <span class="fs-6 fw-normal text-danger">(Опасно!)</span>';
+
+        var ipsCount = res.affectedIps ? Object.keys(res.affectedIps).length : 0;
+
+        var affectedHtml = '';
+        if (ipsCount > 0 || (res.affectedRoutes && Object.keys(res.affectedRoutes).length > 0)) {
+            var badges = [];
+            if (res.affectedIps) {
+                var ipKeys = Object.keys(res.affectedIps).slice(0, 5);
+                for (var i = 0; i < ipKeys.length; i++) {
+                    var ip = ipKeys[i];
+                    badges.push('<span class="badge bg-light text-dark border font-monospace">IP: ' + escapeHtml(ip) + ' (' + res.affectedIps[ip] + ')</span>');
+                }
+            }
+            if (res.affectedRoutes) {
+                var routeKeys = Object.keys(res.affectedRoutes).slice(0, 5);
+                for (var j = 0; j < routeKeys.length; j++) {
+                    var r = routeKeys[j];
+                    badges.push('<span class="badge bg-light text-muted border font-monospace">' + escapeHtml(r) + ' (' + res.affectedRoutes[r] + ')</span>');
+                }
+            }
+            affectedHtml = '<div class="p-2 px-3 mt-2 rounded-3 small border" style="background: rgba(113, 157, 235, 0.04); border-color: var(--ab-line) !important;">' +
+                '<div class="text-muted mb-1 fw-semibold">Затронутые клиенты и маршруты:</div>' +
+                '<div class="d-flex flex-wrap gap-2">' + badges.join('') + '</div>' +
+            '</div>';
+        }
+
+        var html = '<div class="antibot-sim-result-card">' +
+            '<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">' +
+                '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+                    '<span class="badge ' + badgeClass + ' rounded-pill px-3 py-1 fw-bold">' + escapeHtml(vTitle) + '</span>' +
+                    '<span class="text-muted small">⏱️ ' + escapeHtml(timeStr) + '</span>' +
+                '</div>' +
+                '<div class="d-flex gap-2">' +
+                    '<span class="badge badge-soft-secondary rounded-pill px-2 py-1 small">' + sampleLabel + ' <strong>' + (res.sampleSize || 0) + '</strong></span>' +
+                    '<span class="badge badge-soft-danger rounded-pill px-2 py-1 small">' + wouldBlockLabel + ' <strong>' + (res.wouldBlock || 0) + ' (' + (res.impactPercent || 0) + '%)</strong></span>' +
+                '</div>' +
+            '</div>' +
+            '<div class="antibot-sim-notice mb-3 text-dark fw-semibold">' + escapeHtml(res.notice || '') + '</div>' +
+            '<div class="row g-2 mb-2">' +
+                '<div class="col-sm-3 col-6">' +
+                    '<div class="antibot-sim-stat-box">' +
+                        '<div class="small text-muted">' + sampleLabel + '</div>' +
+                        '<div class="antibot-sim-stat-val text-primary">' + (res.sampleSize || 0) + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="col-sm-3 col-6">' +
+                    '<div class="antibot-sim-stat-box">' +
+                        '<div class="small text-muted">' + wouldBlockLabel + '</div>' +
+                        '<div class="antibot-sim-stat-val ' + blockColor + '">' + (res.wouldBlock || 0) + ' <span class="fs-6 fw-normal">(' + (res.impactPercent || 0) + '%)</span></div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="col-sm-3 col-6">' +
+                    '<div class="antibot-sim-stat-box">' +
+                        '<div class="small text-muted">' + affectedIpsLabel + '</div>' +
+                        '<div class="antibot-sim-stat-val text-dark">' + ipsCount + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="col-sm-3 col-6">' +
+                    '<div class="antibot-sim-stat-box">' +
+                        '<div class="small text-muted">' + searchBotsLabel + '</div>' +
+                        '<div class="antibot-sim-stat-val text-success">' + searchBotsStatus + '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            affectedHtml +
+        '</div>';
+
+        resultContainer.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+})();
+JS;
+
+$this->registerJs($js);
+?>

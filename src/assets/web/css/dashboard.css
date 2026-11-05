@@ -992,6 +992,7 @@ body.dark .antibot-sticky-bar {
     padding: 0 16px !important;
     border-radius: 10px !important;
     box-sizing: border-box !important;
+    white-space: nowrap !important;
 }
 
 .antibot-sim-form .form-control,
@@ -1000,6 +1001,109 @@ body.dark .antibot-sticky-bar {
     min-height: 42px !important;
     border-radius: 10px !important;
     box-sizing: border-box !important;
+}
+
+/* ==========================================================================
+   Rule Simulator Interactive Realtime UI & Animations
+   ========================================================================== */
+.antibot-sim-progress-box {
+    display: none;
+    background: var(--ab-surface);
+    border: 1px solid var(--ab-line);
+    border-radius: var(--ab-radius-sm);
+    padding: 1rem 1.25rem;
+    margin-top: 1.25rem;
+    box-shadow: var(--ab-shadow-sm);
+    animation: antibotFadeIn 0.25s ease;
+}
+
+.antibot-sim-progress-bar-wrap {
+    height: 8px;
+    background: rgba(49, 137, 247, 0.1);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    margin-top: 0.5rem;
+}
+
+.antibot-sim-progress-bar-wrap .progress-bar {
+    background: linear-gradient(90deg, #3189f7, #079b70);
+    box-shadow: 0 0 12px rgba(49, 137, 247, 0.5);
+    transition: width 0.25s ease;
+}
+
+.antibot-sim-result-card {
+    background: var(--ab-surface);
+    border: 1px solid var(--ab-line);
+    border-radius: var(--ab-radius-md);
+    padding: 1.25rem 1.35rem;
+    box-shadow: var(--ab-shadow);
+    animation: antibotSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    transition: all 0.25s ease;
+}
+
+html.dark .antibot-sim-progress-box,
+body.dark .antibot-sim-progress-box,
+html.dark .antibot-sim-result-card,
+body.dark .antibot-sim-result-card {
+    background: #17243c !important;
+    border-color: #334863 !important;
+    color: #dce8ff !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28) !important;
+}
+
+.antibot-sim-notice {
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+html.dark .antibot-sim-notice,
+body.dark .antibot-sim-notice {
+    color: #dce8ff !important;
+}
+
+.antibot-sim-stat-box {
+    background: rgba(113, 157, 235, 0.05);
+    border: 1px solid var(--ab-line);
+    border-radius: 12px;
+    padding: 0.75rem 0.85rem;
+    text-align: center;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.antibot-sim-stat-box:hover {
+    transform: translateY(-2px);
+    border-color: var(--ab-line-strong);
+}
+
+html.dark .antibot-sim-stat-box,
+body.dark .antibot-sim-stat-box {
+    background: #1d2d48 !important;
+    border-color: #344865 !important;
+}
+
+.antibot-sim-stat-val {
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-top: 0.15rem;
+}
+
+@keyframes antibotFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes antibotSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .antibot-ip-item {

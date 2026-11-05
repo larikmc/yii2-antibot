@@ -98,6 +98,7 @@ $controller = new DefaultController('default', $module);
 assertTest(method_exists($controller, 'actionIndex'), "2.1: actionIndex exists on DefaultController");
 assertTest(method_exists($controller, 'actionDiagnostics'), "2.2: actionDiagnostics exists on DefaultController");
 assertTest(method_exists($controller, 'actionApplyRecommendation'), "2.3: actionApplyRecommendation exists on DefaultController");
+assertTest(method_exists($controller, 'actionSimulate'), "2.4: actionSimulate exists on DefaultController");
 
 // Section 3: Views exist
 echo "\n--- Section 3: View Files Integrity ---\n";

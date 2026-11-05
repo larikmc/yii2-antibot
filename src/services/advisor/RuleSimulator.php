@@ -50,20 +50,26 @@ class RuleSimulator
      *     notice: string
      * }
      */
-    public static function simulateRateLimit(array $events, int $maxRequests, int $windowSeconds = 60): array
+    public static function simulateRateLimit(array $events, int $maxRequests, int $windowSeconds = 60, ?string $lang = null): array
     {
         $sampleSize = count($events);
-        if ($sampleSize < self::MIN_EVENTS_REQUIRED) {
+        $isRu = ($lang ?? \larikmc\antibot\services\I18n::getLanguage()) === 'ru';
+
+        if ($sampleSize === 0) {
             return [
                 'sufficient' => false,
-                'sampleSize' => $sampleSize,
+                'preliminary' => false,
+                'sampleSize' => 0,
                 'wouldBlock' => 0,
                 'impactPercent' => 0.0,
                 'affectedIps' => [],
                 'affectedRoutes' => [],
                 'searchBotsImpacted' => 0,
-                'verdict' => 'insufficient_data',
-                'notice' => 'Недостаточно данных для достоверной симуляции (требуется от ' . self::MIN_EVENTS_REQUIRED . ' событий в журнале).',
+                'verdict' => 'empty',
+                'verdictTitle' => $isRu ? 'Журнал событий пуст' : 'Event Log Empty',
+                'notice' => $isRu
+                    ? 'В журнале пока нет событий для анализа. Запросы появятся при активности посетителей.'
+                    : 'Event log is currently empty. Requests will be recorded as traffic arrives.',
             ];
         }
 
@@ -105,7 +111,8 @@ class RuleSimulator
             }
         }
 
-        $impactPercent = round(($wouldBlock / $sampleSize) * 100, 2);
+        $impactPercent = round(($wouldBlock / $sampleSize) * 100, 1);
+        $isPreliminary = ($sampleSize < self::MIN_EVENTS_REQUIRED);
 
         $verdict = match (true) {
             $impactPercent === 0.0 => 'safe',
@@ -114,15 +121,37 @@ class RuleSimulator
             default => 'high_risk',
         };
 
-        $notice = match ($verdict) {
-            'safe' => 'Безопасно: ни один реальный посетитель не превысил бы этот лимит.',
-            'mild' => "Мягкое влияние: затронуто {$impactPercent}% запросов (вероятно агрессивные клиенты).",
-            'moderate' => "Умеренное влияние: затронуто {$impactPercent}% трафика. Проверьте список затронутых URL.",
-            default => "ВНИМАНИЕ: Высокий риск ложных блокировок! Лимит отсекает {$impactPercent}% всех запросов.",
+        $verdictTitle = match ($verdict) {
+            'safe' => $isRu ? 'Безопасно для посетителей' : 'Safe for Visitors',
+            'mild' => $isRu ? 'Минимальное влияние' : 'Mild Impact',
+            'moderate' => $isRu ? 'Умеренный риск' : 'Moderate Impact',
+            default => $isRu ? 'Высокий риск блокировок' : 'High Risk of False Positives',
         };
 
+        $notice = match ($verdict) {
+            'safe' => $isRu 
+                ? 'Ни один реальный посетитель или поисковик не превысил бы этот лимит.' 
+                : 'No legitimate visitor or crawler would have exceeded this rate limit.',
+            'mild' => $isRu 
+                ? "Затронуто {$wouldBlock} из {$sampleSize} запросов ({$impactPercent}%). Вероятно отсекаются агрессивные клиенты." 
+                : "Affected {$wouldBlock} of {$sampleSize} requests ({$impactPercent}%). Likely filters aggressive clients.",
+            'moderate' => $isRu 
+                ? "Затронуто {$wouldBlock} запросов ({$impactPercent}% трафика). Проверьте затронутые адреса и URL." 
+                : "Affected {$wouldBlock} requests ({$impactPercent}% of traffic). Review affected IPs and routes.",
+            default => $isRu 
+                ? "ВНИМАНИЕ: Лимит отсекает {$wouldBlock} запросов ({$impactPercent}% всего трафика). Высокий риск ложных блокировок!" 
+                : "WARNING: Limit blocks {$wouldBlock} requests ({$impactPercent}% of all traffic). High risk of false positives!",
+        };
+
+        if ($isPreliminary) {
+            $notice .= $isRu
+                ? " (Предварительная оценка на выборке из {$sampleSize} событий)."
+                : " (Preliminary estimate on a sample of {$sampleSize} events).";
+        }
+
         return [
-            'sufficient' => true,
+            'sufficient' => !$isPreliminary,
+            'preliminary' => $isPreliminary,
             'sampleSize' => $sampleSize,
             'wouldBlock' => $wouldBlock,
             'impactPercent' => $impactPercent,
@@ -130,6 +159,7 @@ class RuleSimulator
             'affectedRoutes' => $affectedRoutes,
             'searchBotsImpacted' => 0, // Legitimate search bots are strictly protected
             'verdict' => $verdict,
+            'verdictTitle' => $verdictTitle,
             'notice' => $notice,
         ];
     }
@@ -139,32 +169,29 @@ class RuleSimulator
      *
      * @param array<int, array<string, mixed>> $events
      * @param string $uaPattern Substring or regex pattern.
-     * @return array{
-     *     sufficient: bool,
-     *     sampleSize: int,
-     *     wouldBlock: int,
-     *     impactPercent: float,
-     *     affectedIps: array<string, int>,
-     *     affectedRoutes: array<string, int>,
-     *     searchBotsImpacted: int,
-     *     verdict: string,
-     *     notice: string
-     * }
+     * @param string|null $lang Language code ('ru' or 'en').
+     * @return array<string, mixed>
      */
-    public static function simulateUserAgentBlock(array $events, string $uaPattern): array
+    public static function simulateUserAgentBlock(array $events, string $uaPattern, ?string $lang = null): array
     {
         $sampleSize = count($events);
-        if ($sampleSize < self::MIN_EVENTS_REQUIRED) {
+        $isRu = ($lang ?? \larikmc\antibot\services\I18n::getLanguage()) === 'ru';
+
+        if ($sampleSize === 0) {
             return [
                 'sufficient' => false,
-                'sampleSize' => $sampleSize,
+                'preliminary' => false,
+                'sampleSize' => 0,
                 'wouldBlock' => 0,
                 'impactPercent' => 0.0,
                 'affectedIps' => [],
                 'affectedRoutes' => [],
                 'searchBotsImpacted' => 0,
-                'verdict' => 'insufficient_data',
-                'notice' => 'Недостаточно данных для достоверной симуляции.',
+                'verdict' => 'empty',
+                'verdictTitle' => $isRu ? 'Журнал событий пуст' : 'Event Log Empty',
+                'notice' => $isRu
+                    ? 'В журнале пока нет событий для анализа.'
+                    : 'Event log is currently empty.',
             ];
         }
 
@@ -196,21 +223,45 @@ class RuleSimulator
             }
         }
 
-        $impactPercent = round(($wouldBlock / $sampleSize) * 100, 2);
+        $impactPercent = round(($wouldBlock / $sampleSize) * 100, 1);
+        $isPreliminary = ($sampleSize < self::MIN_EVENTS_REQUIRED);
 
         $verdict = 'safe';
         if ($searchBotsImpacted > 0) {
             $verdict = 'high_risk';
-            $notice = "ОПАСНОСТЬ: Правило блокирует легитимные поисковики ({$searchBotsImpacted} запросов Google/Yandex)!";
+            $verdictTitle = $isRu ? 'Опасно: блокировка поисковиков' : 'Danger: Blocks Search Engines';
+            $notice = $isRu
+                ? "ОПАСНОСТЬ: Шаблон блокирует легитимных поисковых роботов ({$searchBotsImpacted} запросов Google/Яндекс)!"
+                : "DANGER: Pattern blocks genuine search crawlers ({$searchBotsImpacted} Google/Yandex requests)!";
         } elseif ($impactPercent > 20.0) {
             $verdict = 'high_risk';
-            $notice = "Предупреждение: Правило затрагивает {$impactPercent}% трафика.";
+            $verdictTitle = $isRu ? 'Высокий риск' : 'High Risk';
+            $notice = $isRu
+                ? "Предупреждение: Правило затрагивает {$wouldBlock} из {$sampleSize} запросов ({$impactPercent}% трафика)."
+                : "Warning: Rule affects {$wouldBlock} of {$sampleSize} requests ({$impactPercent}% of traffic).";
+        } elseif ($wouldBlock > 0) {
+            $verdict = 'mild';
+            $verdictTitle = $isRu ? 'Правило активно' : 'Rule Active';
+            $notice = $isRu
+                ? "Правило отсекает {$wouldBlock} запросов ({$impactPercent}% трафика) без ущерба для поисковиков."
+                : "Rule filters {$wouldBlock} requests ({$impactPercent}% of traffic) with zero search bot impact.";
         } else {
-            $notice = "Правило отсекает {$wouldBlock} запросов ({$impactPercent}% трафика) без вреда для поисковиков.";
+            $verdict = 'safe';
+            $verdictTitle = $isRu ? 'Совпадений не обнаружено' : 'No Matches Found';
+            $notice = $isRu
+                ? "В текущем журнале не найдено клиентов с User-Agent, содержащим '{$uaPattern}'."
+                : "No clients with User-Agent containing '{$uaPattern}' were found in recent log.";
+        }
+
+        if ($isPreliminary) {
+            $notice .= $isRu
+                ? " (Выборка: {$sampleSize} событий)."
+                : " (Sample: {$sampleSize} events).";
         }
 
         return [
-            'sufficient' => true,
+            'sufficient' => !$isPreliminary,
+            'preliminary' => $isPreliminary,
             'sampleSize' => $sampleSize,
             'wouldBlock' => $wouldBlock,
             'impactPercent' => $impactPercent,
@@ -218,6 +269,7 @@ class RuleSimulator
             'affectedRoutes' => $affectedRoutes,
             'searchBotsImpacted' => $searchBotsImpacted,
             'verdict' => $verdict,
+            'verdictTitle' => $verdictTitle,
             'notice' => $notice,
         ];
     }

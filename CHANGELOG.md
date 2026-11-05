@@ -20,6 +20,12 @@ All notable changes to `larikmc/yii2-antibot` will be documented in this file.
   - Cleaned up manual session overrides from `Module::beforeAction()`.
   - Localization is now automatically derived from the host application (`Yii::$app->language`): Russian for `ru`, `ru-RU`, `be`, `uk`, `kk`; English for `en` and other locales.
   - Centralized full bilingual dictionary in `I18n::MESSAGES` covering all 4 views, reason decoders, advisor tips, and chart labels.
+- **Real-Time Interactive Rule Simulator:**
+  - Replaced synchronous full-page GET form reload with asynchronous AJAX simulation (`DefaultController::actionSimulate()`).
+  - Added live scanning animation with realistic progress bar and multi-stage status messages ("Чтение журнала событий...", "Симуляция правил...", "Проверка поисковиков...").
+  - Form fields dynamically switch between Rate Limit and User-Agent without page reloads.
+  - Revamped simulation report card with glowing verdict badges, exact timestamps, and 4 KPI metrics (`Sample Size`, `Would Block`, `Affected IPs`, `SEO Bots`).
+  - Enabled meaningful preliminary analysis on smaller traffic sample sizes rather than zeroing out when under 20 events.
 - **Test Suite:**
   - Added `tests/test_v1511.php` verifying version bump, view integrity, and language resolution.
 
