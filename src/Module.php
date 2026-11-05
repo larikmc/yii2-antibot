@@ -21,7 +21,7 @@ use yii\filters\AccessControl;
  */
 class Module extends BaseModule
 {
-    public const VERSION = '1.5.10';
+    public const VERSION = '1.5.11';
 
     /**
      * @var string Controller namespace for this module.
@@ -144,19 +144,6 @@ class Module extends BaseModule
      */
     public function beforeAction($action): bool
     {
-        if (!parent::beforeAction($action)) {
-            return false;
-        }
-
-        if (Yii::$app !== null && Yii::$app->has('request', true) && Yii::$app->has('session', true)) {
-            $langParam = Yii::$app->request->get('lang');
-            if (in_array($langParam, ['ru', 'en'], true)) {
-                Yii::$app->session->set('antibot_language', $langParam);
-                Yii::$app->response->redirect(\yii\helpers\Url::current(['lang' => null]));
-                return false;
-            }
-        }
-
-        return true;
+        return parent::beforeAction($action);
     }
 }

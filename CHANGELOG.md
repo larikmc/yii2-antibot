@@ -2,6 +2,27 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.11] - 2026-11-05
+
+### Laricum C Admin UI Kit Redesign, Native Light & Dark Themes, and Automatic Framework Language Integration
+- **Laricum C Admin UI Kit Styling & Alignment:**
+  - Overhauled all Antibot dashboard surfaces, KPI cards, tables, headers, forms, tab bars, and alerts to seamlessly match the Laricum C Admin (`yii2-admin`) UI Kit.
+  - Aligned design tokens with admin theme variables: `--ab-primary` (`--sz-primary`), `--ab-surface` (`--sz-surface`), `--ab-line` (`--sz-line`), `--ab-text` (`--sz-text`), and `--ab-muted` (`--sz-muted`).
+  - Integrated modern `.nav-pills-solid` tab navigation across all 4 module tabs (`Monitoring`, `Diagnostics`, `Rule Settings`, `IP Lists`).
+  - Implemented glow buttons (`.btn-primary` with soft blue glow), refined card borders (`--ab-radius-lg`), and soft status badges (`.badge-soft-*`).
+  - Polished table styling with subtle row separators, sticky/semi-transparent headers, and smooth hover highlights.
+- **Native Light & Dark Theme Support with Real-time Chart Reactivity:**
+  - Complete dark theme overrides scoped to `html.dark` and `body.dark` matching `#1d2c46` surfaces and `#354660` borders.
+  - Transparent chart canvas backdrops for seamless background blending in both Light and Dark modes.
+  - Dynamic ECharts adaptation: added a `MutationObserver` on `document.documentElement` watching for class mutations (triggered by `#themeButton`), automatically updating axis lines, split lines, legends, and tooltip styles in real time without page reload.
+- **Automatic Framework-Driven Language Localization:**
+  - Removed manual language switcher pill (`.antibot-lang-pill`) from all views and headers.
+  - Cleaned up manual session overrides from `Module::beforeAction()`.
+  - Localization is now automatically derived from the host application (`Yii::$app->language`): Russian for `ru`, `ru-RU`, `be`, `uk`, `kk`; English for `en` and other locales.
+  - Centralized full bilingual dictionary in `I18n::MESSAGES` covering all 4 views, reason decoders, advisor tips, and chart labels.
+- **Test Suite:**
+  - Added `tests/test_v1511.php` verifying version bump, view integrity, and language resolution.
+
 ## [1.5.10] - 2026-11-04
 
 ### Ergonomic UI Overhaul, Dedicated Diagnostics Tab & Compact Dashboards

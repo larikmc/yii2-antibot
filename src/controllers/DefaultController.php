@@ -52,11 +52,15 @@ class DefaultController extends Controller
         $events = $storage->getRecentEvents(100);
         $perf = $antibot->getInspectionMetrics();
 
+        $currentLang = \larikmc\antibot\services\I18n::getLanguage();
+
         // Visual Analytics Dataset (cached 120s, no public overhead)
         $analyticsData = \larikmc\antibot\services\analytics\DashboardAnalyticsService::getAnalytics(
             $storage,
             \larikmc\antibot\services\analytics\DashboardAnalyticsService::PERIOD_24H,
-            $antibot->mode
+            $antibot->mode,
+            false,
+            $currentLang
         );
 
         return $this->render('index', [
@@ -66,7 +70,7 @@ class DefaultController extends Controller
             'events' => $events,
             'perf' => $perf,
             'analyticsData' => $analyticsData,
-            'currentLang' => \larikmc\antibot\services\I18n::getLanguage(),
+            'currentLang' => $currentLang,
         ]);
     }
 
@@ -131,11 +135,14 @@ class DefaultController extends Controller
         $antibot = $this->module->getAntibot();
         $storage = $antibot->getStorage();
 
+        $currentLang = \larikmc\antibot\services\I18n::getLanguage();
+
         $data = \larikmc\antibot\services\analytics\DashboardAnalyticsService::getAnalytics(
             $storage,
             $period,
             $antibot->mode,
-            $forceRefresh
+            $forceRefresh,
+            $currentLang
         );
 
         return $this->asJson($data);

@@ -40,15 +40,16 @@ class DashboardAnalyticsService
         StorageService $storage,
         string $period = self::PERIOD_24H,
         string $mode = StorageService::MODE_STANDARD,
-        bool $forceRefresh = false
+        bool $forceRefresh = false,
+        string $lang = 'ru'
     ): array {
         $period = in_array($period, [self::PERIOD_24H, self::PERIOD_7D, self::PERIOD_ALL], true)
             ? $period
             : self::PERIOD_24H;
 
         $cache = (Yii::$app !== null && Yii::$app->has('cache')) ? Yii::$app->cache : null;
-        $cacheKey = 'antibot_analytics_' . self::CACHE_VERSION . '_' . $period . '_' . $mode;
-        $cooldownKey = 'antibot_analytics_cooldown_' . $period;
+        $cacheKey = 'antibot_analytics_' . self::CACHE_VERSION . '_' . $period . '_' . $mode . '_' . $lang;
+        $cooldownKey = 'antibot_analytics_cooldown_' . $period . '_' . $lang;
 
         if ($cache !== null && !$forceRefresh) {
             $cached = $cache->get($cacheKey);
@@ -76,7 +77,7 @@ class DashboardAnalyticsService
         // Fetch events efficiently from tail of JSONL
         $events = $storage->getRecentEvents(self::SCAN_LIMIT);
 
-        $data = self::processEvents($events, $period, $mode);
+        $data = self::processEvents($events, $period, $mode, $lang);
 
         if ($cache !== null) {
             $cache->set($cacheKey, $data, self::CACHE_TTL);
@@ -91,9 +92,10 @@ class DashboardAnalyticsService
      * @param array<int, array<string, mixed>> $events
      * @param string $period
      * @param string $mode
+     * @param string $lang
      * @return array<string, mixed>
      */
-    public static function processEvents(array $events, string $period, string $mode): array
+    public static function processEvents(array $events, string $period, string $mode, string $lang = 'ru'): array
     {
         $now = time();
         $startTime = match ($period) {
@@ -197,7 +199,7 @@ class DashboardAnalyticsService
 
             // Reasons aggregation (for suspicious / monitored / blocked actions)
             if ($actionCategory !== 'other' || in_array($actionRaw, ['allowed_search_bot', 'pow_solved'], true)) {
-                $normalizedReason = self::normalizeReason($reasonRaw);
+                $normalizedReason = self::normalizeReason($reasonRaw, $lang);
                 $label = $normalizedReason['label'];
                 $reasonsCount[$label] = ($reasonsCount[$label] ?? 0) + 1;
             }
@@ -226,36 +228,37 @@ class DashboardAnalyticsService
         }
 
         // Format Donut Chart 2 (Event distribution)
+        $isRu = ($lang === 'ru');
         $donutTotal = array_sum($actionsCount);
         $donutData = [
             [
-                'name' => 'Мониторинг',
+                'name' => $isRu ? 'Мониторинг' : 'Monitored',
                 'value' => $actionsCount['monitoring'],
-                'color' => '#0d6efd', // Blue
+                'color' => '#3189f7', // Blue
                 'percent' => $donutTotal > 0 ? round(($actionsCount['monitoring'] / $donutTotal) * 100, 1) : 0,
             ],
             [
-                'name' => 'Заблокировано',
+                'name' => $isRu ? 'Заблокировано' : 'Blocked',
                 'value' => $actionsCount['blocked'],
-                'color' => '#dc3545', // Red
+                'color' => '#e24e6c', // Red
                 'percent' => $donutTotal > 0 ? round(($actionsCount['blocked'] / $donutTotal) * 100, 1) : 0,
             ],
             [
                 'name' => 'Rate Limit',
                 'value' => $actionsCount['throttled'],
-                'color' => '#fd7e14', // Orange
+                'color' => '#eea63c', // Orange
                 'percent' => $donutTotal > 0 ? round(($actionsCount['throttled'] / $donutTotal) * 100, 1) : 0,
             ],
             [
-                'name' => 'Проверки (Challenge)',
+                'name' => $isRu ? 'Проверки (Challenge)' : 'Challenges',
                 'value' => $actionsCount['challenge'],
-                'color' => '#6f42c1', // Purple
+                'color' => '#7c8cf8', // Purple
                 'percent' => $donutTotal > 0 ? round(($actionsCount['challenge'] / $donutTotal) * 100, 1) : 0,
             ],
             [
-                'name' => 'Другие события',
+                'name' => $isRu ? 'Другие события' : 'Other Events',
                 'value' => $actionsCount['other'],
-                'color' => '#6c757d', // Grey
+                'color' => '#7b93be', // Slate
                 'percent' => $donutTotal > 0 ? round(($actionsCount['other'] / $donutTotal) * 100, 1) : 0,
             ],
         ];
@@ -274,7 +277,7 @@ class DashboardAnalyticsService
             }
         }
         if ($otherReasonsCount > 0) {
-            $topReasons[] = ['label' => 'Другие причины', 'count' => $otherReasonsCount];
+            $topReasons[] = ['label' => $isRu ? 'Другие причины' : 'Other Reasons', 'count' => $otherReasonsCount];
         }
 
         // Format Bar Chart 4 (Routes - top 10)
@@ -329,60 +332,62 @@ class DashboardAnalyticsService
     }
 
     /**
-     * Normalizes raw reason string into clean Russian descriptive label and category code.
+     * Normalizes raw reason string into clean descriptive label and category code.
      *
      * @param string $reason
+     * @param string $lang
      * @return array{code: string, label: string}
      */
-    public static function normalizeReason(string $reason): array
+    public static function normalizeReason(string $reason, string $lang = 'ru'): array
     {
         $reasonTrimmed = trim($reason);
+        $isRu = ($lang === 'ru');
         if ($reasonTrimmed === '') {
-            return ['code' => 'unknown', 'label' => 'Неизвестная причина'];
+            return ['code' => 'unknown', 'label' => $isRu ? 'Неизвестная причина' : 'Unknown reason'];
         }
 
         $rLower = mb_strtolower($reasonTrimmed, 'UTF-8');
 
         if (str_contains($rLower, 'fake') || str_contains($rLower, 'поддельн')) {
-            return ['code' => 'fake_search_bot', 'label' => 'Поддельный поисковик (Fake Bot)'];
+            return ['code' => 'fake_search_bot', 'label' => $isRu ? 'Поддельный поисковик (Fake Bot)' : 'Fake Search Bot'];
         }
         if (str_contains($rLower, 'cli') || str_contains($rLower, 'curl') || str_contains($rLower, 'python') ||
             str_contains($rLower, 'wget') || str_contains($rLower, 'guzzle') || str_contains($rLower, 'postman') ||
             str_contains($rLower, 'library') || str_contains($rLower, 'anomalous header')) {
-            return ['code' => 'cli_library', 'label' => 'CLI и HTTP-библиотеки'];
+            return ['code' => 'cli_library', 'label' => $isRu ? 'CLI и HTTP-библиотеки' : 'CLI & HTTP Libraries'];
         }
         if (str_contains($rLower, 'ai') || str_contains($rLower, 'gpt') || str_contains($rLower, 'claude') ||
             str_contains($rLower, 'bytespider') || str_contains($rLower, 'crawler')) {
-            return ['code' => 'ai_crawler', 'label' => 'AI-краулеры и LLM'];
+            return ['code' => 'ai_crawler', 'label' => $isRu ? 'AI-краулеры и LLM' : 'AI Crawlers & LLM'];
         }
         if (str_contains($rLower, 'scraper') || str_contains($rLower, 'ahrefs') || str_contains($rLower, 'semrush') ||
             str_contains($rLower, 'dotbot') || str_contains($rLower, 'commercial')) {
-            return ['code' => 'commercial_scraper', 'label' => 'Коммерческие скраперы (SEO)'];
+            return ['code' => 'commercial_scraper', 'label' => $isRu ? 'Коммерческие скраперы (SEO)' : 'Commercial Scrapers (SEO)'];
         }
         if (str_contains($rLower, 'rate limit') || str_contains($rLower, 'лимит') || str_contains($rLower, 'throttled') ||
             str_contains($rLower, 'флуд')) {
-            return ['code' => 'rate_limit', 'label' => 'Превышение Rate Limit'];
+            return ['code' => 'rate_limit', 'label' => $isRu ? 'Превышение Rate Limit' : 'Rate Limit Exceeded'];
         }
         if (str_contains($rLower, 'behavior') || str_contains($rLower, 'поведен') || str_contains($rLower, 'anomaly') ||
             str_contains($rLower, 'risk')) {
-            return ['code' => 'behavior_anomaly', 'label' => 'Подозрительное поведение'];
+            return ['code' => 'behavior_anomaly', 'label' => $isRu ? 'Подозрительное поведение' : 'Behavioral Anomaly'];
         }
         if (str_contains($rLower, 'honey_trap') || str_contains($rLower, 'honey trap') || str_contains($rLower, 'honey url')) {
-            return ['code' => 'honey_trap', 'label' => 'Скрытая ссылка (Honey URL)'];
+            return ['code' => 'honey_trap', 'label' => $isRu ? 'Скрытая ссылка (Honey URL)' : 'Hidden Trap URL (Honey Trap)'];
         }
         if (str_contains($rLower, 'honeypot') || str_contains($rLower, 'ловушк')) {
-            return ['code' => 'honeypot', 'label' => 'Ловушка формы (Honeypot)'];
+            return ['code' => 'honeypot', 'label' => $isRu ? 'Ловушка формы (Honeypot)' : 'Form Honeypot Trap'];
         }
         if (str_contains($rLower, 'search engine') || str_contains($rLower, 'authentic search') || str_contains($rLower, 'поисков')) {
-            return ['code' => 'search_bot', 'label' => 'Поисковые роботы (SEO)'];
+            return ['code' => 'search_bot', 'label' => $isRu ? 'Поисковые роботы (SEO)' : 'Search Engines (SEO)'];
         }
         if (str_contains($rLower, 'challenge') || str_contains($rLower, 'pow') || str_contains($rLower, 'капч')) {
-            return ['code' => 'challenge', 'label' => 'JS/PoW проверки'];
+            return ['code' => 'challenge', 'label' => $isRu ? 'JS/PoW проверки' : 'JS/PoW Challenges'];
         }
 
         // Fallback: clean truncated original reason
         $clean = trim(mb_substr($reasonTrimmed, 0, 36, 'UTF-8'));
-        return ['code' => 'other', 'label' => $clean !== '' ? $clean : 'Другие причины'];
+        return ['code' => 'other', 'label' => $clean !== '' ? $clean : ($isRu ? 'Другие причины' : 'Other Reasons')];
     }
 
     /**

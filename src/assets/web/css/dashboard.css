@@ -1,130 +1,168 @@
 /**
- * Antibot Admin Dashboard & UI Polish Styles
+ * Antibot Admin Dashboard Styles
  *
- * Modern, clean, SaaS-grade design (Tailwind/Stripe/Vercel aesthetics).
- * Compatible with yii2-admin and Bootstrap 5.
+ * Exquisitely styled to match Laricum C Admin (yii2-admin) UI Kit.
+ * Seamless native support for Light and Dark themes.
  *
  * @author LarikMC <https://64web.ru>
  * @license MIT
  */
 
+/* ==========================================================================
+   Design Tokens & Fallbacks (aligned with Laricum C Admin style.css)
+   ========================================================================== */
 :root {
-    --ab-primary: #4f46e5;
-    --ab-primary-hover: #4338ca;
-    --ab-primary-light: #eef2ff;
-    --ab-success: #10b981;
-    --ab-success-light: #ecfdf5;
-    --ab-danger: #ef4444;
-    --ab-danger-light: #fef2f2;
-    --ab-warning: #f59e0b;
-    --ab-warning-light: #fffbeb;
-    --ab-info: #0ea5e9;
-    --ab-info-light: #f0f9ff;
-    --ab-slate-900: #0f172a;
-    --ab-slate-800: #1e293b;
-    --ab-slate-700: #334155;
-    --ab-slate-600: #475569;
-    --ab-slate-500: #64748b;
-    --ab-slate-400: #94a3b8;
-    --ab-slate-200: #e2e8f0;
-    --ab-slate-100: #f1f5f9;
-    --ab-slate-50: #f8fafc;
-    --ab-radius-sm: 8px;
-    --ab-radius: 14px;
-    --ab-radius-lg: 18px;
-    --ab-shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
-    --ab-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
-    --ab-shadow-md: 0 10px 15px -3px rgba(15, 23, 42, 0.07), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
-}
-
-.antibot-dashboard,
-.antibot-settings,
-.antibot-ip-list {
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    color: var(--ab-slate-800);
+    --ab-primary: var(--sz-primary, #3189f7);
+    --ab-primary-hover: var(--sz-primary-hover, #2178e6);
+    --ab-primary-soft: var(--sz-primary-soft, rgba(49, 137, 247, 0.12));
+    --ab-surface: var(--sz-surface-strong, #ffffff);
+    --ab-surface-soft: var(--sz-surface, rgba(255, 255, 255, 0.88));
+    --ab-bg: var(--sz-bg, #f4f1ea);
+    --ab-line: var(--sz-line, rgba(40, 52, 82, 0.12));
+    --ab-line-strong: var(--sz-line-strong, rgba(40, 52, 82, 0.18));
+    --ab-text: var(--sz-text, #14294d);
+    --ab-muted: var(--sz-muted, #7b93be);
+    --ab-radius-lg: 22px;
+    --ab-radius-md: 18px;
+    --ab-radius-sm: 12px;
+    --ab-shadow: var(--sz-shadow, 0 14px 34px rgba(57, 92, 157, 0.045));
+    --ab-shadow-sm: 0 4px 14px rgba(40, 52, 82, 0.05);
 }
 
 /* ==========================================================================
-   Header & Module Navigation Tabs
+   Base Container Styling
    ========================================================================== */
-.antibot-header {
-    margin-bottom: 1.5rem;
+.antibot-dashboard,
+.antibot-diagnostics,
+.antibot-settings,
+.antibot-ip-list {
+    color: var(--ab-text);
 }
 
-.antibot-title {
-    font-size: 1.5rem;
-    font-weight: 700;
+/* ==========================================================================
+   Header Card & Panel (Matching .sz-panel / .card from Laricum UI Kit)
+   ========================================================================== */
+.antibot-header-panel {
+    background: var(--ab-surface);
+    border: 1px solid var(--ab-line);
+    border-radius: var(--ab-radius-lg);
+    box-shadow: var(--ab-shadow);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+html.dark .antibot-header-panel,
+body.dark .antibot-header-panel {
+    background: #1d2c46 !important;
+    border-color: #354660 !important;
+    color: #dce8ff !important;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.24) !important;
+}
+
+.antibot-header-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(49, 137, 247, 0.14) 0%, rgba(49, 137, 247, 0.04) 100%);
+    border: 1px solid rgba(49, 137, 247, 0.2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    flex-shrink: 0;
+}
+
+html.dark .antibot-header-icon,
+body.dark .antibot-header-icon {
+    background: rgba(49, 137, 247, 0.22);
+    border-color: rgba(49, 137, 247, 0.35);
+}
+
+.antibot-header-title {
+    font-size: 1.35rem;
+    font-weight: 800;
     letter-spacing: -0.02em;
-    color: var(--ab-slate-900);
-    margin-bottom: 0.25rem;
+    color: var(--ab-text);
+    margin: 0;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-}
-
-.antibot-subtitle {
-    font-size: 0.875rem;
-    color: var(--ab-slate-500);
-    margin: 0;
-}
-
-/* Top Navigation Tabs */
-.antibot-nav-pills {
-    display: inline-flex;
-    background: var(--ab-slate-100);
-    padding: 4px;
-    border-radius: 12px;
-    border: 1px solid var(--ab-slate-200);
-    gap: 4px;
-    margin-bottom: 1.5rem;
     flex-wrap: wrap;
 }
 
-.antibot-nav-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--ab-slate-600);
-    text-decoration: none;
-    border-radius: 9px;
-    transition: all 0.15s ease;
+html.dark .antibot-header-title,
+body.dark .antibot-header-title {
+    color: #eff4ff !important;
 }
 
-.antibot-nav-link:hover {
-    color: var(--ab-slate-900);
-    background: rgba(255, 255, 255, 0.7);
+.antibot-header-subtitle {
+    font-size: 0.85rem;
+    color: var(--ab-muted);
+    margin: 0.25rem 0 0;
+    line-height: 1.45;
 }
 
-.antibot-nav-link.active {
-    color: #ffffff;
-    background: var(--ab-primary);
-    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25);
+html.dark .antibot-header-subtitle,
+body.dark .antibot-header-subtitle {
+    color: #a0b2d6 !important;
 }
 
 /* ==========================================================================
-   Card System
+   Navigation Tabs (.nav-pills-solid style from UI Kit)
+   ========================================================================== */
+.antibot-nav-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--ab-line);
+    margin-top: 1rem;
+}
+
+html.dark .antibot-nav-wrap,
+body.dark .antibot-nav-wrap {
+    border-top-color: #354660 !important;
+}
+
+/* ==========================================================================
+   Cards (.antibot-card matching .card from Laricum UI Kit)
    ========================================================================== */
 .antibot-card {
-    background: #ffffff;
-    border: 1px solid var(--ab-slate-200);
-    border-radius: var(--ab-radius);
+    background: var(--ab-surface);
+    border: 1px solid var(--ab-line);
+    border-radius: var(--ab-radius-md);
     box-shadow: var(--ab-shadow-sm);
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.25s ease;
     overflow: hidden;
+    color: var(--ab-text);
 }
 
 .antibot-card:hover {
     box-shadow: var(--ab-shadow);
-    border-color: #cbd5e1;
+    border-color: var(--ab-line-strong);
+}
+
+html.dark .antibot-card,
+body.dark .antibot-card {
+    background: #1d2c46 !important;
+    border-color: #354660 !important;
+    color: #dce8ff !important;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.24) !important;
+}
+
+html.dark .antibot-card:hover,
+body.dark .antibot-card:hover {
+    border-color: #455d82 !important;
 }
 
 .antibot-card-header {
     background: transparent;
-    border-bottom: 1px solid var(--ab-slate-100);
-    padding: 1.15rem 1.35rem;
+    border-bottom: 1px solid var(--ab-line);
+    padding: 1.15rem 1.4rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -132,162 +170,275 @@
     gap: 0.75rem;
 }
 
+html.dark .antibot-card-header,
+body.dark .antibot-card-header {
+    border-bottom-color: #334863 !important;
+}
+
 .antibot-card-title {
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 1.05rem;
+    font-weight: 750;
     margin: 0;
-    color: var(--ab-slate-900);
+    color: var(--ab-text);
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    letter-spacing: -0.01em;
+}
+
+html.dark .antibot-card-title,
+body.dark .antibot-card-title {
+    color: #eff4ff !important;
 }
 
 .antibot-card-title-badge {
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.2rem 0.55rem;
-    border-radius: 20px;
-    background: var(--ab-slate-100);
-    color: var(--ab-slate-600);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    background: rgba(49, 137, 247, 0.1);
+    color: var(--ab-primary);
+    border: 1px solid rgba(49, 137, 247, 0.2);
+}
+
+html.dark .antibot-card-title-badge,
+body.dark .antibot-card-title-badge {
+    background: rgba(49, 137, 247, 0.2);
+    color: #93c5fd;
+    border-color: rgba(49, 137, 247, 0.35);
 }
 
 .antibot-card-body {
-    padding: 1.35rem;
+    padding: 1.35rem 1.4rem;
     position: relative;
 }
 
 /* ==========================================================================
-   KPI Cards System (Modern SaaS style - Compact)
+   KPI Cards (Aligned with Laricum .sz-stat-card / UI Kit)
    ========================================================================== */
 .antibot-kpi-card {
-    border-radius: var(--ab-radius);
-    border: 1px solid var(--ab-slate-200);
-    background: #ffffff;
-    padding: 0.85rem 1.15rem;
+    border-radius: var(--ab-radius-md);
+    border: 1px solid var(--ab-line);
+    background: var(--ab-surface);
+    padding: 1.1rem 1.25rem;
     box-shadow: var(--ab-shadow-sm);
     height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     position: relative;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.25s ease;
 }
 
 .antibot-kpi-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--ab-shadow);
-    border-color: #cbd5e1;
+    border-color: var(--ab-line-strong);
+}
+
+html.dark .antibot-kpi-card,
+body.dark .antibot-kpi-card {
+    background: #1d2c46 !important;
+    border-color: #354660 !important;
+    color: #dce8ff !important;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.24) !important;
+}
+
+html.dark .antibot-kpi-card:hover,
+body.dark .antibot-kpi-card:hover {
+    border-color: #455d82 !important;
 }
 
 .antibot-kpi-top {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.5rem;
 }
 
 .antibot-kpi-label {
     font-size: 0.72rem;
-    font-weight: 700;
+    font-weight: 750;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--ab-slate-500);
-    margin-bottom: 0.15rem;
+    letter-spacing: 0.08em;
+    color: var(--ab-muted);
+}
+
+html.dark .antibot-kpi-label,
+body.dark .antibot-kpi-label {
+    color: #a0b2d6 !important;
 }
 
 .antibot-kpi-value {
-    font-size: 1.6rem;
-    font-weight: 700;
-    line-height: 1.15;
-    letter-spacing: -0.02em;
-    color: var(--ab-slate-900);
+    font-size: 1.85rem;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--ab-text);
+}
+
+html.dark .antibot-kpi-value,
+body.dark .antibot-kpi-value {
+    color: #f1f5fa !important;
 }
 
 .antibot-kpi-icon-wrap {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.15rem;
+    font-size: 1.25rem;
     flex-shrink: 0;
+    border: 1px solid transparent;
 }
 
 .antibot-kpi-icon-primary {
-    background: var(--ab-primary-light);
-    color: var(--ab-primary);
+    background: rgba(49, 137, 247, 0.12);
+    color: #3189f7;
+    border-color: rgba(49, 137, 247, 0.22);
 }
 
 .antibot-kpi-icon-success {
-    background: var(--ab-success-light);
-    color: var(--ab-success);
+    background: rgba(7, 155, 112, 0.12);
+    color: #079b70;
+    border-color: rgba(7, 155, 112, 0.22);
 }
 
 .antibot-kpi-icon-danger {
-    background: var(--ab-danger-light);
-    color: var(--ab-danger);
+    background: rgba(226, 78, 108, 0.12);
+    color: #e24e6c;
+    border-color: rgba(226, 78, 108, 0.22);
 }
 
 .antibot-kpi-icon-warning {
-    background: var(--ab-warning-light);
-    color: var(--ab-warning);
+    background: rgba(238, 166, 60, 0.12);
+    color: #eea63c;
+    border-color: rgba(238, 166, 60, 0.22);
 }
 
 .antibot-kpi-icon-info {
-    background: var(--ab-info-light);
-    color: var(--ab-info);
+    background: rgba(40, 101, 190, 0.12);
+    color: #2865be;
+    border-color: rgba(40, 101, 190, 0.22);
+}
+
+html.dark .antibot-kpi-icon-primary {
+    background: rgba(49, 137, 247, 0.24);
+    color: #60a5fa;
+    border-color: rgba(49, 137, 247, 0.4);
+}
+
+html.dark .antibot-kpi-icon-success {
+    background: rgba(7, 155, 112, 0.24);
+    color: #34d399;
+    border-color: rgba(7, 155, 112, 0.4);
+}
+
+html.dark .antibot-kpi-icon-danger {
+    background: rgba(226, 78, 108, 0.24);
+    color: #f87171;
+    border-color: rgba(226, 78, 108, 0.4);
+}
+
+html.dark .antibot-kpi-icon-warning {
+    background: rgba(238, 166, 60, 0.24);
+    color: #fbbf24;
+    border-color: rgba(238, 166, 60, 0.4);
+}
+
+html.dark .antibot-kpi-icon-info {
+    background: rgba(40, 101, 190, 0.24);
+    color: #7dd3fc;
+    border-color: rgba(40, 101, 190, 0.4);
 }
 
 .antibot-kpi-footer {
-    font-size: 0.75rem;
-    color: var(--ab-slate-500);
+    font-size: 0.78rem;
+    color: var(--ab-muted);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-top: 0.5rem;
-    margin-top: 0.5rem;
-    border-top: 1px solid var(--ab-slate-100);
+    padding-top: 0.65rem;
+    margin-top: 0.65rem;
+    border-top: 1px solid var(--ab-line);
+}
+
+html.dark .antibot-kpi-footer,
+body.dark .antibot-kpi-footer {
+    border-top-color: #334863 !important;
+    color: #a0b2d6 !important;
 }
 
 .antibot-kpi-tag {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.15rem 0.55rem;
-    border-radius: 12px;
+    padding: 0.2rem 0.65rem;
+    border-radius: 9999px;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 650;
+    border: 1px solid transparent;
 }
 
 .antibot-kpi-tag-success {
-    background: var(--ab-success-light);
-    color: #065f46;
+    background: rgba(7, 155, 112, 0.12);
+    color: #058e60;
+    border-color: rgba(7, 155, 112, 0.25);
 }
 
 .antibot-kpi-tag-danger {
-    background: var(--ab-danger-light);
-    color: #991b1b;
+    background: rgba(226, 78, 108, 0.12);
+    color: #e24e6c;
+    border-color: rgba(226, 78, 108, 0.25);
 }
 
 .antibot-kpi-tag-warning {
-    background: var(--ab-warning-light);
-    color: #92400e;
+    background: rgba(238, 166, 60, 0.12);
+    color: #d97706;
+    border-color: rgba(238, 166, 60, 0.25);
 }
 
 .antibot-kpi-tag-info {
-    background: var(--ab-info-light);
-    color: #075985;
+    background: rgba(40, 101, 190, 0.12);
+    color: #2865be;
+    border-color: rgba(40, 101, 190, 0.25);
+}
+
+html.dark .antibot-kpi-tag-success {
+    background: rgba(7, 155, 112, 0.22);
+    color: #34d399;
+    border-color: rgba(7, 155, 112, 0.4);
+}
+
+html.dark .antibot-kpi-tag-danger {
+    background: rgba(226, 78, 108, 0.22);
+    color: #f87171;
+    border-color: rgba(226, 78, 108, 0.4);
+}
+
+html.dark .antibot-kpi-tag-warning {
+    background: rgba(238, 166, 60, 0.22);
+    color: #fbbf24;
+    border-color: rgba(238, 166, 60, 0.4);
+}
+
+html.dark .antibot-kpi-tag-info {
+    background: rgba(40, 101, 190, 0.22);
+    color: #7dd3fc;
+    border-color: rgba(40, 101, 190, 0.4);
 }
 
 /* ==========================================================================
-   Chart Controls & Styling (Compact & Balanced)
+   Chart Containers & Period Switcher Controls
    ========================================================================== */
 .antibot-chart-container {
     width: 100%;
     min-height: 250px;
     height: 250px;
     position: relative;
+    background: transparent;
 }
 
 .antibot-chart-wide {
@@ -295,71 +446,56 @@
     height: 260px;
 }
 
-/* Language Switcher Pill */
-.antibot-lang-pill {
-    display: inline-flex;
-    align-items: center;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 9999px;
-    padding: 3px;
-    gap: 2px;
-}
-
-.antibot-lang-pill a {
-    padding: 2px 10px;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-decoration: none;
-    line-height: 1.3;
-    transition: all 0.15s ease;
-}
-
-.antibot-lang-pill a.active {
-    background: var(--ab-primary);
-    color: #ffffff !important;
-    box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
-}
-
-.antibot-lang-pill a:not(.active) {
-    color: #64748b;
-}
-
-.antibot-lang-pill a:not(.active):hover {
-    color: #0f172a;
-    background: #e2e8f0;
-}
-
-/* Segmented Control Buttons (Linear/iOS style) */
+/* Segmented Control Buttons (matching .nav-pills-solid styling) */
 .antibot-segmented-control {
     display: inline-flex;
-    background: var(--ab-slate-100);
-    border: 1px solid var(--ab-slate-200);
-    border-radius: 9px;
-    padding: 2px;
+    background: rgba(113, 157, 235, 0.1);
+    border: 1px solid rgba(40, 52, 82, 0.08);
+    border-radius: 13px;
+    padding: 3px;
+    gap: 3px;
+}
+
+html.dark .antibot-segmented-control,
+body.dark .antibot-segmented-control {
+    background: #121c2e !important;
+    border-color: #23344d !important;
 }
 
 .antibot-btn-period {
     background: transparent;
     border: none;
-    border-radius: 7px;
-    padding: 0.35rem 0.75rem;
+    border-radius: 10px;
+    padding: 0.35rem 0.85rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: var(--ab-slate-600);
+    color: var(--ab-muted);
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .antibot-btn-period:hover {
-    color: var(--ab-slate-900);
+    color: var(--ab-text);
 }
 
 .antibot-btn-period.active {
     background: #ffffff;
     color: var(--ab-primary);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 4px 14px rgba(40, 52, 82, 0.08);
+}
+
+html.dark .antibot-btn-period {
+    color: #a0b2d6 !important;
+}
+
+html.dark .antibot-btn-period:hover {
+    color: #ffffff !important;
+}
+
+html.dark .antibot-btn-period.active {
+    background: linear-gradient(125deg, #3189f7, #3466d8) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(49, 137, 247, 0.45) !important;
 }
 
 .antibot-btn-refresh {
@@ -368,19 +504,33 @@
     gap: 0.4rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    padding: 0.4rem 0.85rem;
-    border-radius: 9px;
-    border: 1px solid var(--ab-slate-200);
-    background: #ffffff;
-    color: var(--ab-slate-700);
+    padding: 0.4rem 0.95rem;
+    border-radius: 11px;
+    border: 1px solid var(--ab-line);
+    background: var(--ab-surface);
+    color: var(--ab-text);
     cursor: pointer;
+    box-shadow: 0 2px 6px rgba(40, 52, 82, 0.04);
     transition: all 0.15s ease;
 }
 
 .antibot-btn-refresh:hover {
-    background: var(--ab-slate-50);
-    color: var(--ab-slate-900);
-    border-color: #cbd5e1;
+    background: var(--ab-bg);
+    border-color: var(--ab-line-strong);
+}
+
+html.dark .antibot-btn-refresh,
+body.dark .antibot-btn-refresh {
+    background: #243756 !important;
+    border-color: #3c5272 !important;
+    color: #dce8ff !important;
+    box-shadow: none;
+}
+
+html.dark .antibot-btn-refresh:hover,
+body.dark .antibot-btn-refresh:hover {
+    background: #2d4566 !important;
+    color: #ffffff !important;
 }
 
 .antibot-btn-refresh.is-spinning .antibot-refresh-icon {
@@ -392,7 +542,7 @@
     to { transform: rotate(360deg); }
 }
 
-/* Meta Information Badges */
+/* Soft Badges */
 .antibot-badge-soft {
     display: inline-flex;
     align-items: center;
@@ -401,88 +551,306 @@
     border-radius: 8px;
     font-size: 0.8125rem;
     font-weight: 500;
-    background: var(--ab-slate-50);
-    border: 1px solid var(--ab-slate-200);
-    color: var(--ab-slate-700);
+    background: rgba(113, 157, 235, 0.08);
+    border: 1px solid var(--ab-line);
+    color: var(--ab-text);
 }
 
-/* Mode Badges */
-.antibot-badge-mode {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.4rem 0.85rem;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
+html.dark .antibot-badge-soft,
+body.dark .antibot-badge-soft {
+    background: #243756 !important;
+    border-color: #354660 !important;
+    color: #dce8ff !important;
 }
 
-.antibot-badge-mode-monitoring {
-    background: var(--ab-info-light);
-    color: #0369a1;
-    border: 1px solid #bae6fd;
+/* Unified Soft Badges matching Laricum UI Kit */
+.badge-soft-primary {
+    background: rgba(49, 137, 247, 0.12) !important;
+    color: #2178e6 !important;
+    border: 1px solid rgba(49, 137, 247, 0.25) !important;
 }
 
-.antibot-badge-mode-standard {
-    background: var(--ab-primary-light);
-    color: #3730a3;
-    border: 1px solid #c7d2fe;
+.badge-soft-success {
+    background: rgba(7, 155, 112, 0.12) !important;
+    color: #079b70 !important;
+    border: 1px solid rgba(7, 155, 112, 0.25) !important;
 }
 
-.antibot-badge-mode-strict {
-    background: var(--ab-danger-light);
-    color: #991b1b;
-    border: 1px solid #fecaca;
+.badge-soft-warning {
+    background: rgba(238, 166, 60, 0.12) !important;
+    color: #d97706 !important;
+    border: 1px solid rgba(238, 166, 60, 0.25) !important;
+}
+
+.badge-soft-danger {
+    background: rgba(226, 78, 108, 0.12) !important;
+    color: #e24e6c !important;
+    border: 1px solid rgba(226, 78, 108, 0.25) !important;
+}
+
+.badge-soft-info {
+    background: rgba(40, 101, 190, 0.12) !important;
+    color: #2865be !important;
+    border: 1px solid rgba(40, 101, 190, 0.25) !important;
+}
+
+.badge-soft-secondary {
+    background: rgba(123, 147, 190, 0.12) !important;
+    color: #64748b !important;
+    border: 1px solid rgba(123, 147, 190, 0.25) !important;
+}
+
+html.dark .badge-soft-primary,
+body.dark .badge-soft-primary {
+    background: rgba(49, 137, 247, 0.22) !important;
+    color: #93c5fd !important;
+    border-color: rgba(49, 137, 247, 0.4) !important;
+}
+
+html.dark .badge-soft-success,
+body.dark .badge-soft-success {
+    background: rgba(7, 155, 112, 0.22) !important;
+    color: #6ee7b7 !important;
+    border-color: rgba(7, 155, 112, 0.4) !important;
+}
+
+html.dark .badge-soft-warning,
+body.dark .badge-soft-warning {
+    background: rgba(238, 166, 60, 0.22) !important;
+    color: #fcd34d !important;
+    border-color: rgba(238, 166, 60, 0.4) !important;
+}
+
+html.dark .badge-soft-danger,
+body.dark .badge-soft-danger {
+    background: rgba(226, 78, 108, 0.22) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(226, 78, 108, 0.4) !important;
+}
+
+html.dark .badge-soft-info,
+body.dark .badge-soft-info {
+    background: rgba(40, 101, 190, 0.22) !important;
+    color: #7dd3fc !important;
+    border-color: rgba(40, 101, 190, 0.4) !important;
+}
+
+html.dark .badge-soft-secondary,
+body.dark .badge-soft-secondary {
+    background: rgba(160, 178, 214, 0.18) !important;
+    color: #cbd5e1 !important;
+    border-color: rgba(160, 178, 214, 0.3) !important;
 }
 
 /* ==========================================================================
-   Settings Page Modernization (Mode selection cards, switches)
+   Live Feed Table (Matching .table and .table-hover from UI Kit)
+   ========================================================================== */
+.antibot-table {
+    margin-bottom: 0;
+    width: 100%;
+}
+
+.antibot-table th {
+    font-size: 0.73rem;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ab-muted);
+    background: rgba(113, 157, 235, 0.05);
+    border-bottom: 1px solid var(--ab-line);
+    padding: 0.85rem 1rem;
+}
+
+.antibot-table td {
+    padding: 0.85rem 1rem;
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--ab-line);
+    vertical-align: middle;
+    color: var(--ab-text);
+}
+
+.antibot-table tbody tr:hover td {
+    background-color: rgba(49, 137, 247, 0.04);
+}
+
+html.dark .antibot-table th,
+body.dark .antibot-table th {
+    background: #17243c !important;
+    color: #a0b2d6 !important;
+    border-bottom-color: #334863 !important;
+}
+
+html.dark .antibot-table td,
+body.dark .antibot-table td {
+    border-bottom-color: #243756 !important;
+    color: #dce8ff !important;
+    background: transparent;
+}
+
+html.dark .antibot-table tbody tr:hover td,
+body.dark .antibot-table tbody tr:hover td {
+    background-color: #243756 !important;
+}
+
+/* Inline code tags in tables and IP items */
+.antibot-code-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: 7px;
+    background: rgba(113, 157, 235, 0.08);
+    border: 1px solid var(--ab-line);
+    color: var(--ab-text);
+}
+
+html.dark .antibot-code-badge,
+body.dark .antibot-code-badge {
+    background: #17243c !important;
+    border-color: #334863 !important;
+    color: #93c5fd !important;
+}
+
+/* ==========================================================================
+   Alerts & Notifications (UI Kit Style)
+   ========================================================================== */
+.antibot-alert-card {
+    border-radius: var(--ab-radius-md);
+    border: 1px solid var(--ab-line);
+    background: var(--ab-surface);
+    box-shadow: var(--ab-shadow-sm);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    border-left-width: 5px;
+}
+
+html.dark .antibot-alert-card,
+body.dark .antibot-alert-card {
+    background: #1d2c46 !important;
+    border-color: #354660 !important;
+    color: #dce8ff !important;
+}
+
+.antibot-alert-card.alert-danger {
+    border-left-color: #e24e6c !important;
+}
+
+.antibot-alert-card.alert-warning {
+    border-left-color: #eea63c !important;
+}
+
+.antibot-alert-card.alert-info {
+    border-left-color: #3189f7 !important;
+}
+
+.antibot-alert-card.alert-success {
+    border-left-color: #079b70 !important;
+}
+
+/* ==========================================================================
+   Settings Page (Mode Cards, Switches & Sticky Bar)
    ========================================================================== */
 .antibot-mode-card {
-    border: 2px solid var(--ab-slate-200);
-    border-radius: var(--ab-radius);
+    border: 2px solid var(--ab-line);
+    border-radius: var(--ab-radius-sm);
     padding: 1.25rem;
     cursor: pointer;
-    background: #ffffff;
+    background: var(--ab-surface);
     transition: all 0.2s ease;
     height: 100%;
     display: block;
+    color: var(--ab-text);
 }
 
 .antibot-mode-card:hover {
-    border-color: #cbd5e1;
+    border-color: var(--ab-line-strong);
     transform: translateY(-2px);
     box-shadow: var(--ab-shadow-sm);
 }
 
 .antibot-mode-card.is-active {
     border-color: var(--ab-primary);
-    background: #faf5ff;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    background: rgba(49, 137, 247, 0.06);
+    box-shadow: 0 0 0 3px rgba(49, 137, 247, 0.14);
 }
 
 .antibot-mode-card.is-active-monitoring {
-    border-color: var(--ab-info);
-    background: #f0f9ff;
-    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+    border-color: #2865be;
+    background: rgba(40, 101, 190, 0.06);
+    box-shadow: 0 0 0 3px rgba(40, 101, 190, 0.14);
 }
 
 .antibot-mode-card.is-active-strict {
-    border-color: var(--ab-danger);
-    background: #fef2f2;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+    border-color: #e24e6c;
+    background: rgba(226, 78, 108, 0.06);
+    box-shadow: 0 0 0 3px rgba(226, 78, 108, 0.14);
 }
 
-/* Modern Switch Styling */
+html.dark .antibot-mode-card,
+body.dark .antibot-mode-card {
+    background: #243756 !important;
+    border-color: #334863 !important;
+    color: #dce8ff !important;
+}
+
+html.dark .antibot-mode-card:hover,
+body.dark .antibot-mode-card:hover {
+    border-color: #455d82 !important;
+}
+
+html.dark .antibot-mode-card.is-active,
+body.dark .antibot-mode-card.is-active {
+    border-color: #3189f7 !important;
+    background: rgba(49, 137, 247, 0.18) !important;
+    box-shadow: 0 0 0 3px rgba(49, 137, 247, 0.3) !important;
+}
+
+html.dark .antibot-mode-card.is-active-monitoring,
+body.dark .antibot-mode-card.is-active-monitoring {
+    border-color: #60a5fa !important;
+    background: rgba(40, 101, 190, 0.18) !important;
+    box-shadow: 0 0 0 3px rgba(40, 101, 190, 0.3) !important;
+}
+
+html.dark .antibot-mode-card.is-active-strict,
+body.dark .antibot-mode-card.is-active-strict {
+    border-color: #f87171 !important;
+    background: rgba(226, 78, 108, 0.18) !important;
+    box-shadow: 0 0 0 3px rgba(226, 78, 108, 0.3) !important;
+}
+
+/* Modern Form Switch */
 .form-switch .form-check-input {
-    width: 2.75em;
-    height: 1.45em;
+    width: 2.85em;
+    height: 1.5em;
     cursor: pointer;
+    border-radius: 2em;
+    transition: background-position .15s ease-in-out;
 }
 
 .form-switch .form-check-input:checked {
     background-color: var(--ab-primary);
     border-color: var(--ab-primary);
+    box-shadow: 0 2px 10px rgba(49, 137, 247, 0.4);
+}
+
+html.dark .form-control,
+body.dark .form-control,
+html.dark .form-select,
+body.dark .form-select {
+    background-color: #17243c !important;
+    border-color: #334863 !important;
+    color: #dce8ff !important;
+}
+
+html.dark .form-control:focus,
+body.dark .form-control:focus,
+html.dark .form-select:focus,
+body.dark .form-select:focus {
+    background-color: #1a2a44 !important;
+    border-color: #3189f7 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(49, 137, 247, 0.25) !important;
 }
 
 /* Sticky Action Bar for Settings */
@@ -490,78 +858,89 @@
     position: sticky;
     bottom: 1.5rem;
     z-index: 99;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--ab-slate-200);
-    border-radius: var(--ab-radius);
-    box-shadow: var(--ab-shadow-md);
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--ab-line);
+    border-radius: var(--ab-radius-md);
+    box-shadow: 0 16px 36px rgba(34, 42, 70, 0.12);
     padding: 1rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-top: 2rem;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+html.dark .antibot-sticky-bar,
+body.dark .antibot-sticky-bar {
+    background: rgba(29, 44, 70, 0.94) !important;
+    border-color: #354660 !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4) !important;
 }
 
 /* ==========================================================================
    IP List Columns
    ========================================================================== */
 .antibot-list-col {
-    border-top: 4px solid var(--ab-slate-300);
-    border-radius: var(--ab-radius);
+    border-top: 4px solid var(--ab-line);
+    border-radius: var(--ab-radius-md);
 }
 
 .antibot-list-col-whitelist {
-    border-top-color: var(--ab-success);
+    border-top-color: #079b70 !important;
 }
 
 .antibot-list-col-blacklist {
-    border-top-color: var(--ab-danger);
+    border-top-color: #e24e6c !important;
 }
 
 .antibot-list-col-proxies {
-    border-top-color: var(--ab-primary);
+    border-top-color: #3189f7 !important;
 }
 
 .antibot-ip-item {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.85rem;
-    border-radius: 8px !important;
-    margin-bottom: 4px;
-    border: 1px solid var(--ab-slate-200) !important;
+    border-radius: 9px !important;
+    margin-bottom: 5px;
+    border: 1px solid var(--ab-line) !important;
+    background: var(--ab-surface);
+    color: var(--ab-text);
     transition: background 0.15s ease;
 }
 
 .antibot-ip-item:hover {
-    background: var(--ab-slate-50);
+    background: rgba(113, 157, 235, 0.06);
+}
+
+html.dark .antibot-ip-item,
+body.dark .antibot-ip-item {
+    background: #17243c !important;
+    border-color: #334863 !important;
+    color: #dce8ff !important;
+}
+
+html.dark .antibot-ip-item:hover,
+body.dark .antibot-ip-item:hover {
+    background: #243756 !important;
 }
 
 /* ==========================================================================
-   Live Feed Table
+   Glowing Buttons (UI Kit Style)
    ========================================================================== */
-.antibot-table {
-    margin-bottom: 0;
+.btn-primary {
+    background: linear-gradient(135deg, #3189f7, #1a74e5) !important;
+    border: none !important;
+    box-shadow: 0 4px 18px rgba(49, 137, 247, 0.35) !important;
+    color: #ffffff !important;
+    font-weight: 650 !important;
+    transition: all 0.2s ease !important;
 }
 
-.antibot-table th {
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--ab-slate-500);
-    background: var(--ab-slate-50);
-    border-bottom: 1px solid var(--ab-slate-200);
-    padding: 0.85rem 1rem;
-}
-
-.antibot-table td {
-    padding: 0.85rem 1rem;
-    font-size: 0.875rem;
-    border-bottom: 1px solid var(--ab-slate-100);
-    vertical-align: middle;
-}
-
-.antibot-table tbody tr:hover {
-    background-color: #f8fafc;
+.btn-primary:hover {
+    background: linear-gradient(135deg, #2178e6, #1263cc) !important;
+    box-shadow: 0 6px 22px rgba(49, 137, 247, 0.5) !important;
+    transform: translateY(-1px);
 }
 
 /* Accessible Table Fallbacks */
@@ -602,16 +981,6 @@
     .antibot-btn-period {
         flex: 1;
         text-align: center;
-    }
-
-    .antibot-nav-pills {
-        width: 100%;
-    }
-
-    .antibot-nav-link {
-        flex: 1;
-        text-align: center;
-        justify-content: center;
     }
 
     .antibot-sticky-bar {

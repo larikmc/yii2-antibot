@@ -19,80 +19,86 @@ use yii\helpers\Url;
 
 \larikmc\antibot\assets\AntibotDashboardAsset::register($this);
 
-$this->title = 'Антибот — Мониторинг и визуальная аналитика';
+$activeLang = $currentLang ?? I18n::getLanguage();
+
+$this->title = I18n::t('app_title', $activeLang);
 $this->params['breadcrumbs'] = [
     ['label' => 'Антибот', 'url' => ['/antibot/default/index']],
-    ['label' => 'Мониторинг и аналитика'],
+    ['label' => I18n::t('tab_monitoring', $activeLang)],
 ];
 
 $perfTotal = (int) ($perf['total_checks'] ?? 0);
-$activeLang = $currentLang ?? 'ru';
 ?>
 
 <div class="antibot-dashboard">
-    <!-- Modern Integrated Header Card -->
-    <div class="card border-0 shadow-sm rounded-4 mb-4 p-4 bg-white">
+    <!-- Header Card (Matching Laricum C Admin UI Kit) -->
+    <div class="antibot-header-panel">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
             <div class="d-flex align-items-center gap-3">
-                <div style="width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); color: #4f46e5; display: inline-flex; align-items: center; justify-content: center; font-size: 1.75rem; box-shadow: inset 0 1px 2px rgba(255,255,255,0.8), 0 2px 6px rgba(79,70,229,0.15); flex-shrink: 0;">
+                <div class="antibot-header-icon">
                     🛡️
                 </div>
                 <div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <h1 class="h4 fw-bold mb-0 text-dark" style="letter-spacing: -0.02em;">Антибот-защита</h1>
+                        <h1 class="antibot-header-title"><?= Html::encode(I18n::t('header_title', $activeLang)) ?></h1>
                         <span class="badge bg-light text-muted border rounded-pill px-2 py-1 small fw-normal">v<?= Module::VERSION ?></span>
-                        <div class="antibot-lang-pill">
-                            <a href="<?= Url::current(['lang' => 'ru']) ?>" class="<?= $activeLang === 'ru' ? 'active' : '' ?>">RU</a>
-                            <a href="<?= Url::current(['lang' => 'en']) ?>" class="<?= $activeLang === 'en' ? 'active' : '' ?>">EN</a>
-                        </div>
-                        <span class="badge <?= $antibot->mode === 'monitoring' ? 'bg-info bg-opacity-10 text-info border border-info border-opacity-25' : ($antibot->mode === 'strict' ? 'bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25' : 'bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25') ?> rounded-pill px-3 py-1 d-inline-flex align-items-center gap-2" style="font-size: 0.82rem; font-weight: 600;">
+                        <span class="badge <?= $antibot->mode === 'monitoring' ? 'badge-soft-info' : ($antibot->mode === 'strict' ? 'badge-soft-danger' : 'badge-soft-primary') ?> rounded-pill px-3 py-1 d-inline-flex align-items-center gap-2" style="font-size: 0.82rem; font-weight: 600;">
                             <span style="width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; box-shadow: 0 0 6px currentColor;"></span>
-                            <?= $activeLang === 'en' ? 'Mode: ' . Html::encode(ucfirst($antibot->mode)) : 'Режим: ' . match($antibot->mode) { 'monitoring' => 'Мониторинг', 'strict' => 'Строгий (Блокировка)', default => 'Стандартный' } ?>
+                            <?= Html::encode(I18n::t('mode_label', $activeLang)) ?> <?= Html::encode(match($antibot->mode) {
+                                'monitoring' => I18n::t('mode_monitoring', $activeLang),
+                                'strict' => I18n::t('mode_strict', $activeLang),
+                                default => I18n::t('mode_standard', $activeLang)
+                            }) ?>
                         </span>
                     </div>
-                    <p class="text-muted small mb-0 mt-1">
-                        <?= $activeLang === 'en'
-                            ? 'Autonomous behavioral anti-bot protection, crawler filtering, search engine verification and visual analytics'
-                            : 'Автономный модуль поведенческой защиты, фильтрации ботов, верификации поисковиков и аналитики' ?>
+                    <p class="antibot-header-subtitle">
+                        <?= Html::encode(I18n::t('header_desc', $activeLang)) ?>
                     </p>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <?php if (!empty($events)): ?>
                     <?= Html::beginForm(['/antibot/default/clear-events'], 'post', ['class' => 'd-inline']) ?>
-                        <?= Html::submitButton('🗑️ Очистить журнал', [
+                        <?= Html::submitButton(I18n::t('clear_log_btn', $activeLang), [
                             'class' => 'btn btn-outline-danger btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm',
-                            'data-confirm' => 'Вы уверены, что хотите очистить журнал событий?',
+                            'data-confirm' => I18n::t('clear_log_confirm', $activeLang),
                         ]) ?>
                     <?= Html::endForm() ?>
                 <?php endif; ?>
                 <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm">
-                    ⚙️ Настройки правил
+                    <?= Html::encode(I18n::t('settings_btn', $activeLang)) ?>
                 </a>
             </div>
         </div>
 
-        <!-- Modern Segmented Navigation Tabs (4 Tabs) -->
-        <hr class="my-3 text-muted opacity-25">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1">
-            <div class="d-inline-flex p-1 bg-light border rounded-pill gap-1 shadow-sm">
-                <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-sm btn-primary rounded-pill px-4 py-2 fw-semibold text-decoration-none shadow-sm">
-                    📊 Мониторинг и Журнал
-                </a>
-                <a href="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
-                    🩺 Диагностика и Советник
-                </a>
-                <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
-                    ⚙️ Настройки правил
-                </a>
-                <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
-                    📋 Списки IP (White/Black)
-                </a>
-            </div>
-            <div class="d-flex align-items-center gap-2 text-muted small">
-                <span class="d-none d-md-inline">Статус модуля:</span>
-                <span class="badge <?= $antibot->enabled ? 'bg-success bg-opacity-10 text-success border border-success border-opacity-25' : 'bg-secondary bg-opacity-10 text-secondary border' ?> rounded-pill px-3 py-1 fw-semibold">
-                    <?= $antibot->enabled ? '● Активен' : '○ Отключен' ?>
+        <!-- Segmented Navigation Tabs (Matching UI Kit .nav-pills-solid) -->
+        <div class="antibot-nav-wrap">
+            <ul class="nav-pills-solid mb-0">
+                <li>
+                    <a href="<?= Url::to(['/antibot/default/index']) ?>" class="nav-link active">
+                        <?= Html::encode(I18n::t('tab_monitoring', $activeLang)) ?>
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="nav-link">
+                        <?= Html::encode(I18n::t('tab_diagnostics', $activeLang)) ?>
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="nav-link">
+                        <?= Html::encode(I18n::t('tab_settings', $activeLang)) ?>
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="nav-link">
+                        <?= Html::encode(I18n::t('tab_iplist', $activeLang)) ?>
+                    </a>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center gap-2 small">
+                <span class="text-muted d-none d-md-inline"><?= Html::encode(I18n::t('status_module', $activeLang)) ?></span>
+                <span class="badge <?= $antibot->enabled ? 'badge-soft-success' : 'badge-soft-secondary' ?> rounded-pill px-3 py-1 fw-semibold">
+                    <?= Html::encode($antibot->enabled ? I18n::t('status_active', $activeLang) : I18n::t('status_disabled', $activeLang)) ?>
                 </span>
             </div>
         </div>
@@ -100,86 +106,76 @@ $activeLang = $currentLang ?? 'ru';
 
     <!-- Active Mode & System Status Alerts -->
     <?php if ($module->hasInsecureAccessConfig()): ?>
-        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-danger">
+        <div class="antibot-alert-card alert-danger">
             <div class="d-flex align-items-center gap-3">
-                <div style="width: 40px; height: 40px; border-radius: 10px; background: #fee2e2; color: #b91c1c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
-                    ⚠️
-                </div>
+                <div style="font-size: 1.35rem; flex-shrink: 0;">⚠️</div>
                 <div>
-                    <strong class="text-dark">Предупреждение безопасности доступа:</strong>
-                    <div class="small text-muted">Модуль настроен с ролью <code>['@']</code> (доступен любому авторизованному клиенту). Рекомендуется настроить RBAC-разрешение <code>antibot.manage</code> или ограничить роли: <code>'accessRoles' => ['admin']</code>.</div>
+                    <strong><?= Html::encode(I18n::t('alert_sec_warning_title', $activeLang)) ?></strong>
+                    <div class="small text-muted mt-1"><?= Html::encode(I18n::t('alert_sec_warning_text', $activeLang)) ?></div>
                 </div>
             </div>
         </div>
     <?php endif; ?>
 
     <?php if ($antibot->hasSecretKeyWarning()): ?>
-        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-warning">
+        <div class="antibot-alert-card alert-warning">
             <div class="d-flex align-items-center gap-3">
-                <div style="width: 40px; height: 40px; border-radius: 10px; background: #fef3c7; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
-                    🔑
-                </div>
+                <div style="font-size: 1.35rem; flex-shrink: 0;">🔑</div>
                 <div>
-                    <strong class="text-dark">Предупреждение ключа подписи:</strong>
-                    <div class="small text-muted">Не задан собственный <code>$secretKey</code> антибота. Используется автоматически сгенерированный локальный ключ.</div>
+                    <strong><?= Html::encode(I18n::t('alert_secret_warning_title', $activeLang)) ?></strong>
+                    <div class="small text-muted mt-1"><?= Html::encode(I18n::t('alert_secret_warning_text', $activeLang)) ?></div>
                 </div>
             </div>
         </div>
     <?php endif; ?>
 
     <?php if (!$antibot->enabled): ?>
-        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-warning">
+        <div class="antibot-alert-card alert-warning">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #fef3c7; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
-                        ⚠️
-                    </div>
+                    <div style="font-size: 1.35rem; flex-shrink: 0;">⚠️</div>
                     <div>
-                        <strong class="text-dark">Модуль защиты выключен:</strong>
-                        <span class="text-muted ms-1">Трафик не фильтруется. Перейдите в настройки правил для включения.</span>
+                        <strong><?= Html::encode(I18n::t('alert_disabled_title', $activeLang)) ?></strong>
+                        <span class="text-muted ms-1"><?= Html::encode(I18n::t('alert_disabled_text', $activeLang)) ?></span>
                     </div>
                 </div>
                 <div>
                     <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-warning rounded-pill px-3 py-1 fw-semibold text-dark shadow-sm">
-                        Включить защиту →
+                        <?= Html::encode(I18n::t('btn_enable_protection', $activeLang)) ?>
                     </a>
                 </div>
             </div>
         </div>
     <?php elseif ($antibot->mode === 'monitoring'): ?>
-        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-info">
+        <div class="antibot-alert-card alert-info">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
-                        ℹ️
-                    </div>
+                    <div style="font-size: 1.35rem; flex-shrink: 0;">ℹ️</div>
                     <div>
-                        <strong class="text-dark">Режим мониторинга (Monitoring):</strong>
-                        <span class="text-muted ms-1">Подозрительные боты и скраперы фиксируются в журнале, но запросы не блокируются (HTTP 200). Безопасное тестирование без риска для посетителей сайта.</span>
+                        <strong><?= Html::encode(I18n::t('alert_monitoring_title', $activeLang)) ?></strong>
+                        <span class="text-muted ms-1"><?= Html::encode(I18n::t('alert_monitoring_text', $activeLang)) ?></span>
                     </div>
                 </div>
                 <div>
                     <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-semibold shadow-sm">
-                        Изменить режим →
+                        <?= Html::encode(I18n::t('btn_change_mode', $activeLang)) ?>
                     </a>
                 </div>
             </div>
         </div>
     <?php elseif ($antibot->mode === 'strict'): ?>
-        <div class="card border-0 shadow-sm rounded-4 mb-4 p-3 bg-white border-start border-4 border-danger">
+        <div class="antibot-alert-card alert-danger">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
                 <div class="d-flex align-items-center gap-3">
-                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #fee2e2; color: #b91c1c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
-                        🚨
-                    </div>
+                    <div style="font-size: 1.35rem; flex-shrink: 0;">🚨</div>
                     <div>
-                        <strong class="text-dark">Строгий режим (Strict):</strong>
-                        <span class="text-muted ms-1">Включена повышенная строгость фильтрации с обязательным превентивным отсечением подозрительных клиентов.</span>
+                        <strong><?= Html::encode(I18n::t('alert_strict_title', $activeLang)) ?></strong>
+                        <span class="text-muted ms-1"><?= Html::encode(I18n::t('alert_strict_text', $activeLang)) ?></span>
                     </div>
                 </div>
                 <div>
                     <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-1 fw-semibold shadow-sm">
-                        Изменить режим →
+                        <?= Html::encode(I18n::t('btn_change_mode', $activeLang)) ?>
                     </a>
                 </div>
             </div>
@@ -193,13 +189,13 @@ $activeLang = $currentLang ?? 'ru';
             <div class="antibot-kpi-card">
                 <div>
                     <div class="antibot-kpi-top">
-                        <span class="antibot-kpi-label">Проинспектировано</span>
+                        <span class="antibot-kpi-label"><?= Html::encode(I18n::t('kpi_inspected', $activeLang)) ?></span>
                         <div class="antibot-kpi-icon-wrap antibot-kpi-icon-primary">🌐</div>
                     </div>
                     <div class="antibot-kpi-value"><?= number_format($perfTotal) ?></div>
                 </div>
                 <div class="antibot-kpi-footer">
-                    <span>Всего запросов</span>
+                    <span><?= Html::encode(I18n::t('kpi_total_requests', $activeLang)) ?></span>
                     <span class="antibot-kpi-tag antibot-kpi-tag-success">✓ <?= (int) ($perf['allowed'] ?? 0) ?> OK</span>
                 </div>
             </div>
@@ -210,14 +206,14 @@ $activeLang = $currentLang ?? 'ru';
             <div class="antibot-kpi-card">
                 <div>
                     <div class="antibot-kpi-top">
-                        <span class="antibot-kpi-label">Событий в журнале</span>
+                        <span class="antibot-kpi-label"><?= Html::encode(I18n::t('kpi_events', $activeLang)) ?></span>
                         <div class="antibot-kpi-icon-wrap antibot-kpi-icon-warning">📝</div>
                     </div>
                     <div class="antibot-kpi-value"><?= number_format((int) ($stats['total'] ?? 0)) ?></div>
                 </div>
                 <div class="antibot-kpi-footer">
-                    <span>За 24 часа</span>
-                    <strong class="text-dark"><?= (int) ($stats['last24h']['total'] ?? 0) ?></strong>
+                    <span><?= Html::encode(I18n::t('kpi_last_24h', $activeLang)) ?></span>
+                    <strong><?= (int) ($stats['last24h']['total'] ?? 0) ?></strong>
                 </div>
             </div>
         </div>
@@ -227,15 +223,15 @@ $activeLang = $currentLang ?? 'ru';
             <div class="antibot-kpi-card">
                 <div>
                     <div class="antibot-kpi-top">
-                        <span class="antibot-kpi-label">Заблокировано (403)</span>
+                        <span class="antibot-kpi-label"><?= Html::encode(I18n::t('kpi_blocked', $activeLang)) ?></span>
                         <div class="antibot-kpi-icon-wrap antibot-kpi-icon-danger">🛑</div>
                     </div>
                     <div class="antibot-kpi-value text-danger"><?= number_format((int) ($stats['blocked'] ?? 0)) ?></div>
                 </div>
                 <div class="antibot-kpi-footer">
-                    <span>За 24 часа</span>
+                    <span><?= Html::encode(I18n::t('kpi_last_24h', $activeLang)) ?></span>
                     <?php if (($stats['monitored'] ?? 0) > 0 || ($perf['monitored'] ?? 0) > 0): ?>
-                        <span class="antibot-kpi-tag antibot-kpi-tag-info">👁 <?= (int) max($stats['monitored'] ?? 0, $perf['monitored'] ?? 0) ?> в монит.</span>
+                        <span class="antibot-kpi-tag antibot-kpi-tag-info">👁 <?= (int) max($stats['monitored'] ?? 0, $perf['monitored'] ?? 0) ?> <?= Html::encode(I18n::t('kpi_in_monitoring', $activeLang)) ?></span>
                     <?php else: ?>
                         <strong class="text-danger"><?= (int) ($stats['last24h']['blocked'] ?? 0) ?></strong>
                     <?php endif; ?>
@@ -248,40 +244,40 @@ $activeLang = $currentLang ?? 'ru';
             <div class="antibot-kpi-card">
                 <div>
                     <div class="antibot-kpi-top">
-                        <span class="antibot-kpi-label">Поисковики (SEO)</span>
+                        <span class="antibot-kpi-label"><?= Html::encode(I18n::t('kpi_search_bots', $activeLang)) ?></span>
                         <div class="antibot-kpi-icon-wrap antibot-kpi-icon-success">🤖</div>
                     </div>
                     <div class="antibot-kpi-value text-success"><?= number_format((int) ($stats['searchBots'] ?? 0)) ?></div>
                 </div>
                 <div class="antibot-kpi-footer">
-                    <span>Яндекс, Google, Bing</span>
+                    <span><?= Html::encode(I18n::t('kpi_search_desc', $activeLang)) ?></span>
                     <span class="antibot-kpi-tag antibot-kpi-tag-success">Reverse DNS</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- LEVEL 2: Chart #1 — Wide Timeline Dynamics Chart (Line / Area, compact 260px) -->
+    <!-- LEVEL 2: Chart #1 — Wide Timeline Dynamics Chart (Line / Area) -->
     <div class="antibot-card mb-4">
         <div class="antibot-card-header">
             <div>
                 <h2 class="antibot-card-title">
-                    <span>📈 Динамика подозрительной активности</span>
+                    <span><?= Html::encode(I18n::t('chart_dynamics_title', $activeLang)) ?></span>
                 </h2>
                 <div class="text-muted small mt-1">
-                    События журнала по времени (при <code>simulated: true</code> действия отображаются как мониторинг без блокировки)
+                    <?= Html::encode(I18n::t('chart_dynamics_desc', $activeLang)) ?>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <!-- Segmented Control Period Switcher -->
-                <div class="antibot-segmented-control" role="group" aria-label="Период выборки">
-                    <button type="button" class="antibot-btn-period active" data-period="24h">24 часа</button>
-                    <button type="button" class="antibot-btn-period" data-period="7d">7 дней</button>
-                    <button type="button" class="antibot-btn-period" data-period="all">Вся история</button>
+                <div class="antibot-segmented-control" role="group">
+                    <button type="button" class="antibot-btn-period active" data-period="24h"><?= Html::encode(I18n::t('period_24h', $activeLang)) ?></button>
+                    <button type="button" class="antibot-btn-period" data-period="7d"><?= Html::encode(I18n::t('period_7d', $activeLang)) ?></button>
+                    <button type="button" class="antibot-btn-period" data-period="all"><?= Html::encode(I18n::t('period_all', $activeLang)) ?></button>
                 </div>
                 <!-- Refresh Button with Cooldown -->
-                <button type="button" class="antibot-btn-refresh" id="antibot-btn-refresh" title="Обновить аналитику (кэшируется на 120 сек)">
-                    <span class="antibot-refresh-icon">🔄</span> Обновить
+                <button type="button" class="antibot-btn-refresh" id="antibot-btn-refresh">
+                    <span class="antibot-refresh-icon">🔄</span> <?= Html::encode(I18n::t('btn_refresh', $activeLang)) ?>
                 </button>
             </div>
         </div>
@@ -289,18 +285,18 @@ $activeLang = $currentLang ?? 'ru';
             <!-- Metadata & Honesty Badges -->
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 small">
                 <div class="d-flex gap-2 flex-wrap align-items-center">
-                    <span id="antibot-badge-coverage" class="antibot-badge-soft text-success border">
-                        ⏱ <strong>Полное окно</strong> (24 часа)
+                    <span id="antibot-badge-coverage" class="antibot-badge-soft badge-soft-success border">
+                        ⏱ <strong><?= Html::encode(I18n::t('badge_full_window', $activeLang)) ?></strong> (<?= Html::encode(I18n::t('period_24h', $activeLang)) ?>)
                     </span>
                     <span class="antibot-badge-soft">
-                        Учтено событий: <strong id="antibot-badge-processed" class="ms-1"><?= (int) ($analyticsData['events_processed'] ?? 0) ?></strong>
+                        <?= Html::encode(I18n::t('badge_events_processed', $activeLang)) ?> <strong id="antibot-badge-processed" class="ms-1"><?= (int) ($analyticsData['events_processed'] ?? 0) ?></strong>
                     </span>
                     <span class="antibot-badge-soft text-muted d-none d-md-inline">
-                        Сформировано: <span id="antibot-badge-generated"><?= Html::encode($analyticsData['generated_at'] ?? date('Y-m-d H:i:s')) ?></span>
+                        <?= Html::encode(I18n::t('badge_generated_at', $activeLang)) ?> <span id="antibot-badge-generated"><?= Html::encode($analyticsData['generated_at'] ?? date('Y-m-d H:i:s')) ?></span>
                     </span>
                 </div>
                 <div class="text-muted fst-italic small">
-                    ℹ️ События журнала, а не весь HTTP-трафик. Статистика Best-Effort.
+                    <?= Html::encode(I18n::t('chart_disclaimer', $activeLang)) ?>
                 </div>
             </div>
 
@@ -337,25 +333,13 @@ $activeLang = $currentLang ?? 'ru';
                 <div class="antibot-card-header">
                     <div>
                         <h2 class="antibot-card-title">
-                            <span>🍩 Распределение действий</span>
+                            <span><?= Html::encode(I18n::t('chart_dist_title', $activeLang)) ?></span>
                         </h2>
-                        <div class="text-muted small">Доля категорий в учтённых событиях журнала</div>
+                        <div class="text-muted small"><?= Html::encode(I18n::t('chart_dist_desc', $activeLang)) ?></div>
                     </div>
                 </div>
                 <div class="antibot-card-body">
                     <div id="antibot-chart-distribution" class="antibot-chart-container"></div>
-
-                    <!-- Accessible Fallback -->
-                    <div class="antibot-chart-fallback table-responsive">
-                        <table class="table table-sm">
-                            <?php foreach (($analyticsData['actions']['items'] ?? []) as $act): ?>
-                                <tr>
-                                    <td><?= Html::encode($act['name']) ?></td>
-                                    <td><strong><?= (int) $act['value'] ?></strong> (<?= (float) $act['percent'] ?>%)</td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </table>
-                    </div>
                 </div>
             </div>
         </div>
@@ -366,25 +350,13 @@ $activeLang = $currentLang ?? 'ru';
                 <div class="antibot-card-header">
                     <div>
                         <h2 class="antibot-card-title">
-                            <span>📊 Основные причины срабатываний</span>
+                            <span><?= Html::encode(I18n::t('chart_reasons_title', $activeLang)) ?></span>
                         </h2>
-                        <div class="text-muted small">Топ категорий детекции (с понятными описаниями)</div>
+                        <div class="text-muted small"><?= Html::encode(I18n::t('chart_reasons_desc', $activeLang)) ?></div>
                     </div>
                 </div>
                 <div class="antibot-card-body">
                     <div id="antibot-chart-reasons" class="antibot-chart-container"></div>
-
-                    <!-- Accessible Fallback -->
-                    <div class="antibot-chart-fallback table-responsive">
-                        <table class="table table-sm">
-                            <?php foreach (($analyticsData['reasons']['items'] ?? []) as $r): ?>
-                                <tr>
-                                    <td><?= Html::encode($r['label']) ?></td>
-                                    <td><strong><?= (int) $r['count'] ?></strong></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </table>
-                    </div>
                 </div>
             </div>
         </div>
@@ -395,36 +367,24 @@ $activeLang = $currentLang ?? 'ru';
         <div class="antibot-card-header">
             <div>
                 <h2 class="antibot-card-title">
-                    <span>🎯 Самые атакуемые маршруты (Top-10 URL)</span>
+                    <span><?= Html::encode(I18n::t('chart_routes_title', $activeLang)) ?></span>
                 </h2>
                 <div class="text-muted small">
-                    Маршруты с наибольшим количеством подозрительных запросов (query string и токены удалены в целях безопасности)
+                    <?= Html::encode(I18n::t('chart_routes_desc', $activeLang)) ?>
                 </div>
             </div>
         </div>
         <div class="antibot-card-body">
             <div id="antibot-chart-routes" class="antibot-chart-container"></div>
-
-            <!-- Accessible Fallback -->
-            <div class="antibot-chart-fallback table-responsive">
-                <table class="table table-sm">
-                    <?php foreach (($analyticsData['routes']['items'] ?? []) as $rt): ?>
-                        <tr>
-                            <td><code><?= Html::encode($rt['route']) ?></code></td>
-                            <td><strong><?= (int) $rt['count'] ?></strong> событий</td>
-                        </tr>
-                    <?php endforeach; ?>
-                </table>
-            </div>
         </div>
     </div>
 
-    <!-- LEVEL 5: Live Event Feed Table (Directly visible below the charts!) -->
+    <!-- LEVEL 5: Live Event Feed Table (Directly visible below the charts) -->
     <div class="antibot-card mb-4">
         <div class="antibot-card-header">
             <div>
-                <h5 class="antibot-card-title">Журнал последних событий (Live Feed)</h5>
-                <span class="text-muted small">Зафиксированные подозрительные обращения</span>
+                <h5 class="antibot-card-title"><?= Html::encode(I18n::t('table_title', $activeLang)) ?></h5>
+                <span class="text-muted small"><?= Html::encode(I18n::t('table_desc', $activeLang)) ?></span>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <span class="badge bg-light text-dark border rounded-pill px-3 py-1">JSON Lines (.jsonl)</span>
@@ -433,19 +393,19 @@ $activeLang = $currentLang ?? 'ru';
         <div class="antibot-card-body p-0">
             <?php if (empty($events)): ?>
                 <div class="p-4 text-center text-muted">
-                    Журнал событий пуст. Активность ботов пока не фиксировалась.
+                    <?= Html::encode(I18n::t('table_empty', $activeLang)) ?>
                 </div>
             <?php else: ?>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle antibot-table mb-0">
                         <thead>
                             <tr>
-                                <th style="width: 170px;">Время</th>
-                                <th style="width: 150px;">IP адрес</th>
-                                <th style="width: 140px;">Действие</th>
-                                <th>Причина</th>
-                                <th>User-Agent</th>
-                                <th class="text-end" style="width: 120px;">Действия</th>
+                                <th style="width: 170px;"><?= Html::encode(I18n::t('th_time', $activeLang)) ?></th>
+                                <th style="width: 150px;"><?= Html::encode(I18n::t('th_ip', $activeLang)) ?></th>
+                                <th style="width: 140px;"><?= Html::encode(I18n::t('th_action', $activeLang)) ?></th>
+                                <th><?= Html::encode(I18n::t('th_reason', $activeLang)) ?></th>
+                                <th><?= Html::encode(I18n::t('th_ua', $activeLang)) ?></th>
+                                <th class="text-end" style="width: 120px;"><?= Html::encode(I18n::t('th_actions', $activeLang)) ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -461,7 +421,7 @@ $activeLang = $currentLang ?? 'ru';
                                         <?= Html::encode($event['date'] ?? date('Y-m-d H:i:s', (int) ($event['timestamp'] ?? time()))) ?>
                                     </td>
                                     <td>
-                                        <code class="fw-bold px-2 py-1 bg-light rounded-2 border"><?= Html::encode($ip) ?></code>
+                                        <code class="antibot-code-badge"><?= Html::encode($ip) ?></code>
                                     </td>
                                     <td>
                                         <span class="badge <?= $actionData['badgeClass'] ?> rounded-pill px-2 py-1 shadow-sm d-inline-flex align-items-center gap-1" title="<?= Html::encode($actionData['description']) ?>">
@@ -482,12 +442,12 @@ $activeLang = $currentLang ?? 'ru';
                                         <?php if ($action !== 'blocked'): ?>
                                             <?= Html::beginForm(['/antibot/default/quick-block'], 'post', ['class' => 'd-inline']) ?>
                                                 <?= Html::hiddenInput('ip', $ip) ?>
-                                                <?= Html::submitButton('Бан', ['class' => 'btn btn-sm btn-outline-danger rounded-pill py-0 px-2', 'title' => 'Заблокировать этот IP']) ?>
+                                                <?= Html::submitButton(I18n::t('btn_ban', $activeLang), ['class' => 'btn btn-sm btn-outline-danger rounded-pill py-0 px-2', 'title' => I18n::t('ban_ip_title', $activeLang)]) ?>
                                             <?= Html::endForm() ?>
                                         <?php else: ?>
                                             <?= Html::beginForm(['/antibot/default/quick-whitelist'], 'post', ['class' => 'd-inline']) ?>
                                                 <?= Html::hiddenInput('ip', $ip) ?>
-                                                <?= Html::submitButton('В белый', ['class' => 'btn btn-sm btn-outline-success rounded-pill py-0 px-2', 'title' => 'Добавить в белый список']) ?>
+                                                <?= Html::submitButton(I18n::t('btn_whitelist', $activeLang), ['class' => 'btn btn-sm btn-outline-success rounded-pill py-0 px-2', 'title' => I18n::t('whitelist_ip_title', $activeLang)]) ?>
                                             <?= Html::endForm() ?>
                                         <?php endif; ?>
                                     </td>
@@ -502,12 +462,12 @@ $activeLang = $currentLang ?? 'ru';
 </div>
 
 <?php
-// Initialize ECharts with pre-rendered data and dynamic API endpoint
+// Initialize ECharts with pre-rendered data, dynamic API endpoint, and active language
 $initialDataJson = Json::encode($analyticsData);
 $analyticsEndpointUrl = Url::to(['/antibot/default/analytics-data']);
 $this->registerJs("
     if (window.AntibotCharts) {
-        window.AntibotCharts.init({$initialDataJson}, '{$analyticsEndpointUrl}');
+        window.AntibotCharts.init({$initialDataJson}, '{$analyticsEndpointUrl}', '{$activeLang}');
     }
 ");
 ?>

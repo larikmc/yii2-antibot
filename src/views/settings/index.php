@@ -13,10 +13,12 @@ use yii\helpers\Url;
 
 \larikmc\antibot\assets\AntibotDashboardAsset::register($this);
 
-$this->title = 'Антибот — Настройки правил';
+$activeLang = I18n::getLanguage();
+
+$this->title = I18n::t('settings_title', $activeLang);
 $this->params['breadcrumbs'] = [
     ['label' => 'Антибот', 'url' => ['/antibot/default/index']],
-    ['label' => 'Настройки правил'],
+    ['label' => I18n::t('tab_settings', $activeLang)],
 ];
 
 $trustedProxiesStr = implode("\n", (array) ($settings['trustedProxies'] ?? []));
@@ -25,49 +27,52 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
 ?>
 
 <div class="antibot-settings">
-    <!-- Modern Integrated Header Card -->
-    <div class="card border-0 shadow-sm rounded-4 mb-4 p-4 bg-white">
+    <!-- Header Card (Matching Laricum C Admin UI Kit) -->
+    <div class="antibot-header-panel">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
             <div class="d-flex align-items-center gap-3">
-                <div style="width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); color: #4f46e5; display: inline-flex; align-items: center; justify-content: center; font-size: 1.75rem; box-shadow: inset 0 1px 2px rgba(255,255,255,0.8), 0 2px 6px rgba(79,70,229,0.15); flex-shrink: 0;">
+                <div class="antibot-header-icon">
                     ⚙️
                 </div>
                 <div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <h1 class="h4 fw-bold mb-0 text-dark" style="letter-spacing: -0.02em;">Настройки правил защиты</h1>
+                        <h1 class="antibot-header-title"><?= Html::encode(I18n::t('settings_header_title', $activeLang)) ?></h1>
                         <span class="badge bg-light text-muted border rounded-pill px-2 py-1 small fw-normal">v<?= Module::VERSION ?></span>
-                        <div class="antibot-lang-pill">
-                            <a href="<?= Url::current(['lang' => 'ru']) ?>" class="<?= (I18n::getLanguage()) === 'ru' ? 'active' : '' ?>">RU</a>
-                            <a href="<?= Url::current(['lang' => 'en']) ?>" class="<?= (I18n::getLanguage()) === 'en' ? 'active' : '' ?>">EN</a>
-                        </div>
                     </div>
-                    <p class="text-muted small mb-0 mt-1">Управление сигнатурами, фильтрами поисковиков, AI-парсерами и лимитами</p>
+                    <p class="antibot-header-subtitle"><?= Html::encode(I18n::t('header_desc_settings', $activeLang)) ?></p>
                 </div>
             </div>
             <div>
                 <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm">
-                    ← В мониторинг
+                    <?= Html::encode(I18n::t('nav_back_to_monitoring', $activeLang)) ?>
                 </a>
             </div>
         </div>
 
-        <!-- Modern Segmented Navigation Tabs (4 Tabs) -->
-        <hr class="my-3 text-muted opacity-25">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1">
-            <div class="d-inline-flex p-1 bg-light border rounded-pill gap-1 shadow-sm">
-                <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
-                    📊 Мониторинг и Журнал
-                </a>
-                <a href="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
-                    🩺 Диагностика и Советник
-                </a>
-                <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-primary rounded-pill px-4 py-2 fw-semibold text-decoration-none shadow-sm">
-                    ⚙️ Настройки правил
-                </a>
-                <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="btn btn-sm btn-light text-dark rounded-pill px-4 py-2 fw-semibold text-decoration-none border-0">
-                    📋 Списки IP (White/Black)
-                </a>
-            </div>
+        <!-- Segmented Navigation Tabs (Matching UI Kit .nav-pills-solid) -->
+        <div class="antibot-nav-wrap">
+            <ul class="nav-pills-solid mb-0">
+                <li>
+                    <a href="<?= Url::to(['/antibot/default/index']) ?>" class="nav-link">
+                        <?= Html::encode(I18n::t('tab_monitoring', $activeLang)) ?>
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= Url::to(['/antibot/default/diagnostics']) ?>" class="nav-link">
+                        <?= Html::encode(I18n::t('tab_diagnostics', $activeLang)) ?>
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="nav-link active">
+                        <?= Html::encode(I18n::t('tab_settings', $activeLang)) ?>
+                    </a>
+                </li>
+                <li>
+                    <a href="<?= Url::to(['/antibot/ip-list/index']) ?>" class="nav-link">
+                        <?= Html::encode(I18n::t('tab_iplist', $activeLang)) ?>
+                    </a>
+                </li>
+            </ul>
         </div>
     </div>
 
@@ -81,59 +86,47 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>🛡️</span> 1. Основной режим работы
+                            <span>🛡️</span> <?= Html::encode(I18n::t('settings_sec_1', $activeLang)) ?>
                         </h2>
-                        <span class="antibot-card-title-badge">Базовый профиль</span>
+                        <span class="antibot-card-title-badge"><?= Html::encode(I18n::t('settings_sec_1_badge', $activeLang)) ?></span>
                     </div>
                     <div class="antibot-card-body">
-                        <div class="form-check form-switch mb-4 p-3 bg-light rounded-3 d-flex align-items-center justify-content-between">
+                        <div class="form-check form-switch mb-4 p-3 rounded-3 d-flex align-items-center justify-content-between" style="background: rgba(113, 157, 235, 0.05); border: 1px solid var(--ab-line);">
                             <div>
-                                <label class="form-check-label fw-bold text-dark fs-6" for="enabledSwitch">Включить фильтрацию трафика Антибот</label>
-                                <div class="small text-muted">Глобальный мастер-тумблер модуля антибот-защиты.</div>
+                                <label class="form-check-label fw-bold fs-6" for="enabledSwitch"><?= Html::encode(I18n::t('settings_enabled_label', $activeLang)) ?></label>
+                                <div class="small text-muted"><?= Html::encode(I18n::t('settings_enabled_desc', $activeLang)) ?></div>
                             </div>
                             <input class="form-check-input ms-3 me-0" type="checkbox" name="AntibotSetting[enabled]" value="1" id="enabledSwitch" <?= !empty($settings['enabled']) ? 'checked' : '' ?>>
                         </div>
 
-                        <label class="form-label fw-bold text-dark mb-2">Уровень строгости защиты:</label>
+                        <label class="form-label fw-bold mb-2"><?= Html::encode(I18n::t('settings_strictness_label', $activeLang)) ?></label>
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="antibot-mode-card <?= $currentMode === 'monitoring' ? 'is-active is-active-monitoring' : '' ?>">
                                     <div class="form-check mb-2">
                                         <input class="form-check-input" type="radio" name="AntibotSetting[mode]" value="monitoring" <?= $currentMode === 'monitoring' ? 'checked' : '' ?>>
-                                        <span class="fw-bold text-info">Мониторинг</span>
+                                        <span class="fw-bold text-info"><?= Html::encode(I18n::t('mode_monitoring', $activeLang)) ?></span>
                                     </div>
-                                    <div class="small text-muted">Только аудит и лог. Никаких блокировок для проверки настроек.</div>
+                                    <div class="small text-muted"><?= Html::encode(I18n::t('settings_mode_monitoring_desc', $activeLang)) ?></div>
                                 </label>
                             </div>
                             <div class="col-md-4">
                                 <label class="antibot-mode-card <?= $currentMode === 'standard' ? 'is-active' : '' ?>">
                                     <div class="form-check mb-2">
                                         <input class="form-check-input" type="radio" name="AntibotSetting[mode]" value="standard" <?= $currentMode === 'standard' ? 'checked' : '' ?>>
-                                        <span class="fw-bold text-primary">Стандартный</span>
+                                        <span class="fw-bold text-primary"><?= Html::encode(I18n::t('mode_standard', $activeLang)) ?></span>
                                     </div>
-                                    <div class="small text-muted">Рекомендуется. Блокирует парсеры, AI-ботов и фейковые поисковики.</div>
+                                    <div class="small text-muted"><?= Html::encode(I18n::t('settings_mode_standard_desc', $activeLang)) ?></div>
                                 </label>
                             </div>
                             <div class="col-md-4">
                                 <label class="antibot-mode-card <?= $currentMode === 'strict' ? 'is-active is-active-strict' : '' ?>">
                                     <div class="form-check mb-2">
                                         <input class="form-check-input" type="radio" name="AntibotSetting[mode]" value="strict" <?= $currentMode === 'strict' ? 'checked' : '' ?>>
-                                        <span class="fw-bold text-danger">Строгий (Strict)</span>
+                                        <span class="fw-bold text-danger"><?= Html::encode(I18n::t('mode_strict', $activeLang)) ?></span>
                                     </div>
-                                    <div class="small text-muted">JS-челлендж для всех браузеров перед допуском к контенту.</div>
+                                    <div class="small text-muted"><?= Html::encode(I18n::t('settings_mode_strict_desc', $activeLang)) ?></div>
                                 </label>
-                            </div>
-                        </div>
-
-                        <div class="row g-3 mt-2 pt-2 border-top">
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold">Язык интерфейса и журнала событий (Language):</label>
-                                <select name="AntibotSetting[language]" class="form-select form-select-sm rounded-3">
-                                    <option value="auto" <?= ($settings['language'] ?? 'auto') === 'auto' ? 'selected' : '' ?>>Автоопределение (по языку сайта)</option>
-                                    <option value="ru" <?= ($settings['language'] ?? '') === 'ru' ? 'selected' : '' ?>>Русский (Russian)</option>
-                                    <option value="en" <?= ($settings['language'] ?? '') === 'en' ? 'selected' : '' ?>>English</option>
-                                </select>
-                                <div class="form-text text-muted small mt-1">Определяет язык названий действий и причин срабатываний в журнале Live Feed и на графиках.</div>
                             </div>
                         </div>
                     </div>
@@ -143,21 +136,21 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>🤖</span> 2. Верификация поисковиков (SEO-защита)
+                            <span>🤖</span> <?= Html::encode(I18n::t('settings_sec_2', $activeLang)) ?>
                         </h2>
                         <span class="antibot-card-title-badge">Reverse DNS</span>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[verifySearchBots]" value="1" id="verifySearchSwitch" <?= !empty($settings['verifySearchBots']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="verifySearchSwitch">Верифицировать реальные поисковые роботы</label>
-                            <div class="form-text">Двусторонняя Reverse DNS (PTR + Forward) проверка ботов Яндекс, Google, Bing, Mail.ru. Легитимные поисковики никогда не блокируются.</div>
+                            <label class="form-check-label fw-bold" for="verifySearchSwitch"><?= Html::encode(I18n::t('settings_verify_search', $activeLang)) ?></label>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_verify_search_desc', $activeLang)) ?></div>
                         </div>
 
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[blockFakeSearchBots]" value="1" id="fakeSearchSwitch" <?= !empty($settings['blockFakeSearchBots']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold text-danger" for="fakeSearchSwitch">Блокировать поддельных поисковых роботов (Fake Search Bots)</label>
-                            <div class="form-text">Если бот маскируется под Googlebot или YandexBot с постороннего IP-адреса, он блокируется с 403 Forbidden. Ошибки DNS трактуются безопасно как <code>unknown</code>.</div>
+                            <label class="form-check-label fw-bold text-danger" for="fakeSearchSwitch"><?= Html::encode(I18n::t('settings_block_fake', $activeLang)) ?></label>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_block_fake_desc', $activeLang)) ?></div>
                         </div>
                     </div>
                 </div>
@@ -166,25 +159,25 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>🧠</span> 3. Политики для ИИ-краулеров (AI Bots)
+                            <span>🧠</span> <?= Html::encode(I18n::t('settings_sec_3', $activeLang)) ?>
                         </h2>
-                        <span class="antibot-card-title-badge">LLM & Скраперы</span>
+                        <span class="antibot-card-title-badge">LLM & Bots</span>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[blockAiCrawlers]" value="1" id="aiSwitch" <?= !empty($settings['blockAiCrawlers']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="aiSwitch">Глобальная блокировка скраперов для обучения ИИ</label>
-                            <div class="form-text">Базовое правило для всех ненастроенных индивидуально скраперов.</div>
+                            <label class="form-check-label fw-bold" for="aiSwitch"><?= Html::encode(I18n::t('settings_block_ai', $activeLang)) ?></label>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_block_ai_desc', $activeLang)) ?></div>
                         </div>
 
-                        <h6 class="fw-bold small text-muted text-uppercase mt-4 mb-2">Индивидуальные правила для роботов:</h6>
+                        <h6 class="fw-bold small text-muted text-uppercase mt-4 mb-2">Индивидуальные правила:</h6>
                         <div class="table-responsive">
                             <table class="table table-hover align-middle antibot-table mb-0">
                                 <thead>
                                     <tr>
-                                        <th>Бот / Система</th>
-                                        <th>Тип</th>
-                                        <th>Политика</th>
+                                        <th><?= Html::encode(I18n::t('settings_ai_table_bot', $activeLang)) ?></th>
+                                        <th><?= Html::encode(I18n::t('settings_ai_table_type', $activeLang)) ?></th>
+                                        <th><?= Html::encode(I18n::t('settings_ai_table_policy', $activeLang)) ?></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -208,16 +201,16 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                                                 <div class="small text-muted"><?= Html::encode($bDesc) ?></div>
                                             </td>
                                             <td>
-                                                <span class="badge <?= $bType === 'search' ? 'bg-success' : 'bg-secondary' ?> rounded-pill px-2 py-1">
-                                                    <?= $bType === 'search' ? 'Поисковый' : 'Обучение' ?>
+                                                <span class="badge <?= $bType === 'search' ? 'badge-soft-success' : 'badge-soft-secondary' ?> rounded-pill px-2 py-1">
+                                                    <?= Html::encode($bType === 'search' ? I18n::t('settings_ai_type_search', $activeLang) : I18n::t('settings_ai_type_training', $activeLang)) ?>
                                                 </span>
                                             </td>
                                             <td>
                                                 <select name="AntibotSetting[aiCrawlerPolicies][<?= Html::encode($bKey) ?>]" class="form-select form-select-sm rounded-3">
-                                                    <option value="allow" <?= $currentPolicy === 'allow' ? 'selected' : '' ?>>Разрешить (Allow)</option>
-                                                    <option value="monitor" <?= $currentPolicy === 'monitor' ? 'selected' : '' ?>>Мониторить (Monitor)</option>
-                                                    <option value="throttle" <?= $currentPolicy === 'throttle' ? 'selected' : '' ?>>Ограничивать (Throttle)</option>
-                                                    <option value="block" <?= $currentPolicy === 'block' ? 'selected' : '' ?>>Блокировать (Block)</option>
+                                                    <option value="allow" <?= $currentPolicy === 'allow' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_ai_allow', $activeLang)) ?></option>
+                                                    <option value="monitor" <?= $currentPolicy === 'monitor' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_ai_monitor', $activeLang)) ?></option>
+                                                    <option value="throttle" <?= $currentPolicy === 'throttle' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_ai_throttle', $activeLang)) ?></option>
+                                                    <option value="block" <?= $currentPolicy === 'block' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_ai_block', $activeLang)) ?></option>
                                                 </select>
                                             </td>
                                         </tr>
@@ -232,20 +225,20 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>🚫</span> 4. Коммерческие скраперы и CLI-утилиты
+                            <span>🚫</span> <?= Html::encode(I18n::t('settings_sec_4', $activeLang)) ?>
                         </h2>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[blockCommercialScrapers]" value="1" id="commercialSwitch" <?= !empty($settings['blockCommercialScrapers']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="commercialSwitch">Блокировать коммерческие SEO-парсеры</label>
-                            <div class="form-text">AhrefsBot, SemrushBot, DotBot, MJ12bot, MegaIndex и аналогичные тяжелые скраперы.</div>
+                            <label class="form-check-label fw-bold" for="commercialSwitch"><?= Html::encode(I18n::t('settings_block_scrapers', $activeLang)) ?></label>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_block_scrapers_desc', $activeLang)) ?></div>
                         </div>
 
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[blockCliAndLibraries]" value="1" id="cliSwitch" <?= !empty($settings['blockCliAndLibraries']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="cliSwitch">Блокировать CLI-утилиты и скрипты</label>
-                            <div class="form-text">cURL, Wget, Python-requests, Scrapy, Guzzle, Go-http-client и клиенты без User-Agent.</div>
+                            <label class="form-check-label fw-bold" for="cliSwitch"><?= Html::encode(I18n::t('settings_block_cli', $activeLang)) ?></label>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_block_cli_desc', $activeLang)) ?></div>
                         </div>
                     </div>
                 </div>
@@ -254,15 +247,15 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>🕵️</span> 5. Поведенческий анализ (Behavior Intelligence)
+                            <span>🕵️</span> <?= Html::encode(I18n::t('settings_sec_5', $activeLang)) ?>
                         </h2>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[behaviorAnalysisEnabled]" value="1" id="bhSwitch" <?= !empty($settings['behaviorAnalysisEnabled']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="bhSwitch">Включить поведенческий анализ активности</label>
-                            <div class="form-text">
-                                Оценивает последовательность запросов, интервалы между кликами, аномальное разнообразие URL (парсинг всех ссылок), частый поиск и всплески ошибок. Включает эвристический RiskEngine.
+                            <label class="form-check-label fw-bold" for="bhSwitch"><?= Html::encode(I18n::t('settings_behavior', $activeLang)) ?></label>
+                            <div class="form-text text-muted">
+                                <?= Html::encode(I18n::t('settings_behavior_desc', $activeLang)) ?>
                             </div>
                         </div>
                     </div>
@@ -275,38 +268,38 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>⚡</span> 6. Ограничение частоты (Rate Limiter)
+                            <span>⚡</span> <?= Html::encode(I18n::t('settings_sec_6', $activeLang)) ?>
                         </h2>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[rateLimitEnabled]" value="1" id="rateLimitSwitch" <?= !empty($settings['rateLimitEnabled']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="rateLimitSwitch">Включить Rate Limiter</label>
+                            <label class="form-check-label fw-bold" for="rateLimitSwitch"><?= Html::encode(I18n::t('settings_ratelimit_enable', $activeLang)) ?></label>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Адаптер хранилища:</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_adapter_label', $activeLang)) ?></label>
                             <select name="AntibotSetting[rateLimitAdapter]" class="form-select form-select-sm rounded-3">
-                                <option value="cache" <?= ($settings['rateLimitAdapter'] ?? 'cache') === 'cache' ? 'selected' : '' ?>>CacheLimiter (Стандартный без Redis)</option>
-                                <option value="redis" <?= ($settings['rateLimitAdapter'] ?? '') === 'redis' ? 'selected' : '' ?>>RedisLimiter (Атомарный Lua, при наличии Redis)</option>
+                                <option value="cache" <?= ($settings['rateLimitAdapter'] ?? 'cache') === 'cache' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_adapter_cache', $activeLang)) ?></option>
+                                <option value="redis" <?= ($settings['rateLimitAdapter'] ?? '') === 'redis' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_adapter_redis', $activeLang)) ?></option>
                             </select>
-                            <div class="form-text">CacheLimiter не создает блокировок и предотвращает зависание PHP.</div>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_adapter_desc', $activeLang)) ?></div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Максимум запросов:</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_ratelimit_max', $activeLang)) ?></label>
                             <input type="number" name="AntibotSetting[rateLimitMax]" class="form-control rounded-3" value="<?= (int) ($settings['rateLimitMax'] ?? 60) ?>" min="1" max="1000">
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Окно подсчета (секунды):</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_ratelimit_window', $activeLang)) ?></label>
                             <input type="number" name="AntibotSetting[rateLimitWindow]" class="form-control rounded-3" value="<?= (int) ($settings['rateLimitWindow'] ?? 60) ?>" min="1" max="3600">
                         </div>
 
                         <div class="mb-0">
-                            <label class="form-label small fw-bold">Время временного бана (секунды):</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_ratelimit_ban', $activeLang)) ?></label>
                             <input type="number" name="AntibotSetting[rateLimitBanDuration]" class="form-control rounded-3" value="<?= (int) ($settings['rateLimitBanDuration'] ?? 300) ?>" min="0" max="86400">
-                            <div class="form-text">Применяется при систематическом флуде (0 = без бана).</div>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_ratelimit_ban_desc', $activeLang)) ?></div>
                         </div>
                     </div>
                 </div>
@@ -315,21 +308,21 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>⚖️</span> 7. Бюджет нагрузки (Weighted Limiter)
+                            <span>⚖️</span> <?= Html::encode(I18n::t('settings_sec_7', $activeLang)) ?>
                         </h2>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[weightedRateLimitEnabled]" value="1" id="wrlSwitch" <?= !empty($settings['weightedRateLimitEnabled']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="wrlSwitch">Учитывать вес операций (баллы)</label>
+                            <label class="form-check-label fw-bold" for="wrlSwitch"><?= Html::encode(I18n::t('settings_weighted_enable', $activeLang)) ?></label>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Лимит баллов (бюджет на окно):</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_weighted_budget', $activeLang)) ?></label>
                             <input type="number" name="AntibotSetting[weightedRateLimitBudget]" class="form-control rounded-3" value="<?= (int) ($settings['weightedRateLimitBudget'] ?? 150) ?>" min="10" max="10000">
-                            <div class="form-text">Обычная страница: 1 балл, поиск: 5 баллов, тяжелый фильтр: 8-10 баллов.</div>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_weighted_budget_desc', $activeLang)) ?></div>
                         </div>
                         <div class="mb-0">
-                            <label class="form-label small fw-bold">Окно бюджета (секунды):</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_weighted_window', $activeLang)) ?></label>
                             <input type="number" name="AntibotSetting[weightedRateLimitWindow]" class="form-control rounded-3" value="<?= (int) ($settings['weightedRateLimitWindow'] ?? 60) ?>" min="5" max="3600">
                         </div>
                     </div>
@@ -339,21 +332,21 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>🛡️</span> 8. Доверенные прокси (Proxies)
+                            <span>🛡️</span> <?= Html::encode(I18n::t('settings_sec_8', $activeLang)) ?>
                         </h2>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" role="switch" id="autoTrustLocalProxy" name="AntibotSetting[autoTrustLocalProxy]" value="1" <?= !empty($settings['autoTrustLocalProxy']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold small" for="autoTrustLocalProxy">Автоматически доверять локальным reverse proxy (127.0.0.1, SERVER_ADDR)</label>
-                            <div class="form-text text-muted small mt-1">Рекомендуется для Nginx + Apache / PHP-FPM (HestiaCP, cPanel, Docker). Модуль автоматически распознает реальный IP посетителя из заголовков <code>X-Forwarded-For</code> / <code>X-Real-IP</code> без необходимости вручную вводить IP сервера.</div>
+                            <label class="form-check-label fw-bold small" for="autoTrustLocalProxy"><?= Html::encode(I18n::t('settings_proxy_autotrust', $activeLang)) ?></label>
+                            <div class="form-text text-muted small mt-1"><?= Html::encode(I18n::t('settings_proxy_autotrust_desc', $activeLang)) ?></div>
                         </div>
 
                         <div class="mb-0">
-                            <label class="form-label small fw-bold">Дополнительные IP или CIDR подсети доверенных прокси (по одному на строку):</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_proxy_custom', $activeLang)) ?></label>
                             <textarea name="AntibotSetting[trustedProxies]" class="form-control font-monospace small rounded-3" rows="3" placeholder="10.0.0.0/8&#10;173.245.48.0/20"><?= Html::encode($trustedProxiesStr) ?></textarea>
                             <div class="form-text text-muted mt-2">
-                                <strong>Безопасность:</strong> Указывайте внешние балансировщики или Cloudflare. Заголовки прокси принимаются только от доверенных узлов для строгой защиты от подмены IP.
+                                <?= Html::encode(I18n::t('settings_proxy_safety', $activeLang)) ?>
                             </div>
                         </div>
                     </div>
@@ -363,20 +356,20 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>🧩</span> 9. Proof-of-Work Челлендж
+                            <span>🧩</span> <?= Html::encode(I18n::t('settings_sec_9', $activeLang)) ?>
                         </h2>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[powEnabled]" value="1" id="powSwitch" <?= !empty($settings['powEnabled']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="powSwitch">Включить локальный Proof-of-Work</label>
+                            <label class="form-check-label fw-bold" for="powSwitch"><?= Html::encode(I18n::t('settings_pow_enable', $activeLang)) ?></label>
                         </div>
                         <div class="mb-0">
-                            <label class="form-label small fw-bold">Сложность вычислений (SHA-256 target):</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_pow_diff', $activeLang)) ?></label>
                             <select name="AntibotSetting[powDifficulty]" class="form-select form-select-sm rounded-3">
-                                <option value="light" <?= ($settings['powDifficulty'] ?? 'medium') === 'light' ? 'selected' : '' ?>>Light (~50-100 мс — базовый)</option>
-                                <option value="medium" <?= ($settings['powDifficulty'] ?? 'medium') === 'medium' ? 'selected' : '' ?>>Medium (~300-800 мс — рекомендуемый)</option>
-                                <option value="strong" <?= ($settings['powDifficulty'] ?? 'medium') === 'strong' ? 'selected' : '' ?>>Strong (~2-4 с — жесткий отсев)</option>
+                                <option value="light" <?= ($settings['powDifficulty'] ?? 'medium') === 'light' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_pow_light', $activeLang)) ?></option>
+                                <option value="medium" <?= ($settings['powDifficulty'] ?? 'medium') === 'medium' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_pow_medium', $activeLang)) ?></option>
+                                <option value="strong" <?= ($settings['powDifficulty'] ?? 'medium') === 'strong' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_pow_strong', $activeLang)) ?></option>
                             </select>
                         </div>
                     </div>
@@ -386,16 +379,16 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>🍯</span> 10. Ссылки-ловушки (Honey URLs)
+                            <span>🍯</span> <?= Html::encode(I18n::t('settings_sec_10', $activeLang)) ?>
                         </h2>
                     </div>
                     <div class="antibot-card-body">
                         <div class="form-check form-switch mb-3">
                             <input class="form-check-input" type="checkbox" name="AntibotSetting[honeyTrapsEnabled]" value="1" id="honeySwitch" <?= !empty($settings['honeyTrapsEnabled']) ? 'checked' : '' ?>>
-                            <label class="form-check-label fw-bold" for="honeySwitch">Активировать перехват ловушек</label>
+                            <label class="form-check-label fw-bold" for="honeySwitch"><?= Html::encode(I18n::t('settings_traps_enable', $activeLang)) ?></label>
                         </div>
                         <div class="mb-0">
-                            <label class="form-label small fw-bold">Маршрут ловушки:</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_trap_route', $activeLang)) ?></label>
                             <input type="text" name="AntibotSetting[trapRoute]" class="form-control rounded-3" value="<?= Html::encode($settings['trapRoute'] ?? 'antibot/trap') ?>">
                         </div>
                     </div>
@@ -405,12 +398,12 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 <div class="antibot-card mb-4">
                     <div class="antibot-card-header">
                         <h2 class="antibot-card-title">
-                            <span>💬</span> 11. Экран блокировки
+                            <span>💬</span> <?= Html::encode(I18n::t('settings_sec_11', $activeLang)) ?>
                         </h2>
                     </div>
                     <div class="antibot-card-body">
                         <div class="mb-0">
-                            <label class="form-label small fw-bold">Текст на экране блокировки:</label>
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_block_msg', $activeLang)) ?></label>
                             <textarea name="AntibotSetting[customBlockMessage]" class="form-control rounded-3" rows="2"><?= Html::encode($settings['customBlockMessage'] ?? '') ?></textarea>
                         </div>
                     </div>
@@ -421,12 +414,12 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
         <!-- Sticky Bottom Save Bar -->
         <div class="antibot-sticky-bar">
             <div>
-                <span class="fw-semibold text-dark">⚙️ Конфигурация защиты</span>
-                <span class="text-muted small ms-2 d-none d-md-inline">— изменения вступают в силу немедленно</span>
+                <span class="fw-semibold text-dark"><?= Html::encode(I18n::t('settings_bar_title', $activeLang)) ?></span>
+                <span class="text-muted small ms-2 d-none d-md-inline"><?= Html::encode(I18n::t('settings_bar_desc', $activeLang)) ?></span>
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
-                    💾 Сохранить настройки
+                    <?= Html::encode(I18n::t('settings_save_btn', $activeLang)) ?>
                 </button>
             </div>
         </div>
