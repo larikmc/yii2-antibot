@@ -2,6 +2,36 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.12] - 2026-11-05
+
+### Autonomous Zero-External-Service Defense Suite, Panic Mode, Auto-Jail Quarantine, Client Hints Detection & Route Protection
+- **Feature 1: Instant Live Feed Filters & Real-Time Search (`default/index`):**
+  - Instant client-side Category Quick-Filter buttons: `[Все]`, `[⛔ Заблокированные (403)]`, `[🤖 Поисковики (SEO)]`, `[⏱️ Лимиты частоты]`, `[🍯 Ловушки]`, and `[👁️ Мониторинг]`.
+  - Live client-side search bar filtering rows across IP, URL, Reason, and User-Agent with real-time visible counter badge.
+- **Feature 2: Quick /24 Subnet Ban & Bulk IP/CIDR Import (`ip-list/index`):**
+  - Added a 1-click `/24` subnet ban button (`btn_ban_24`) directly in the Live Feed table (`long2ip(ip2long($ip) & ~255) . '/24'`).
+  - Added collapsible Bulk Import panel on IP Lists supporting multi-line / comma-separated IP and CIDR subnet inputs with deduplication, validation, and detailed flash reporting.
+- **Feature 3: Client Hints & Header Consistency Anomaly Detector (`HeaderAnalyzer`):**
+  - Created `larikmc\antibot\services\behavior\HeaderAnalyzer` inspecting `Sec-Ch-Ua`, `Sec-Ch-Ua-Platform`, `Sec-Ch-Ua-Mobile`, `Accept-Language`, and `Accept-Encoding`.
+  - Flags spoofed Chrome/Safari User-Agents (cURL, Python, Headless) where Client Hints OS platform contradicts the User-Agent OS.
+  - Catches purported modern desktop browsers missing standard `Accept-Language` or gzip compression headers.
+  - Fully integrated into `BotDetector::detectAnomalousHeaders()` and `Antibot::checkRequest()`.
+- **Feature 4: Auto-Jail (Quarantine) for Chronic Attackers (`AutoJailService`):**
+  - Created autonomous `larikmc\antibot\services\resilience\AutoJailService` providing cache-backed temporary detention for chronic attackers.
+  - Detains IPs triggering repeat critical violations (honey URL traps, fake search bots failing reverse DNS, rate limit floods) without consuming server CPU on future requests.
+  - Active detentions management dashboard card with real-time countdown and 1-click release actions.
+- **Feature 5: Sensitive Route Protection & Route-Specific Rate Limits:**
+  - Added dedicated protection rules for sensitive URL paths (`site/login*`, `*search*`, `*checkout*`).
+  - Enhanced route matching engine with `Antibot::matchRoutePattern()` supporting exact, wildcard, and prefix pattern matching with custom request limits and HTTP methods.
+  - Interactive rule manager in settings view with vanilla JS dynamic row addition and removal.
+- **Feature 6: "Under Attack" / Panic Defense Mode (`PanicModeService`):**
+  - Introduced 1-click elevated defense toggle with auto-expiring durations (15 min, 30 min, 1 hour).
+  - Automatically halves rate limit thresholds and enforces strict Proof-of-Work (PoW) or JS Challenge on all unverified clients.
+  - Prominent defense banner on dashboard and glowing navbar trigger with countdown timer.
+- **Test Suite & Verification:**
+  - Created `tests/test_v1512.php` verifying all 6 features: Client Hints detection, AutoJail quarantine, Panic Mode, Route pattern matching, and bilingual translations (29/29 tests passed).
+  - Synchronized and visually verified with Playwright on test environment.
+
 ## [1.5.11] - 2026-11-05
 
 ### Laricum C Admin UI Kit Redesign, Native Light & Dark Themes, and Automatic Framework Language Integration

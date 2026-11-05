@@ -108,6 +108,66 @@ $this->params['breadcrumbs'] = [
         </div>
     </div>
 
+    <!-- Auto-Jail Detentions (If active) -->
+    <?php if (!empty($jailedIps)): ?>
+        <div class="card border-0 shadow-sm mb-4" style="border-radius: 14px; overflow: hidden; border-left: 4px solid #ef4444 !important;">
+            <div class="card-header bg-white py-3 px-4 d-flex align-items-center justify-content-between flex-wrap gap-2 border-bottom">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fs-5">🚨</span>
+                    <h5 class="mb-0 fw-bold fs-6"><?= Html::encode(I18n::t('autojail_title', $activeLang)) ?></h5>
+                    <span class="badge bg-danger rounded-pill px-2 py-1 small"><?= count($jailedIps) ?></span>
+                </div>
+                <div>
+                    <?= Html::beginForm(['/antibot/default/clear-jail'], 'post', ['class' => 'd-inline']) ?>
+                        <?= Html::submitButton(I18n::t('autojail_btn_clear_all', $activeLang), [
+                            'class' => 'btn btn-outline-secondary btn-sm rounded-pill px-3 py-1 small fw-semibold',
+                            'data-confirm' => 'Вы уверены, что хотите освободить все адреса из карантина?',
+                        ]) ?>
+                    <?= Html::endForm() ?>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4"><?= Html::encode(I18n::t('autojail_th_ip', $activeLang)) ?></th>
+                            <th><?= Html::encode(I18n::t('autojail_th_reason', $activeLang)) ?></th>
+                            <th><?= Html::encode(I18n::t('autojail_th_jailed_at', $activeLang)) ?></th>
+                            <th><?= Html::encode(I18n::t('autojail_th_remaining', $activeLang)) ?></th>
+                            <th class="text-end pe-4"><?= Html::encode(I18n::t('th_actions', $activeLang)) ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($jailedIps as $jail): ?>
+                            <tr>
+                                <td class="ps-4">
+                                    <code class="fw-bold text-danger"><?= Html::encode($jail['ip']) ?></code>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border"><?= Html::encode($jail['reason']) ?></span>
+                                </td>
+                                <td class="text-muted small">
+                                    <?= date('H:i:s d.m.Y', (int) $jail['jailed_at']) ?>
+                                </td>
+                                <td>
+                                    <span class="badge bg-warning text-dark rounded-pill px-2 py-1 font-monospace">
+                                        <?= sprintf('%02d:%02d', floor($jail['remaining_sec'] / 60), $jail['remaining_sec'] % 60) ?>
+                                    </span>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <?= Html::beginForm(['/antibot/default/release-jail'], 'post', ['class' => 'd-inline']) ?>
+                                        <input type="hidden" name="ip" value="<?= Html::encode($jail['ip']) ?>">
+                                        <?= Html::submitButton(I18n::t('autojail_btn_release', $activeLang), ['class' => 'btn btn-outline-success btn-sm rounded-pill px-3 py-1 small']) ?>
+                                    <?= Html::endForm() ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <div class="row g-4">
         <!-- Белый список (Whitelist) -->
         <div class="col-lg-4">

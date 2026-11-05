@@ -240,6 +240,12 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                             <label class="form-check-label fw-bold" for="cliSwitch"><?= Html::encode(I18n::t('settings_block_cli', $activeLang)) ?></label>
                             <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_block_cli_desc', $activeLang)) ?></div>
                         </div>
+
+                        <div class="form-check form-switch mb-0 mt-3 pt-3 border-top">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[headerConsistencyEnabled]" value="1" id="headerConsistencySwitch" <?= !empty($settings['headerConsistencyEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="headerConsistencySwitch"><?= Html::encode(I18n::t('settings_header_consistency', $activeLang)) ?></label>
+                            <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_header_consistency_desc', $activeLang)) ?></div>
+                        </div>
                     </div>
                 </div>
 
@@ -300,6 +306,25 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                             <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_ratelimit_ban', $activeLang)) ?></label>
                             <input type="number" name="AntibotSetting[rateLimitBanDuration]" class="form-control rounded-3" value="<?= (int) ($settings['rateLimitBanDuration'] ?? 300) ?>" min="0" max="86400">
                             <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_ratelimit_ban_desc', $activeLang)) ?></div>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-top">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="AntibotSetting[autoJailEnabled]" value="1" id="autoJailSwitch" <?= !empty($settings['autoJailEnabled']) ? 'checked' : '' ?>>
+                                <label class="form-check-label fw-bold text-danger" for="autoJailSwitch"><?= Html::encode(I18n::t('settings_autojail_enabled', $activeLang)) ?></label>
+                                <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_autojail_enabled_desc', $activeLang)) ?></div>
+                            </div>
+
+                            <div class="row g-2">
+                                <div class="col-sm-6">
+                                    <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_autojail_threshold', $activeLang)) ?></label>
+                                    <input type="number" name="AntibotSetting[autoJailThreshold]" class="form-control rounded-3" value="<?= (int) ($settings['autoJailThreshold'] ?? 2) ?>" min="1" max="10">
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_autojail_duration', $activeLang)) ?></label>
+                                    <input type="number" name="AntibotSetting[autoJailDuration]" class="form-control rounded-3" value="<?= (int) ($settings['autoJailDuration'] ?? 1800) ?>" min="60" max="86400">
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -408,6 +433,75 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                         </div>
                     </div>
                 </div>
+
+                <!-- 12. Защита чувствительных маршрутов (Sensitive Routes) -->
+                <div class="antibot-card mb-4">
+                    <div class="antibot-card-header">
+                        <h2 class="antibot-card-title">
+                            <span>🎯</span> <?= Html::encode(I18n::t('settings_sec_12', $activeLang)) ?>
+                        </h2>
+                        <span class="antibot-card-title-badge">Route Limits</span>
+                    </div>
+                    <div class="antibot-card-body">
+                        <p class="small text-muted mb-3">
+                            <?= Html::encode(I18n::t('settings_route_rules_desc', $activeLang)) ?>
+                        </p>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle antibot-table mb-3" id="routeRulesTable">
+                                <thead>
+                                    <tr>
+                                        <th><?= Html::encode(I18n::t('settings_route_pattern', $activeLang)) ?></th>
+                                        <th style="width: 140px;"><?= Html::encode(I18n::t('settings_route_limit', $activeLang)) ?></th>
+                                        <th style="width: 120px;"><?= Html::encode(I18n::t('settings_route_window', $activeLang)) ?></th>
+                                        <th style="width: 120px;"><?= Html::encode(I18n::t('settings_route_methods', $activeLang)) ?></th>
+                                        <th><?= Html::encode(I18n::t('settings_route_desc', $activeLang)) ?></th>
+                                        <th style="width: 60px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php
+                                    $routeRules = (array) ($settings['routeRules'] ?? []);
+                                    if (empty($routeRules)) {
+                                        $routeRules = [
+                                            ['pattern' => 'site/login*', 'maxRequests' => 10, 'window' => 60, 'methods' => ['POST'], 'description' => 'Авторизация / Форма входа'],
+                                            ['pattern' => '*search*', 'maxRequests' => 20, 'window' => 60, 'methods' => [], 'description' => 'Поисковые запросы'],
+                                            ['pattern' => '*checkout*', 'maxRequests' => 15, 'window' => 60, 'methods' => [], 'description' => 'Оформление заказа'],
+                                        ];
+                                    }
+                                    foreach ($routeRules as $idx => $rRule):
+                                        $methodsStr = implode(', ', (array) ($rRule['methods'] ?? []));
+                                    ?>
+                                        <tr class="route-rule-row">
+                                            <td>
+                                                <input type="text" name="AntibotSetting[routeRules][<?= $idx ?>][pattern]" class="form-control form-control-sm font-monospace" value="<?= Html::encode($rRule['pattern'] ?? '') ?>" placeholder="site/login*">
+                                            </td>
+                                            <td>
+                                                <input type="number" name="AntibotSetting[routeRules][<?= $idx ?>][maxRequests]" class="form-control form-control-sm" value="<?= (int) ($rRule['maxRequests'] ?? 10) ?>" min="1" max="1000">
+                                            </td>
+                                            <td>
+                                                <input type="number" name="AntibotSetting[routeRules][<?= $idx ?>][window]" class="form-control form-control-sm" value="<?= (int) ($rRule['window'] ?? 60) ?>" min="1" max="3600">
+                                            </td>
+                                            <td>
+                                                <input type="text" name="AntibotSetting[routeRules][<?= $idx ?>][methods][]" class="form-control form-control-sm" value="<?= Html::encode($methodsStr) ?>" placeholder="POST, GET">
+                                            </td>
+                                            <td>
+                                                <input type="text" name="AntibotSetting[routeRules][<?= $idx ?>][description]" class="form-control form-control-sm" value="<?= Html::encode($rRule['description'] ?? '') ?>" placeholder="Форма входа">
+                                            </td>
+                                            <td class="text-end">
+                                                <button type="button" class="btn btn-outline-danger btn-sm rounded-circle p-0 d-inline-flex align-items-center justify-content-center btn-remove-rule" style="width: 28px; height: 28px;" title="Удалить">✕</button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1 fw-semibold" id="btnAddRouteRule">
+                            <?= Html::encode(I18n::t('settings_route_add_btn', $activeLang)) ?>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -447,5 +541,29 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
     });
+
+    // Dynamic Route Rules Row Management
+    var tableBody = document.querySelector('#routeRulesTable tbody');
+    var btnAdd = document.getElementById('btnAddRouteRule');
+    if (btnAdd && tableBody) {
+        btnAdd.addEventListener('click', function () {
+            var newIdx = tableBody.querySelectorAll('tr').length;
+            var tr = document.createElement('tr');
+            tr.className = 'route-rule-row';
+            tr.innerHTML = '<td><input type="text" name="AntibotSetting[routeRules][' + newIdx + '][pattern]" class="form-control form-control-sm font-monospace" placeholder="site/login*"></td>' +
+                '<td><input type="number" name="AntibotSetting[routeRules][' + newIdx + '][maxRequests]" class="form-control form-control-sm" value="10" min="1"></td>' +
+                '<td><input type="number" name="AntibotSetting[routeRules][' + newIdx + '][window]" class="form-control form-control-sm" value="60" min="1"></td>' +
+                '<td><input type="text" name="AntibotSetting[routeRules][' + newIdx + '][methods][]" class="form-control form-control-sm" placeholder="POST"></td>' +
+                '<td><input type="text" name="AntibotSetting[routeRules][' + newIdx + '][description]" class="form-control form-control-sm" placeholder="Защита действия"></td>' +
+                '<td class="text-end"><button type="button" class="btn btn-outline-danger btn-sm rounded-circle p-0 d-inline-flex align-items-center justify-content-center btn-remove-rule" style="width: 28px; height: 28px;">✕</button></td>';
+            tableBody.appendChild(tr);
+        });
+
+        tableBody.addEventListener('click', function (e) {
+            if (e.target && e.target.classList.contains('btn-remove-rule')) {
+                e.target.closest('tr').remove();
+            }
+        });
+    }
 });
 </script>

@@ -12,6 +12,9 @@ use larikmc\antibot\services\StorageService;
 use larikmc\antibot\services\TokenService;
 use Yii;
 use yii\base\BootstrapInterface;
+use larikmc\antibot\services\behavior\HeaderAnalyzer;
+use larikmc\antibot\services\resilience\AutoJailService;
+use larikmc\antibot\services\resilience\PanicModeService;
 use yii\base\Component;
 use yii\web\Application as WebApplication;
 use yii\web\Response;
@@ -34,7 +37,7 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
-    public const VERSION = '1.5.11';
+    public const VERSION = '1.5.12';
 
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;
@@ -129,6 +132,26 @@ class Antibot extends Component implements BootstrapInterface
      * @var string Relative route path for honey URL traps.
      */
     public string $trapRoute = 'antibot/trap';
+
+    /**
+     * @var bool Whether Client Hints and header consistency anomaly detection is enabled.
+     */
+    public bool $headerConsistencyEnabled = true;
+
+    /**
+     * @var bool Whether Auto-Jail (quarantine) for repeated security offenses is enabled.
+     */
+    public bool $autoJailEnabled = true;
+
+    /**
+     * @var int Number of critical offenses before an IP is jailed.
+     */
+    public int $autoJailThreshold = 2;
+
+    /**
+     * @var int Quarantine duration in seconds.
+     */
+    public int $autoJailDuration = 1800;
 
     public ?string $storageFile = null;
     public ?string $eventsFile = null;
@@ -255,6 +278,18 @@ class Antibot extends Component implements BootstrapInterface
             }
             if (isset($savedSettings['trapRoute']) && is_string($savedSettings['trapRoute'])) {
                 $this->trapRoute = $savedSettings['trapRoute'];
+            }
+            if (isset($savedSettings['headerConsistencyEnabled'])) {
+                $this->headerConsistencyEnabled = (bool) $savedSettings['headerConsistencyEnabled'];
+            }
+            if (isset($savedSettings['autoJailEnabled'])) {
+                $this->autoJailEnabled = (bool) $savedSettings['autoJailEnabled'];
+            }
+            if (isset($savedSettings['autoJailThreshold'])) {
+                $this->autoJailThreshold = (int) $savedSettings['autoJailThreshold'];
+            }
+            if (isset($savedSettings['autoJailDuration'])) {
+                $this->autoJailDuration = (int) $savedSettings['autoJailDuration'];
             }
             if (isset($savedSettings['customBlockMessage']) && is_string($savedSettings['customBlockMessage'])) {
                 $this->customBlockMessage = $savedSettings['customBlockMessage'];
@@ -557,6 +592,10 @@ class Antibot extends Component implements BootstrapInterface
             // 1c. Check Honey URL Trap access
             if ($this->honeyTrapsEnabled && ($pathInfo === $this->trapRoute || $pathInfo === ltrim($this->trapRoute, '/'))) {
                 $this->_currentDecision = 'blocked';
+                if ($this->autoJailEnabled) {
+                    $threshold = PanicModeService::isActive() ? 1 : $this->autoJailThreshold;
+                    AutoJailService::recordViolation($ip, 'Honey URL trap hit: ' . $pathInfo, $threshold, $this->autoJailDuration);
+                }
                 $this->handleTrapHit($ip, $ua);
                 return;
             }
@@ -573,6 +612,13 @@ class Antibot extends Component implements BootstrapInterface
                     }
                 }
                 $this->_currentDecision = 'allowed';
+                return;
+            }
+
+            // 2b. Auto-Jail Quarantine Check (Sub-millisecond fast reject for chronic attackers)
+            if ($this->autoJailEnabled && AutoJailService::isJailed($ip)) {
+                $this->_currentDecision = 'blocked';
+                $this->blockRequest('IP detained in temporary Auto-Jail quarantine', $ip, $ua, $url);
                 return;
             }
 
@@ -603,6 +649,10 @@ class Antibot extends Component implements BootstrapInterface
 
                     if ($dnsStatus === ReverseDnsVerifier::STATUS_FAKE && $this->blockFakeSearchBots) {
                         $this->_currentDecision = 'blocked';
+                        if ($this->autoJailEnabled) {
+                            $threshold = PanicModeService::isActive() ? 1 : $this->autoJailThreshold;
+                            AutoJailService::recordViolation($ip, 'Fake search bot spoofing ' . ucfirst($searchEngine), $threshold, $this->autoJailDuration);
+                        }
                         $this->blockRequest('Fake search bot spoofing ' . ucfirst($searchEngine), $ip, $ua, $url);
                         return;
                     }
@@ -656,12 +706,14 @@ class Antibot extends Component implements BootstrapInterface
                 return;
             }
 
-            // 8. Anomalous HTTP headers
-            $anomReason = BotDetector::detectAnomalousHeaders($request->headers->toArray());
-            if ($anomReason !== null && $this->blockCliAndLibraries) {
-                $this->_currentDecision = 'blocked';
-                $this->blockRequest($anomReason, $ip, $ua, $url);
-                return;
+            // 8. Anomalous HTTP headers & Client Hints Consistency
+            if ($this->headerConsistencyEnabled) {
+                $anomReason = BotDetector::detectAnomalousHeaders($request->headers->toArray());
+                if ($anomReason !== null && $this->blockCliAndLibraries) {
+                    $this->_currentDecision = 'blocked';
+                    $this->blockRequest($anomReason, $ip, $ua, $url);
+                    return;
+                }
             }
 
             // 9. Verified Visitor Cookie Check
@@ -674,11 +726,20 @@ class Antibot extends Component implements BootstrapInterface
             $maxReq = $matchedRule['maxRequests'] ?? $this->rateLimitMax;
             $win = $matchedRule['window'] ?? $this->rateLimitWindow;
 
+            // In Panic Mode, halve the allowed requests for tight emergency defense
+            if (PanicModeService::isActive()) {
+                $maxReq = max(1, (int) floor($maxReq / 2));
+            }
+
             if ($this->rateLimitEnabled) {
                 $limitKey = $matchedRule !== null ? sprintf('%s_uri_%s', $ip, md5($pathInfo)) : $ip;
                 $limitResult = RateLimiter::check($limitKey, $maxReq, $win, $this->rateLimitBanDuration);
 
                 if ($limitResult['exceeded']) {
+                    if ($this->autoJailEnabled) {
+                        $threshold = PanicModeService::isActive() ? 1 : $this->autoJailThreshold;
+                        AutoJailService::recordViolation($ip, 'Rate limit exceeded: ' . $pathInfo, $threshold, $this->autoJailDuration);
+                    }
                     $this->_currentDecision = 'throttled';
                     $this->throttleRequest(
                         sprintf('Rate limit exceeded: %d req/%ds', $maxReq, $win),
@@ -771,6 +832,38 @@ class Antibot extends Component implements BootstrapInterface
                             'url' => $url,
                         ]);
                     }
+                }
+            }
+
+            // 12b. Elevated Panic Mode Challenge (Strict verification for unverified visitors)
+            if (PanicModeService::isActive() && !$isVerifiedVisitor && !$this->isMachineOrApiRequest() && !$this->isMonitoringMode()) {
+                if ($this->powEnabled) {
+                    $this->_currentDecision = 'challenge';
+                    $pow = \larikmc\antibot\services\pow\PowService::generateChallenge($ip, $secretKey, $this->powDifficulty);
+                    $this->_storage->logEvent([
+                        'ip' => $ip,
+                        'userAgent' => $ua,
+                        'action' => 'challenged',
+                        'reason' => 'Panic Mode active: PoW challenge enforced',
+                        'url' => $url,
+                    ]);
+                    $this->finishInspection('challenge');
+                    $html = \larikmc\antibot\services\pow\PowService::renderChallengeHtml(
+                        $pow['seed'],
+                        $pow['target'],
+                        $request->getAbsoluteUrl(),
+                        'Режим повышенной защиты сайта. Проверка браузера...'
+                    );
+                    $response = Yii::$app->response;
+                    $response->format = Response::FORMAT_HTML;
+                    $response->content = $html;
+                    $response->send();
+                    exit(0);
+                } elseif ($this->jsChallengeEnabled) {
+                    $this->_currentDecision = 'challenge';
+                    $this->finishInspection('challenge');
+                    $this->renderChallengeScreen($ip, $ua, $secretKey);
+                    exit(0);
                 }
             }
 
@@ -1408,6 +1501,26 @@ class Antibot extends Component implements BootstrapInterface
         exit(0);
     }
 
+    public static function matchRoutePattern(string $path, string $pattern): bool
+    {
+        $path = trim($path, '/');
+        $pattern = trim($pattern, '/');
+        if ($pattern === '' || $path === '') {
+            return false;
+        }
+        if (strcasecmp($path, $pattern) === 0) {
+            return true;
+        }
+        if (fnmatch($pattern, $path, FNM_CASEFOLD)) {
+            return true;
+        }
+        $prefix = rtrim($pattern, '*');
+        if ($prefix !== '' && (str_starts_with($path, $prefix) || str_starts_with($path, rtrim($prefix, '/') . '/'))) {
+            return true;
+        }
+        return false;
+    }
+
     private function findMatchingUriRule(string $pathInfo, string $method): ?array
     {
         foreach ($this->routeRules as $rule) {
@@ -1415,10 +1528,10 @@ class Antibot extends Component implements BootstrapInterface
             if ($pattern === '') {
                 continue;
             }
-            if (!empty($rule['methods']) && !in_array(strtoupper($method), array_map('strtoupper', $rule['methods']), true)) {
+            if (!empty($rule['methods']) && !in_array(strtoupper($method), array_map('strtoupper', (array) $rule['methods']), true)) {
                 continue;
             }
-            if ($pathInfo === $pattern || str_starts_with($pathInfo, rtrim($pattern, '*') . '/')) {
+            if (self::matchRoutePattern($pathInfo, $pattern)) {
                 return $rule;
             }
         }

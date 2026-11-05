@@ -68,12 +68,37 @@ class SettingsController extends Controller
                 }
             }
 
+            // Process route-specific sensitive rules
+            $rawRouteRules = (array) ($post['routeRules'] ?? []);
+            $cleanRouteRules = [];
+            foreach ($rawRouteRules as $rule) {
+                $pattern = trim((string) ($rule['pattern'] ?? ''));
+                if ($pattern === '') {
+                    continue;
+                }
+                $maxReq = max(1, (int) ($rule['maxRequests'] ?? 10));
+                $win = max(1, (int) ($rule['window'] ?? 60));
+                $methodsRaw = $rule['methods'] ?? [];
+                $methods = is_array($methodsRaw) ? array_values(array_filter(array_map('strtoupper', array_map('trim', $methodsRaw)))) : [];
+                $cleanRouteRules[] = [
+                    'pattern' => $pattern,
+                    'maxRequests' => $maxReq,
+                    'window' => $win,
+                    'methods' => $methods,
+                    'description' => trim((string) ($rule['description'] ?? '')),
+                ];
+            }
+
             $payload = [
                 'enabled' => !empty($post['enabled']),
                 'mode' => (string) ($post['mode'] ?? 'standard'),
                 'blockAiCrawlers' => !empty($post['blockAiCrawlers']),
                 'blockCommercialScrapers' => !empty($post['blockCommercialScrapers']),
                 'blockCliAndLibraries' => !empty($post['blockCliAndLibraries']),
+                'headerConsistencyEnabled' => !empty($post['headerConsistencyEnabled']),
+                'autoJailEnabled' => !empty($post['autoJailEnabled']),
+                'autoJailThreshold' => max(1, (int) ($post['autoJailThreshold'] ?? 2)),
+                'autoJailDuration' => max(60, (int) ($post['autoJailDuration'] ?? 1800)),
                 'verifySearchBots' => !empty($post['verifySearchBots']),
                 'blockFakeSearchBots' => !empty($post['blockFakeSearchBots']),
                 'rateLimitEnabled' => !empty($post['rateLimitEnabled']),
@@ -81,6 +106,7 @@ class SettingsController extends Controller
                 'rateLimitWindow' => max(1, (int) ($post['rateLimitWindow'] ?? 60)),
                 'rateLimitBanDuration' => max(0, (int) ($post['rateLimitBanDuration'] ?? 300)),
                 'rateLimitAdapter' => in_array($post['rateLimitAdapter'] ?? '', ['cache', 'redis'], true) ? $post['rateLimitAdapter'] : 'cache',
+                'routeRules' => $cleanRouteRules,
                 'behaviorAnalysisEnabled' => !empty($post['behaviorAnalysisEnabled']),
                 'weightedRateLimitEnabled' => !empty($post['weightedRateLimitEnabled']),
                 'weightedRateLimitBudget' => max(10, (int) ($post['weightedRateLimitBudget'] ?? 150)),
@@ -115,6 +141,10 @@ class SettingsController extends Controller
             $settings['blockAiCrawlers'] = $antibot->blockAiCrawlers;
             $settings['blockCommercialScrapers'] = $antibot->blockCommercialScrapers;
             $settings['blockCliAndLibraries'] = $antibot->blockCliAndLibraries;
+            $settings['headerConsistencyEnabled'] = $antibot->headerConsistencyEnabled;
+            $settings['autoJailEnabled'] = $antibot->autoJailEnabled;
+            $settings['autoJailThreshold'] = $antibot->autoJailThreshold;
+            $settings['autoJailDuration'] = $antibot->autoJailDuration;
             $settings['verifySearchBots'] = $antibot->verifySearchBots;
             $settings['blockFakeSearchBots'] = $antibot->blockFakeSearchBots;
             $settings['rateLimitEnabled'] = $antibot->rateLimitEnabled;

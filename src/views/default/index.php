@@ -10,6 +10,9 @@ declare(strict_types=1);
 /** @var array<string, mixed> $perf */
 /** @var array<string, mixed> $analyticsData */
 /** @var string|null $currentLang */
+/** @var array<int, array<string, mixed>>|null $jailedIps */
+/** @var bool|null $panicModeActive */
+/** @var int|null $panicRemaining */
 
 use larikmc\antibot\Module;
 use larikmc\antibot\services\I18n;
@@ -57,6 +60,53 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
+                <!-- Panic Mode Toggle -->
+                <?php if (!empty($panicModeActive)): ?>
+                    <?= Html::beginForm(['/antibot/default/toggle-panic'], 'post', ['class' => 'd-inline']) ?>
+                        <button type="submit" class="btn btn-danger btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm d-inline-flex align-items-center gap-2" title="<?= Html::encode(I18n::t('panic_mode_desc', $activeLang)) ?>">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #fff; display: inline-block;"></span>
+                            <?= Html::encode(I18n::t('panic_mode_active_badge', $activeLang)) ?> (<?= sprintf('%02d:%02d', floor(($panicRemaining ?? 0) / 60), ($panicRemaining ?? 0) % 60) ?>) ✕
+                        </button>
+                    <?= Html::endForm() ?>
+                <?php else: ?>
+                    <div class="dropdown d-inline-block">
+                        <button class="btn btn-outline-warning btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm dropdown-toggle d-inline-flex align-items-center gap-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="<?= Html::encode(I18n::t('panic_mode_desc', $activeLang)) ?>">
+                            🛡️ <?= Html::encode(I18n::t('panic_mode_btn_activate', $activeLang)) ?>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-2" style="border-radius: 12px; font-size: 0.88rem;">
+                            <li class="px-3 py-1 text-muted small fw-semibold"><?= Html::encode(I18n::t('panic_mode_title', $activeLang)) ?>:</li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li>
+                                <?= Html::beginForm(['/antibot/default/toggle-panic'], 'post') ?>
+                                    <input type="hidden" name="duration" value="900">
+                                    <button type="submit" class="dropdown-item rounded-2 py-1 px-3 d-flex align-items-center justify-content-between">
+                                        <span>⚡ 15 минут</span>
+                                        <span class="badge bg-light text-muted ms-2 small">Быстрый отсев</span>
+                                    </button>
+                                <?= Html::endForm() ?>
+                            </li>
+                            <li>
+                                <?= Html::beginForm(['/antibot/default/toggle-panic'], 'post') ?>
+                                    <input type="hidden" name="duration" value="1800">
+                                    <button type="submit" class="dropdown-item rounded-2 py-1 px-3 d-flex align-items-center justify-content-between">
+                                        <span>🔥 30 минут</span>
+                                        <span class="badge bg-light text-muted ms-2 small">Стандарт</span>
+                                    </button>
+                                <?= Html::endForm() ?>
+                            </li>
+                            <li>
+                                <?= Html::beginForm(['/antibot/default/toggle-panic'], 'post') ?>
+                                    <input type="hidden" name="duration" value="3600">
+                                    <button type="submit" class="dropdown-item rounded-2 py-1 px-3 d-flex align-items-center justify-content-between">
+                                        <span>🛡️ 1 час</span>
+                                        <span class="badge bg-light text-muted ms-2 small">Усиленный</span>
+                                    </button>
+                                <?= Html::endForm() ?>
+                            </li>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+
                 <?php if (!empty($events)): ?>
                     <?= Html::beginForm(['/antibot/default/clear-events'], 'post', ['class' => 'd-inline']) ?>
                         <?= Html::submitButton(I18n::t('clear_log_btn', $activeLang), [
@@ -105,6 +155,90 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
     </div>
 
     <!-- Active Mode & System Status Alerts -->
+    <?php if (!empty($panicModeActive)): ?>
+        <div class="antibot-alert-card alert-warning mb-4 shadow-sm" style="border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.08);">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="font-size: 1.6rem; flex-shrink: 0;">🛡️</div>
+                    <div>
+                        <div class="fw-bold text-dark fs-6 d-flex align-items-center gap-2">
+                            <?= Html::encode(I18n::t('panic_mode_title', $activeLang)) ?>
+                            <span class="badge bg-danger rounded-pill px-2 py-1 small"><?= Html::encode(I18n::t('panic_mode_active_badge', $activeLang)) ?></span>
+                        </div>
+                        <div class="text-muted small mt-1">
+                            <?= Html::encode(I18n::t('panic_mode_desc', $activeLang)) ?>.
+                            <strong><?= Html::encode(I18n::t('panic_mode_remaining', $activeLang)) ?> <?= sprintf('%02d:%02d', floor(($panicRemaining ?? 0) / 60), ($panicRemaining ?? 0) % 60) ?></strong>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <?= Html::beginForm(['/antibot/default/toggle-panic'], 'post') ?>
+                        <?= Html::submitButton(I18n::t('panic_mode_btn_deactivate', $activeLang), ['class' => 'btn btn-outline-danger btn-sm rounded-pill px-3 py-2 fw-semibold']) ?>
+                    <?= Html::endForm() ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($jailedIps)): ?>
+        <div class="card border-0 shadow-sm mb-4" style="border-radius: 14px; overflow: hidden; border-left: 4px solid #ef4444 !important;">
+            <div class="card-header bg-white py-3 px-4 d-flex align-items-center justify-content-between flex-wrap gap-2 border-bottom">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fs-5">🚨</span>
+                    <h5 class="mb-0 fw-bold fs-6"><?= Html::encode(I18n::t('autojail_title', $activeLang)) ?></h5>
+                    <span class="badge bg-danger rounded-pill px-2 py-1 small"><?= count($jailedIps) ?></span>
+                </div>
+                <div>
+                    <?= Html::beginForm(['/antibot/default/clear-jail'], 'post', ['class' => 'd-inline']) ?>
+                        <?= Html::submitButton(I18n::t('autojail_btn_clear_all', $activeLang), [
+                            'class' => 'btn btn-outline-secondary btn-sm rounded-pill px-3 py-1 small fw-semibold',
+                            'data-confirm' => 'Вы уверены, что хотите освободить все адреса из карантина?',
+                        ]) ?>
+                    <?= Html::endForm() ?>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4"><?= Html::encode(I18n::t('autojail_th_ip', $activeLang)) ?></th>
+                            <th><?= Html::encode(I18n::t('autojail_th_reason', $activeLang)) ?></th>
+                            <th><?= Html::encode(I18n::t('autojail_th_jailed_at', $activeLang)) ?></th>
+                            <th><?= Html::encode(I18n::t('autojail_th_remaining', $activeLang)) ?></th>
+                            <th class="text-end pe-4"><?= Html::encode(I18n::t('th_actions', $activeLang)) ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($jailedIps as $jail): ?>
+                            <tr>
+                                <td class="ps-4">
+                                    <code class="fw-bold text-danger"><?= Html::encode($jail['ip']) ?></code>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border"><?= Html::encode($jail['reason']) ?></span>
+                                </td>
+                                <td class="text-muted small">
+                                    <?= date('H:i:s d.m.Y', (int) $jail['jailed_at']) ?>
+                                </td>
+                                <td>
+                                    <span class="badge bg-warning text-dark rounded-pill px-2 py-1 font-monospace">
+                                        <?= sprintf('%02d:%02d', floor($jail['remaining_sec'] / 60), $jail['remaining_sec'] % 60) ?>
+                                    </span>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <?= Html::beginForm(['/antibot/default/release-jail'], 'post', ['class' => 'd-inline']) ?>
+                                        <input type="hidden" name="ip" value="<?= Html::encode($jail['ip']) ?>">
+                                        <?= Html::submitButton(I18n::t('autojail_btn_release', $activeLang), ['class' => 'btn btn-outline-success btn-sm rounded-pill px-3 py-1 small']) ?>
+                                    <?= Html::endForm() ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <?php if ($module->hasInsecureAccessConfig()): ?>
         <div class="antibot-alert-card alert-danger">
             <div class="d-flex align-items-center gap-3">

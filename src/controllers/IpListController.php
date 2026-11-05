@@ -125,6 +125,7 @@ class IpListController extends Controller
             'blacklist' => (array) ($settings['blacklist'] ?? []),
             'trustedProxies' => (array) ($settings['trustedProxies'] ?? []),
             'antibot' => $antibot,
+            'jailedIps' => \larikmc\antibot\services\resilience\AutoJailService::getJailedIps(),
         ]);
     }
 

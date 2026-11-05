@@ -176,6 +176,7 @@ class BotDetector
 
     /**
      * Detects anomalous or suspicious HTTP headers typical of crude scrapers.
+     * Integrates Client Hints consistency and missing standard browser header heuristics.
      *
      * @param array<string, mixed> $headers
      * @return string|null Reason or null.
@@ -188,14 +189,8 @@ class BotDetector
         }
 
         $ua = trim((string) $uaVal);
-        if ($ua === '') {
-            return 'Empty or missing User-Agent header';
-        }
+        $result = \larikmc\antibot\services\behavior\HeaderAnalyzer::analyze($ua, $headers);
 
-        if (strlen($ua) < 8) {
-            return 'Suspiciously short User-Agent string';
-        }
-
-        return null;
+        return $result['isAnomaly'] ? $result['reason'] : null;
     }
 }

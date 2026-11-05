@@ -33,6 +33,9 @@ class DefaultController extends Controller
                 'quick-whitelist' => ['POST'],
                 'clear-events' => ['POST'],
                 'apply-recommendation' => ['POST'],
+                'toggle-panic' => ['POST'],
+                'release-jail' => ['POST'],
+                'clear-jail' => ['POST'],
             ],
         ];
         return $behaviors;
@@ -63,6 +66,10 @@ class DefaultController extends Controller
             $currentLang
         );
 
+        $jailedIps = \larikmc\antibot\services\resilience\AutoJailService::getJailedIps();
+        $panicModeActive = \larikmc\antibot\services\resilience\PanicModeService::isActive();
+        $panicRemaining = \larikmc\antibot\services\resilience\PanicModeService::getRemainingSeconds();
+
         return $this->render('index', [
             'antibot' => $antibot,
             'module' => $this->module,
@@ -71,6 +78,9 @@ class DefaultController extends Controller
             'perf' => $perf,
             'analyticsData' => $analyticsData,
             'currentLang' => $currentLang,
+            'jailedIps' => $jailedIps,
+            'panicModeActive' => $panicModeActive,
+            'panicRemaining' => $panicRemaining,
         ]);
     }
 
@@ -313,6 +323,67 @@ class DefaultController extends Controller
         $antibot = $this->module->getAntibot();
         $antibot->getStorage()->clearEvents();
         Yii::$app->session->setFlash('success', 'Журнал событий успешно очищен.');
+        return $this->redirect(Yii::$app->request->referrer ?: ['index']);
+    }
+
+    /**
+     * Toggles elevated Panic / Under-Attack defense mode.
+     *
+     * @return Response
+     */
+    public function actionTogglePanic(): Response
+    {
+        $isActive = \larikmc\antibot\services\resilience\PanicModeService::isActive();
+
+        if ($isActive) {
+            \larikmc\antibot\services\resilience\PanicModeService::deactivate();
+            Yii::$app->session->setFlash('info', 'Режим повышенной защиты (Under Attack) отключен.');
+        } else {
+            $duration = max(60, (int) $this->request->post('duration', 900));
+            \larikmc\antibot\services\resilience\PanicModeService::activate($duration);
+            $mins = (int) ceil($duration / 60);
+            Yii::$app->session->setFlash('warning', "🛡️ Режим повышенной защиты АКТИВИРОВАН на {$mins} мин. Порог запросов снижен, включена строгая проверка!");
+        }
+
+        if ($this->request->isAjax) {
+            $response = Yii::$app->response;
+            $response->format = Response::FORMAT_JSON;
+            $response->data = [
+                'success' => true,
+                'isActive' => \larikmc\antibot\services\resilience\PanicModeService::isActive(),
+                'remainingSec' => \larikmc\antibot\services\resilience\PanicModeService::getRemainingSeconds(),
+            ];
+            return $response;
+        }
+
+        return $this->redirect(Yii::$app->request->referrer ?: ['index']);
+    }
+
+    /**
+     * Releases an IP from Auto-Jail quarantine.
+     *
+     * @return Response
+     */
+    public function actionReleaseJail(): Response
+    {
+        $ip = trim((string) $this->request->post('ip', ''));
+        if ($ip !== '') {
+            \larikmc\antibot\services\resilience\AutoJailService::releaseIp($ip);
+            Yii::$app->session->setFlash('success', "IP {$ip} успешно освобожден из карантина Auto-Jail.");
+        }
+
+        return $this->redirect(Yii::$app->request->referrer ?: ['index']);
+    }
+
+    /**
+     * Clears all quarantined IPs from Auto-Jail.
+     *
+     * @return Response
+     */
+    public function actionClearJail(): Response
+    {
+        \larikmc\antibot\services\resilience\AutoJailService::clearAll();
+        Yii::$app->session->setFlash('success', 'Все адреса успешно освобождены из карантина Auto-Jail.');
         return $this->redirect(Yii::$app->request->referrer ?: ['index']);
     }
 }
