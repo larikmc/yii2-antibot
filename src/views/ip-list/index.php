@@ -93,8 +93,8 @@ $this->params['breadcrumbs'] = [
                         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
                         <input type="hidden" name="type" value="whitelist">
                         <div class="input-group">
-                            <input type="text" name="ip_entry" class="form-control rounded-start-3" placeholder="127.0.0.1 / 10.0.0.0/8" required>
-                            <button type="submit" class="btn btn-success rounded-end-3 px-3"><?= Html::encode(I18n::t('iplist_add_btn', $activeLang)) ?></button>
+                            <input type="text" name="ip_entry" class="form-control" placeholder="127.0.0.1 / 10.0.0.0/8" required>
+                            <button type="submit" class="btn btn-success px-3"><?= Html::encode(I18n::t('iplist_add_btn', $activeLang)) ?></button>
                         </div>
                     </form>
 
@@ -143,8 +143,8 @@ $this->params['breadcrumbs'] = [
                         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
                         <input type="hidden" name="type" value="blacklist">
                         <div class="input-group">
-                            <input type="text" name="ip_entry" class="form-control rounded-start-3" placeholder="185.220.101.5 / 45.146.0.0/16" required>
-                            <button type="submit" class="btn btn-danger rounded-end-3 px-3"><?= Html::encode(I18n::t('iplist_add_btn', $activeLang)) ?></button>
+                            <input type="text" name="ip_entry" class="form-control" placeholder="185.220.101.5 / 45.146.0.0/16" required>
+                            <button type="submit" class="btn btn-danger px-3"><?= Html::encode(I18n::t('iplist_add_btn', $activeLang)) ?></button>
                         </div>
                     </form>
 
@@ -193,8 +193,8 @@ $this->params['breadcrumbs'] = [
                         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
                         <input type="hidden" name="type" value="trustedProxies">
                         <div class="input-group">
-                            <input type="text" name="ip_entry" class="form-control rounded-start-3" placeholder="173.245.48.0/20 / 127.0.0.1" required>
-                            <button type="submit" class="btn btn-primary rounded-end-3 px-3"><?= Html::encode(I18n::t('iplist_add_btn', $activeLang)) ?></button>
+                            <input type="text" name="ip_entry" class="form-control" placeholder="173.245.48.0/20 / 127.0.0.1" required>
+                            <button type="submit" class="btn btn-primary px-3"><?= Html::encode(I18n::t('iplist_add_btn', $activeLang)) ?></button>
                         </div>
                     </form>
 

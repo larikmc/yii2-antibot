@@ -898,6 +898,88 @@ body.dark .antibot-sticky-bar {
     border-top-color: #3189f7 !important;
 }
 
+/* IP List Input Group & Add Button Alignment */
+.antibot-ip-list .input-group {
+    display: flex !important;
+    align-items: stretch !important;
+    width: 100% !important;
+}
+
+.antibot-ip-list .input-group > .form-control {
+    height: 42px !important;
+    min-height: 42px !important;
+    border-top-left-radius: 10px !important;
+    border-bottom-left-radius: 10px !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    padding: 8px 12px !important;
+    box-sizing: border-box !important;
+}
+
+.antibot-ip-list .input-group > .btn {
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 16px !important;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-top-right-radius: 10px !important;
+    border-bottom-right-radius: 10px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    margin-left: -1px !important;
+    z-index: 2;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.15s ease !important;
+}
+
+.antibot-ip-list .input-group > .btn:hover {
+    z-index: 3;
+    transform: translateY(-1px);
+}
+
+.antibot-ip-list .btn-success {
+    background: linear-gradient(135deg, #079b70, #057a58) !important;
+    border: 1px solid #079b70 !important;
+    box-shadow: 0 4px 14px rgba(7, 155, 112, 0.3) !important;
+    color: #ffffff !important;
+}
+
+.antibot-ip-list .btn-success:hover {
+    background: linear-gradient(135deg, #068963, #046549) !important;
+    box-shadow: 0 6px 18px rgba(7, 155, 112, 0.45) !important;
+}
+
+.antibot-ip-list .btn-danger {
+    background: linear-gradient(135deg, #e24e6c, #c93553) !important;
+    border: 1px solid #e24e6c !important;
+    box-shadow: 0 4px 14px rgba(226, 78, 108, 0.3) !important;
+    color: #ffffff !important;
+}
+
+.antibot-ip-list .btn-danger:hover {
+    background: linear-gradient(135deg, #d33c5b, #b32845) !important;
+    box-shadow: 0 6px 18px rgba(226, 78, 108, 0.45) !important;
+}
+
+.antibot-ip-list .btn-primary {
+    background: linear-gradient(135deg, #3189f7, #1a74e5) !important;
+    border: 1px solid #3189f7 !important;
+    box-shadow: 0 4px 18px rgba(49, 137, 247, 0.35) !important;
+    color: #ffffff !important;
+}
+
+.antibot-ip-list .btn-primary:hover {
+    background: linear-gradient(135deg, #2178e6, #1263cc) !important;
+    box-shadow: 0 6px 22px rgba(49, 137, 247, 0.5) !important;
+}
+
 .antibot-ip-item {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.85rem;
