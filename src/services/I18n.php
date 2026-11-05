@@ -276,7 +276,7 @@ class I18n
             'settings_sec_11' => '11. Экран блокировки',
             'settings_block_msg' => 'Текст на экране блокировки:',
             // Auto-Jail (Quarantine)
-            'autojail_title' => '🛡️ Авто-карантин (Auto-Jail)',
+            'autojail_title' => 'Авто-карантин (Auto-Jail)',
             'autojail_desc' => 'Автоматическая временная изоляция хронических нарушителей без нагрузки на сервер',
             'autojail_active_count' => 'Находятся в карантине:',
             'autojail_empty' => 'Карантин чист. Ни один адрес сейчас не изолирован.',
@@ -289,7 +289,7 @@ class I18n
             // Panic Mode
             'panic_mode_title' => 'Режим повышенной защиты (Under Attack)',
             'panic_mode_active_badge' => '⚠️ РЕЖИМ АТАКИ АКТИВЕН',
-            'panic_mode_btn_activate' => '🛡️ Защита от атаки',
+            'panic_mode_btn_activate' => 'Защита от атаки',
             'panic_mode_btn_deactivate' => 'Отключить режим атаки',
             'panic_mode_remaining' => 'Осталось:',
             'panic_mode_desc' => 'Включает строгую JS/PoW проверку для всех неавторизованных клиентов и снижает лимиты в 2 раза',
@@ -547,7 +547,7 @@ class I18n
             'settings_sec_11' => '11. Blocking Screen',
             'settings_block_msg' => 'Custom Block Screen Message:',
             // Auto-Jail (Quarantine)
-            'autojail_title' => '🛡️ Auto-Jail Quarantine',
+            'autojail_title' => 'Auto-Jail Quarantine',
             'autojail_desc' => 'Automatic temporary quarantine of chronic offenders without server overhead',
             'autojail_active_count' => 'Currently in quarantine:',
             'autojail_empty' => 'Quarantine is clear. No active detentions.',
@@ -560,7 +560,7 @@ class I18n
             // Panic Mode
             'panic_mode_title' => 'Elevated Panic Mode (Under Attack)',
             'panic_mode_active_badge' => '⚠️ ATTACK MODE ACTIVE',
-            'panic_mode_btn_activate' => '🛡️ Under Attack Mode',
+            'panic_mode_btn_activate' => 'Under Attack Mode',
             'panic_mode_btn_deactivate' => 'Disable Attack Mode',
             'panic_mode_remaining' => 'Remaining:',
             'panic_mode_desc' => 'Enforces strict JS/PoW verification for all unverified clients and halves rate limits',
