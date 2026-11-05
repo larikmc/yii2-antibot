@@ -252,17 +252,26 @@ class DefaultController extends Controller
     public function actionQuickBlock(): Response
     {
         $ip = trim((string) $this->request->post('ip', ''));
+        $subnet24 = (bool) $this->request->post('subnet24', false);
+
         if ($ip !== '') {
             $antibot = $this->module->getAntibot();
             $storage = $antibot->getStorage();
             $settings = $storage->loadSettings();
 
+            $target = $ip;
+            if ($subnet24) {
+                $target = \larikmc\antibot\services\IpMatcher::getSubnet24($ip) ?? $ip;
+            }
+
             $blacklist = (array) ($settings['blacklist'] ?? []);
-            if (!in_array($ip, $blacklist, true)) {
-                $blacklist[] = $ip;
+            if (!in_array($target, $blacklist, true)) {
+                $blacklist[] = $target;
                 $settings['blacklist'] = array_values(array_unique($blacklist));
                 $storage->saveSettings($settings);
-                Yii::$app->session->setFlash('success', "IP {$ip} успешно добавлен в черный список.");
+                Yii::$app->session->setFlash('success', "Запись '{$target}' успешно добавлена в черный список.");
+            } else {
+                Yii::$app->session->setFlash('info', "Запись '{$target}' уже находится в черном списке.");
             }
         }
 

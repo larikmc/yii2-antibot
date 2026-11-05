@@ -381,15 +381,47 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
 
     <!-- LEVEL 5: Live Event Feed Table (Directly visible below the charts) -->
     <div class="antibot-card mb-4">
-        <div class="antibot-card-header">
+        <div class="antibot-card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
                 <h5 class="antibot-card-title"><?= Html::encode(I18n::t('table_title', $activeLang)) ?></h5>
                 <span class="text-muted small"><?= Html::encode(I18n::t('table_desc', $activeLang)) ?></span>
             </div>
             <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-light text-dark border rounded-pill px-3 py-1">JSON Lines (.jsonl)</span>
+                <span class="badge bg-light text-muted border rounded-pill px-3 py-1 small">JSON Lines (.jsonl)</span>
             </div>
         </div>
+
+        <?php if (!empty($events)): ?>
+            <!-- Quick Filter & Search Bar -->
+            <div class="p-3 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3" style="background: rgba(113, 157, 235, 0.03);">
+                <div class="d-flex align-items-center gap-1 flex-wrap" id="antibotFeedFilters">
+                    <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-semibold feed-filter-btn active" data-filter="all">
+                        <?= Html::encode(I18n::t('filter_all', $activeLang)) ?> <span class="badge bg-white text-primary rounded-pill ms-1" id="feedVisibleCount"><?= count($events) ?></span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="blocked">
+                        ⛔ <?= Html::encode(I18n::t('filter_blocked', $activeLang)) ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="search">
+                        🤖 <?= Html::encode(I18n::t('filter_search', $activeLang)) ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="ratelimit">
+                        ⏱️ <?= Html::encode(I18n::t('filter_ratelimit', $activeLang)) ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="traps">
+                        🍯 <?= Html::encode(I18n::t('filter_traps', $activeLang)) ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="monitored">
+                        👁️ <?= Html::encode(I18n::t('filter_monitored', $activeLang)) ?>
+                    </button>
+                </div>
+
+                <div class="position-relative" style="min-width: 260px; max-width: 360px; flex: 1;">
+                    <input type="text" id="liveFeedSearchInput" class="form-control form-control-sm rounded-pill pe-4" placeholder="<?= Html::encode(I18n::t('feed_search_placeholder', $activeLang)) ?>" style="height: 34px; padding-left: 14px;">
+                    <span class="position-absolute end-0 top-50 translate-middle-y me-3 text-muted small" style="pointer-events: none;">🔍</span>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <div class="antibot-card-body p-0">
             <?php if (empty($events)): ?>
                 <div class="p-4 text-center text-muted">
@@ -397,7 +429,7 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                 </div>
             <?php else: ?>
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle antibot-table mb-0">
+                    <table class="table table-hover align-middle antibot-table mb-0" id="liveFeedTable">
                         <thead>
                             <tr>
                                 <th style="width: 170px;"><?= Html::encode(I18n::t('th_time', $activeLang)) ?></th>
@@ -405,7 +437,7 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                 <th style="width: 140px;"><?= Html::encode(I18n::t('th_action', $activeLang)) ?></th>
                                 <th><?= Html::encode(I18n::t('th_reason', $activeLang)) ?></th>
                                 <th><?= Html::encode(I18n::t('th_ua', $activeLang)) ?></th>
-                                <th class="text-end" style="width: 120px;"><?= Html::encode(I18n::t('th_actions', $activeLang)) ?></th>
+                                <th class="text-end" style="width: 130px;"><?= Html::encode(I18n::t('th_actions', $activeLang)) ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -415,8 +447,9 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                     $actionData = I18n::formatAction($action, $activeLang);
                                     $reasonData = I18n::formatReason((string) ($event['reason'] ?? ''), $activeLang);
                                     $ip = (string) ($event['ip'] ?? '');
+                                    $searchBlob = mb_strtolower($ip . ' ' . ($event['route'] ?? '') . ' ' . ($event['userAgent'] ?? '') . ' ' . ($event['reason'] ?? '') . ' ' . ($reasonData['title'] ?? ''));
                                 ?>
-                                <tr>
+                                <tr data-action="<?= Html::encode($action) ?>" data-reason="<?= Html::encode((string)($event['reason'] ?? '')) ?>" data-search="<?= Html::encode($searchBlob) ?>">
                                     <td class="small text-muted font-monospace">
                                         <?= Html::encode($event['date'] ?? date('Y-m-d H:i:s', (int) ($event['timestamp'] ?? time()))) ?>
                                     </td>
@@ -440,10 +473,19 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                     </td>
                                     <td class="text-end">
                                         <?php if ($action !== 'blocked'): ?>
-                                            <?= Html::beginForm(['/antibot/default/quick-block'], 'post', ['class' => 'd-inline']) ?>
-                                                <?= Html::hiddenInput('ip', $ip) ?>
-                                                <?= Html::submitButton(I18n::t('btn_ban', $activeLang), ['class' => 'btn btn-sm btn-outline-danger rounded-pill py-0 px-2', 'title' => I18n::t('ban_ip_title', $activeLang)]) ?>
-                                            <?= Html::endForm() ?>
+                                            <div class="d-inline-flex align-items-center gap-1 justify-content-end">
+                                                <?= Html::beginForm(['/antibot/default/quick-block'], 'post', ['class' => 'd-inline']) ?>
+                                                    <?= Html::hiddenInput('ip', $ip) ?>
+                                                    <?= Html::submitButton(I18n::t('btn_ban', $activeLang), ['class' => 'btn btn-sm btn-outline-danger rounded-pill py-0 px-2', 'title' => I18n::t('ban_ip_title', $activeLang)]) ?>
+                                                <?= Html::endForm() ?>
+                                                <?php if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)): ?>
+                                                    <?= Html::beginForm(['/antibot/default/quick-block'], 'post', ['class' => 'd-inline']) ?>
+                                                        <?= Html::hiddenInput('ip', $ip) ?>
+                                                        <?= Html::hiddenInput('subnet24', '1') ?>
+                                                        <?= Html::submitButton('/24', ['class' => 'btn btn-sm btn-outline-secondary rounded-pill py-0 px-1', 'title' => I18n::t('btn_ban_24_title', $activeLang), 'style' => 'font-size: 0.72rem;']) ?>
+                                                    <?= Html::endForm() ?>
+                                                <?php endif; ?>
+                                            </div>
                                         <?php else: ?>
                                             <?= Html::beginForm(['/antibot/default/quick-whitelist'], 'post', ['class' => 'd-inline']) ?>
                                                 <?= Html::hiddenInput('ip', $ip) ?>
@@ -453,6 +495,11 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
+                            <tr id="feedEmptyMatchRow" style="display: none;">
+                                <td colspan="6" class="p-4 text-center text-muted">
+                                    Ничего не найдено по текущему фильтру или поисковому запросу.
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -469,5 +516,73 @@ $this->registerJs("
     if (window.AntibotCharts) {
         window.AntibotCharts.init({$initialDataJson}, '{$analyticsEndpointUrl}', '{$activeLang}');
     }
+
+    // Live Feed Instant Filter & Search
+    (function() {
+        var searchInput = document.getElementById('liveFeedSearchInput');
+        var filterBtns = document.querySelectorAll('.feed-filter-btn');
+        var rows = document.querySelectorAll('#liveFeedTable tbody tr');
+        var countEl = document.getElementById('feedVisibleCount');
+        var emptyRow = document.getElementById('feedEmptyMatchRow');
+        var activeFilter = 'all';
+
+        function filterTable() {
+            var query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            var visible = 0;
+
+            rows.forEach(function(row) {
+                if (row.id === 'feedEmptyMatchRow') return;
+
+                var action = row.getAttribute('data-action') || '';
+                var reason = row.getAttribute('data-reason') || '';
+                var searchData = row.getAttribute('data-search') || '';
+
+                var matchesFilter = true;
+                if (activeFilter === 'blocked') {
+                    matchesFilter = (action === 'blocked' || action.indexOf('block') !== -1);
+                } else if (activeFilter === 'search') {
+                    matchesFilter = (action === 'allowed_search_bot' || reason.indexOf('search') !== -1 || reason.indexOf('yandex') !== -1 || reason.indexOf('google') !== -1);
+                } else if (activeFilter === 'ratelimit') {
+                    matchesFilter = (action === 'rate_limited' || reason.indexOf('rate') !== -1 || reason.indexOf('limit') !== -1);
+                } else if (activeFilter === 'traps') {
+                    matchesFilter = (reason.indexOf('trap') !== -1 || reason.indexOf('honey') !== -1);
+                } else if (activeFilter === 'monitored') {
+                    matchesFilter = (action === 'monitored' || action === 'allowed_user' || action === 'inspected');
+                }
+
+                var matchesSearch = true;
+                if (query !== '') {
+                    matchesSearch = searchData.indexOf(query) !== -1;
+                }
+
+                if (matchesFilter && matchesSearch) {
+                    row.style.display = '';
+                    visible++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            if (countEl) countEl.textContent = visible;
+            if (emptyRow) emptyRow.style.display = (visible === 0) ? '' : 'none';
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', filterTable);
+        }
+
+        filterBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                filterBtns.forEach(function(b) {
+                    b.classList.remove('btn-primary', 'active');
+                    b.classList.add('btn-outline-secondary');
+                });
+                btn.classList.remove('btn-outline-secondary');
+                btn.classList.add('btn-primary', 'active');
+                activeFilter = btn.getAttribute('data-filter') || 'all';
+                filterTable();
+            });
+        });
+    })();
 ");
 ?>

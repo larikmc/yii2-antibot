@@ -121,6 +121,21 @@ class IpMatcher
     }
 
     /**
+     * Calculates the /24 subnet for a given IPv4 address.
+     */
+    public static function getSubnet24(string $ip): ?string
+    {
+        $ip = trim($ip);
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $long = ip2long($ip);
+            if ($long !== false) {
+                return long2ip($long & ~255) . '/24';
+            }
+        }
+        return null;
+    }
+
+    /**
      * Validates whether a string is a valid IPv4, IPv6, or CIDR notation.
      */
     public static function isValidIpOrCidr(string $entry): bool

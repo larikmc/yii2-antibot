@@ -40,7 +40,10 @@ $this->params['breadcrumbs'] = [
                     <p class="antibot-header-subtitle"><?= Html::encode(I18n::t('header_desc_iplist', $activeLang)) ?></p>
                 </div>
             </div>
-            <div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm" data-bs-toggle="collapse" data-bs-target="#bulkImportPanel">
+                    <?= Html::encode(I18n::t('bulk_import_btn', $activeLang)) ?>
+                </button>
                 <a href="<?= Url::to(['/antibot/default/index']) ?>" class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm">
                     <?= Html::encode(I18n::t('nav_back_to_monitoring', $activeLang)) ?>
                 </a>
@@ -71,6 +74,37 @@ $this->params['breadcrumbs'] = [
                     </a>
                 </li>
             </ul>
+        </div>
+    </div>
+
+    <!-- Collapsible Bulk Import Panel -->
+    <div class="collapse mb-4" id="bulkImportPanel">
+        <div class="antibot-card p-3">
+            <h5 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                <span>📥</span> <?= Html::encode(I18n::t('bulk_import_title', $activeLang)) ?>
+            </h5>
+            <p class="text-muted small mb-3"><?= Html::encode(I18n::t('bulk_import_desc', $activeLang)) ?></p>
+            <form method="post" action="<?= Url::to(['/antibot/ip-list/index']) ?>">
+                <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Целевой список:</label>
+                        <select name="type" class="form-select rounded-3">
+                            <option value="blacklist">⛔ Черный список (Blacklist)</option>
+                            <option value="whitelist">✅ Белый список (Whitelist)</option>
+                            <option value="trustedProxies">🛡️ Доверенные прокси (Proxies)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-9">
+                        <label class="form-label small fw-bold">IP-адреса или подсети CIDR:</label>
+                        <textarea name="bulk_entries" class="form-control rounded-3 font-monospace" rows="3" placeholder="185.220.101.5&#10;194.67.210.0/24&#10;2a02:6b8::/32" required></textarea>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary rounded-pill px-3 btn-sm" data-bs-toggle="collapse" data-bs-target="#bulkImportPanel">Отмена</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold btn-sm"><?= Html::encode(I18n::t('bulk_import_submit', $activeLang)) ?></button>
+                </div>
+            </form>
         </div>
     </div>
 

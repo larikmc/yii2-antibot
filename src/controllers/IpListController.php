@@ -50,12 +50,57 @@ class IpListController extends Controller
 
         if ($this->request->isPost) {
             $type = (string) $this->request->post('type', '');
-            $entry = trim((string) $this->request->post('ip_entry', ''));
-
             if (!in_array($type, ['whitelist', 'blacklist', 'trustedProxies'], true)) {
                 Yii::$app->session->setFlash('error', 'Недопустимый тип списка.');
                 return $this->redirect(['index']);
             }
+
+            // 1. Bulk import handling
+            $bulkText = trim((string) $this->request->post('bulk_entries', ''));
+            if ($bulkText !== '') {
+                $rawLines = preg_split('/[\r\n,;]+/', $bulkText);
+                $added = 0;
+                $skipped = 0;
+                $invalid = 0;
+                $list = (array) ($settings[$type] ?? []);
+
+                foreach ($rawLines as $line) {
+                    $entry = trim($line);
+                    if ($entry === '' || str_starts_with($entry, '#')) {
+                        continue;
+                    }
+
+                    if (!IpMatcher::isValidIpOrCidr($entry)) {
+                        $invalid++;
+                        continue;
+                    }
+
+                    if (!in_array($entry, $list, true)) {
+                        $list[] = $entry;
+                        $added++;
+                    } else {
+                        $skipped++;
+                    }
+                }
+
+                if ($added > 0) {
+                    $settings[$type] = array_values(array_unique($list));
+                    $storage->saveSettings($settings);
+                }
+
+                $msg = "Массовый импорт ({$type}): добавлено {$added} записей.";
+                if ($skipped > 0) {
+                    $msg .= " Пропущено дубликатов: {$skipped}.";
+                }
+                if ($invalid > 0) {
+                    $msg .= " Ошибочных строк: {$invalid}.";
+                }
+                Yii::$app->session->setFlash($added > 0 ? 'success' : 'info', $msg);
+                return $this->redirect(['index']);
+            }
+
+            // 2. Single entry handling
+            $entry = trim((string) $this->request->post('ip_entry', ''));
 
             if (!IpMatcher::isValidIpOrCidr($entry)) {
                 Yii::$app->session->setFlash('error', "Некорректный IP или CIDR: '{$entry}'. Пример: 95.26.144.17 или 10.0.0.0/8.");
