@@ -309,6 +309,30 @@ class I18n
             'settings_route_methods' => 'HTTP Методы',
             'settings_route_desc' => 'Назначение',
             'settings_route_add_btn' => '+ Добавить правило маршрута',
+            // 13. Robots.txt Trap
+            'settings_sec_13' => '13. Ловушка robots.txt (Disallow Honeypot)',
+            'settings_robots_trap_desc' => 'Ловушка для нелегитимных парсеров и сканеров уязвимостей, которые читают robots.txt и намеренно переходят по запрещённым ссылкам.',
+            'settings_robots_trap_enabled' => 'Включить ловушку robots.txt',
+            'settings_robots_trap_route' => 'Путь ловушки (URI):',
+            'settings_robots_snippet_title' => 'Директива для вашего robots.txt:',
+            // 14. Headless & WebGL
+            'settings_sec_14' => '14. Детектор Headless-браузеров (Puppeteer / Selenium)',
+            'settings_headless_desc' => 'Анализирует WebGL GPU-рендерер (SwiftShader, llvmpipe, Mesa) и флаги автоматизации в процессе браузерной проверки JS Challenge.',
+            'settings_headless_enabled' => 'Включить проверку Headless и программных GPU',
+            // 15. Missing Assets Trap
+            'settings_sec_15' => '15. Ловушка отсутствия статики (Zero-CSS Scraper Trap)',
+            'settings_missing_assets_desc' => 'Ловит консольные парсеры (Python requests, Scrapy, curl), загружающие только HTML и игнорирующие CSS, картинки и шрифты.',
+            'settings_missing_assets_enabled' => 'Включить ловушку отсутствия статики',
+            'settings_missing_assets_thresh' => 'Порог последовательных HTML-запросов:',
+            'settings_missing_assets_window' => 'Окно отслеживания (секунды):',
+            // 16. Datacenter Filter
+            'settings_sec_16' => '16. Фильтр облачных датацентров (Hetzner, OVH, AWS, DigitalOcean)',
+            'settings_datacenter_desc' => 'Автономная оффлайн-фильтрация запросов с серверных VPS-хостингов. Белые поисковые системы (Googlebot, Яндекс) защищены через Reverse DNS.',
+            'settings_datacenter_enabled' => 'Включить фильтрацию датацентров',
+            'settings_datacenter_action' => 'Действие при обнаружении датацентра:',
+            'settings_datacenter_action_risk' => 'Повышать риск (+40 к RiskEngine)',
+            'settings_datacenter_action_challenge' => 'Обязательный JS Challenge',
+            'settings_datacenter_action_block' => 'Прямая блокировка (403)',
         ],
         'en' => [
             'app_title' => 'AntiBot — Monitoring & Visual Analytics',
@@ -580,6 +604,30 @@ class I18n
             'settings_route_methods' => 'HTTP Methods',
             'settings_route_desc' => 'Purpose',
             'settings_route_add_btn' => '+ Add Route Rule',
+            // 13. Robots.txt Trap
+            'settings_sec_13' => '13. Robots.txt Disallow Trap',
+            'settings_robots_trap_desc' => 'Honeypot trap for rogue scrapers and scanners that parse robots.txt and intentionally probe disallowed paths.',
+            'settings_robots_trap_enabled' => 'Enable robots.txt Trap',
+            'settings_robots_trap_route' => 'Trap Route (URI):',
+            'settings_robots_snippet_title' => 'Directive for your robots.txt:',
+            // 14. Headless & WebGL
+            'settings_sec_14' => '14. Headless Browser & WebGL Detector',
+            'settings_headless_desc' => 'Inspects WebGL GPU renderer (SwiftShader, llvmpipe) and automation flags during browser challenges.',
+            'settings_headless_enabled' => 'Enable Headless & Software GPU Detection',
+            // 15. Missing Assets Trap
+            'settings_sec_15' => '15. Missing Assets Scraper Trap (Zero-CSS Trap)',
+            'settings_missing_assets_desc' => 'Catches console scrapers (Python requests, Scrapy, curl) loading purely HTML while skipping CSS and images.',
+            'settings_missing_assets_enabled' => 'Enable Missing Assets Trap',
+            'settings_missing_assets_thresh' => 'Consecutive HTML Requests Threshold:',
+            'settings_missing_assets_window' => 'Tracking Window (seconds):',
+            // 16. Datacenter Filter
+            'settings_sec_16' => '16. Cloud Datacenter & ASN Filter (Hetzner, OVH, AWS, DigitalOcean)',
+            'settings_datacenter_desc' => 'Autonomous offline filtering of cloud VPS providers. Legitimate search engines are exempt via Reverse DNS.',
+            'settings_datacenter_enabled' => 'Enable Datacenter Filtering',
+            'settings_datacenter_action' => 'Action on Datacenter IP:',
+            'settings_datacenter_action_risk' => 'Increase Risk Score (+40 points)',
+            'settings_datacenter_action_challenge' => 'Enforce JS Challenge',
+            'settings_datacenter_action_block' => 'Block Directly (403)',
         ],
     ];
 
@@ -895,6 +943,43 @@ class I18n
             return [
                 'title' => $isRu ? 'Доступ запрещён: обнаружена активность бота' : 'Access Denied: Automated bot activity detected',
                 'badge' => $isRu ? 'Блокировка' : 'Blocked',
+                'raw' => $raw,
+            ];
+        }
+
+        // 18. Robots.txt Trap
+        if (preg_match('/^Robots\.txt Disallow violation/i', $raw)) {
+            return [
+                'title' => $isRu ? 'Нарушение robots.txt: обращение к запрещённому разделу-ловушке (Disallow Trap)' : 'Robots.txt Disallow violation (Honeypot Trap)',
+                'badge' => $isRu ? 'Ловушка robots.txt' : 'Robots Trap',
+                'raw' => $raw,
+            ];
+        }
+
+        // 19. Headless browser detection
+        if (preg_match('/^Headless browser(?: emulator)? detected:\s*(.+)$/i', $raw, $m)) {
+            return [
+                'title' => $isRu ? "Обнаружен headless-браузер (Puppeteer/Selenium: {$m[1]})" : "Headless browser detected: {$m[1]}",
+                'badge' => $isRu ? 'Headless-бот' : 'Headless Bot',
+                'raw' => $raw,
+            ];
+        }
+
+        // 20. Missing static assets trap
+        if (preg_match('/^Missing static assets (?:anomaly|trap)(?:\s*\((.+)\))?/i', $raw, $m)) {
+            $det = !empty($m[1]) ? " ({$m[1]})" : '';
+            return [
+                'title' => $isRu ? "Аномалия: серия запросов HTML без загрузки статики / CSS{$det}" : "Missing static assets anomaly{$det}",
+                'badge' => $isRu ? 'Скрапер без CSS' : 'No-Asset Scraper',
+                'raw' => $raw,
+            ];
+        }
+
+        // 21. Datacenter IP
+        if (preg_match('/^(?:Cloud hosting \/ )?Datacenter IP (?:blocked|challenge):\s*(.+)$/i', $raw, $m)) {
+            return [
+                'title' => $isRu ? "Запрос из облачного датацентра ({$m[1]}), возможный бот/прокси" : "Datacenter / Cloud IP detected: {$m[1]}",
+                'badge' => $isRu ? 'Датацентр' : 'Datacenter',
                 'raw' => $raw,
             ];
         }

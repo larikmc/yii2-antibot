@@ -2,6 +2,29 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.5.13] - 2026-11-15
+
+### Advanced Rogue Bot Defense Suite: Robots.txt Trap, Cloud Datacenter ASN Filter, Headless WebGL Detection & Missing Assets Trap
+- **Feature 1: Robots.txt Honeypot Disallow Trap (`RobotsTrapService`):**
+  - Traps rogue crawlers, scrapers, and vulnerability scanners that read `robots.txt` and intentionally probe disallowed paths.
+  - Whitelisted and authentic search engines (Googlebot, Yandex, Bing) strictly adhere to `robots.txt` and never enter Disallowed routes.
+  - Rogue bots hitting the Disallow trap path are immediately placed into Auto-Jail quarantine and rejected with HTTP 403.
+  - Integrated into Admin Settings with copy-to-clipboard `robots.txt` directive generator.
+- **Feature 2: Cloud Datacenter & ASN Filter (`DatacenterDetector`):**
+  - High-performance offline bitwise CIDR detection for leading VPS/cloud hosting providers (Hetzner, OVHcloud, DigitalOcean, AWS EC2, Scaleway, Vultr, Linode, Selectel).
+  - Authentic search engines verified via Reverse DNS (Google, Yandex, Bing) are strictly exempt.
+  - Configurable actions: Increase Risk Score (+40 to RiskEngine), Enforce JS/PoW Challenge, or Direct Block (403).
+- **Feature 3: Headless Browser & Software WebGL GPU Detection (`HeadlessDetector`):**
+  - Detects headless automation browsers (Puppeteer, Selenium, Playwright, undetected-chromedriver) running on cloud servers.
+  - Inspects client WebGL unmasked GPU renderer during JS Challenge for software rasterizers: `SwiftShader`, `llvmpipe`, `Mesa OffScreen`, `VirtualBox`, `VMware`.
+  - Analyzes `navigator.webdriver` flags, zero-screen display geometry anomalies, and automation framework artifacts.
+- **Feature 4: Missing Assets Scraper Trap (`MissingAssetsTrap`):**
+  - Catches console scrapers (Python `requests`, `Scrapy`, Go, PHP `curl`) that fetch dozens of consecutive HTML pages while ignoring static assets.
+  - Seamlessly injects a 1x1 transparent beacon image tag (`/antibot-beacon.png`) before `</body>` on HTML page responses.
+  - Genuine browsers automatically fetch the beacon/assets and reset the scraper counter; console scrapers exceed threshold and get challenged or blocked.
+- **Test Suite & Verification:**
+  - Added comprehensive `tests/test_v1513.php` verifying all 4 features, datacenter subnets, headless GPU checks, asset traps, and bilingual translations (46/46 passed on PHP 8.2 & PHP 8.5).
+
 ## [1.5.12] - 2026-11-05
 
 ### Autonomous Zero-External-Service Defense Suite, Panic Mode, Auto-Jail Quarantine, Client Hints Detection & Route Protection

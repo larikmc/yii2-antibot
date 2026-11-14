@@ -502,6 +502,119 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                         </button>
                     </div>
                 </div>
+
+                <!-- 13. Ловушка robots.txt (Robots.txt Trap) -->
+                <div class="antibot-card mb-4">
+                    <div class="antibot-card-header">
+                        <h2 class="antibot-card-title">
+                            <span>🤖</span> <?= Html::encode(I18n::t('settings_sec_13', $activeLang)) ?>
+                        </h2>
+                        <span class="antibot-card-title-badge">Honeypot Disallow</span>
+                    </div>
+                    <div class="antibot-card-body">
+                        <p class="small text-muted mb-3">
+                            <?= Html::encode(I18n::t('settings_robots_trap_desc', $activeLang)) ?>
+                        </p>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[robotsTrapEnabled]" value="1" id="robotsTrapSwitch" <?= !empty($settings['robotsTrapEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="robotsTrapSwitch"><?= Html::encode(I18n::t('settings_robots_trap_enabled', $activeLang)) ?></label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_robots_trap_route', $activeLang)) ?></label>
+                            <input type="text" name="AntibotSetting[robotsTrapRoute]" class="form-control rounded-3 font-monospace" value="<?= Html::encode($settings['robotsTrapRoute'] ?? '/antibot-trap-disallow') ?>" placeholder="/antibot-trap-disallow">
+                        </div>
+                        <div class="p-3 bg-light rounded-3 border">
+                            <label class="form-label small fw-bold text-dark mb-1"><?= Html::encode(I18n::t('settings_robots_snippet_title', $activeLang)) ?></label>
+                            <div class="d-flex align-items-center justify-content-between gap-2 mt-1">
+                                <code class="small text-danger bg-white p-2 rounded border flex-grow-1" id="robotsSnippetCode">User-agent: *&#10;Disallow: <?= Html::encode('/' . trim($settings['robotsTrapRoute'] ?? 'antibot-trap-disallow', '/') . '/') ?></code>
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="navigator.clipboard.writeText('User-agent: *\nDisallow: <?= Html::encode('/' . trim($settings['robotsTrapRoute'] ?? 'antibot-trap-disallow', '/') . '/') ?>\n'); this.innerText='Скопировано!'; setTimeout(() => this.innerText='Копировать', 2000);">
+                                    Копировать
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 14. Детектор Headless-браузеров -->
+                <div class="antibot-card mb-4">
+                    <div class="antibot-card-header">
+                        <h2 class="antibot-card-title">
+                            <span>🎭</span> <?= Html::encode(I18n::t('settings_sec_14', $activeLang)) ?>
+                        </h2>
+                        <span class="antibot-card-title-badge">WebGL & Puppeteer</span>
+                    </div>
+                    <div class="antibot-card-body">
+                        <p class="small text-muted mb-3">
+                            <?= Html::encode(I18n::t('settings_headless_desc', $activeLang)) ?>
+                        </p>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[headlessDetectionEnabled]" value="1" id="headlessSwitch" <?= !empty($settings['headlessDetectionEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="headlessSwitch"><?= Html::encode(I18n::t('settings_headless_enabled', $activeLang)) ?></label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 15. Ловушка отсутствия статики (Missing Assets Trap) -->
+                <div class="antibot-card mb-4">
+                    <div class="antibot-card-header">
+                        <h2 class="antibot-card-title">
+                            <span>📦</span> <?= Html::encode(I18n::t('settings_sec_15', $activeLang)) ?>
+                        </h2>
+                        <span class="antibot-card-title-badge">Zero-CSS Trap</span>
+                    </div>
+                    <div class="antibot-card-body">
+                        <p class="small text-muted mb-3">
+                            <?= Html::encode(I18n::t('settings_missing_assets_desc', $activeLang)) ?>
+                        </p>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[missingAssetsTrapEnabled]" value="1" id="missingAssetsSwitch" <?= !empty($settings['missingAssetsTrapEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="missingAssetsSwitch"><?= Html::encode(I18n::t('settings_missing_assets_enabled', $activeLang)) ?></label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_missing_assets_thresh', $activeLang)) ?></label>
+                                <input type="number" name="AntibotSetting[missingAssetsThreshold]" class="form-control rounded-3" value="<?= (int) ($settings['missingAssetsThreshold'] ?? 6) ?>" min="2" max="100">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_missing_assets_window', $activeLang)) ?></label>
+                                <input type="number" name="AntibotSetting[missingAssetsWindow]" class="form-control rounded-3" value="<?= (int) ($settings['missingAssetsWindow'] ?? 60) ?>" min="10" max="600">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 16. Фильтр облачных датацентров (Datacenter & ASN Filter) -->
+                <div class="antibot-card mb-4">
+                    <div class="antibot-card-header">
+                        <h2 class="antibot-card-title">
+                            <span>🏢</span> <?= Html::encode(I18n::t('settings_sec_16', $activeLang)) ?>
+                        </h2>
+                        <span class="antibot-card-title-badge">Hetzner / OVH / AWS</span>
+                    </div>
+                    <div class="antibot-card-body">
+                        <p class="small text-muted mb-3">
+                            <?= Html::encode(I18n::t('settings_datacenter_desc', $activeLang)) ?>
+                        </p>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="AntibotSetting[datacenterFilterEnabled]" value="1" id="dcFilterSwitch" <?= !empty($settings['datacenterFilterEnabled']) ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-bold" for="dcFilterSwitch"><?= Html::encode(I18n::t('settings_datacenter_enabled', $activeLang)) ?></label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_datacenter_action', $activeLang)) ?></label>
+                                <select name="AntibotSetting[datacenterFilterAction]" class="form-select rounded-3">
+                                    <option value="risk" <?= ($settings['datacenterFilterAction'] ?? 'risk') === 'risk' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_datacenter_action_risk', $activeLang)) ?></option>
+                                    <option value="challenge" <?= ($settings['datacenterFilterAction'] ?? 'risk') === 'challenge' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_datacenter_action_challenge', $activeLang)) ?></option>
+                                    <option value="block" <?= ($settings['datacenterFilterAction'] ?? 'risk') === 'block' ? 'selected' : '' ?>><?= Html::encode(I18n::t('settings_datacenter_action_block', $activeLang)) ?></option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Очки риска для RiskEngine (+10..100):</label>
+                                <input type="number" name="AntibotSetting[datacenterRiskScore]" class="form-control rounded-3" value="<?= (int) ($settings['datacenterRiskScore'] ?? 40) ?>" min="10" max="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

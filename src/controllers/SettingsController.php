@@ -115,6 +115,16 @@ class SettingsController extends Controller
                 'powDifficulty' => in_array($post['powDifficulty'] ?? '', ['light', 'medium', 'strong'], true) ? $post['powDifficulty'] : 'medium',
                 'honeyTrapsEnabled' => !empty($post['honeyTrapsEnabled']),
                 'trapRoute' => trim((string) ($post['trapRoute'] ?? 'antibot/trap')),
+                'robotsTrapEnabled' => !empty($post['robotsTrapEnabled']),
+                'robotsTrapRoute' => trim((string) ($post['robotsTrapRoute'] ?? '/antibot-trap-disallow')),
+                'headlessDetectionEnabled' => !empty($post['headlessDetectionEnabled']),
+                'missingAssetsTrapEnabled' => !empty($post['missingAssetsTrapEnabled']),
+                'missingAssetsThreshold' => max(2, (int) ($post['missingAssetsThreshold'] ?? 6)),
+                'missingAssetsWindow' => max(10, (int) ($post['missingAssetsWindow'] ?? 60)),
+                'beaconRoute' => trim((string) ($post['beaconRoute'] ?? '/antibot-beacon.png')),
+                'datacenterFilterEnabled' => !empty($post['datacenterFilterEnabled']),
+                'datacenterFilterAction' => in_array($post['datacenterFilterAction'] ?? '', ['risk', 'challenge', 'block'], true) ? $post['datacenterFilterAction'] : 'risk',
+                'datacenterRiskScore' => max(10, min(100, (int) ($post['datacenterRiskScore'] ?? 40))),
                 'jsChallengeEnabled' => !empty($post['jsChallengeEnabled']),
                 'trustedProxies' => array_values(array_unique($trustedProxies)),
                 'autoTrustLocalProxy' => !empty($post['autoTrustLocalProxy']),
@@ -170,6 +180,16 @@ class SettingsController extends Controller
             $settings['powDifficulty'] = $antibot->powDifficulty;
             $settings['honeyTrapsEnabled'] = $antibot->honeyTrapsEnabled;
             $settings['trapRoute'] = $antibot->trapRoute;
+            $settings['robotsTrapEnabled'] = $antibot->robotsTrapEnabled;
+            $settings['robotsTrapRoute'] = $antibot->robotsTrapRoute;
+            $settings['headlessDetectionEnabled'] = $antibot->headlessDetectionEnabled;
+            $settings['missingAssetsTrapEnabled'] = $antibot->missingAssetsTrapEnabled;
+            $settings['missingAssetsThreshold'] = $antibot->missingAssetsThreshold;
+            $settings['missingAssetsWindow'] = $antibot->missingAssetsWindow;
+            $settings['beaconRoute'] = $antibot->beaconRoute;
+            $settings['datacenterFilterEnabled'] = $antibot->datacenterFilterEnabled;
+            $settings['datacenterFilterAction'] = $antibot->datacenterFilterAction;
+            $settings['datacenterRiskScore'] = $antibot->datacenterRiskScore;
             $settings['customBlockMessage'] = $antibot->customBlockMessage;
         }
 

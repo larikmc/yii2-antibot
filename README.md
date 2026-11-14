@@ -1,7 +1,7 @@
 # Yii2 Antibot (`larikmc/yii2-antibot`)
 
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE.md)
-[![Latest Version](https://img.shields.io/badge/release-v1.5.9-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.5.9)
+[![Latest Version](https://img.shields.io/badge/release-v1.5.13-blue.svg)](https://github.com/larikmc/yii2-antibot/releases/tag/v1.5.13)
 [![PHP](https://img.shields.io/badge/PHP-8.0%20|%208.1%20|%208.2%20|%208.3%20|%208.4%20|%208.5-blue)](https://php.net)
 [![Yii2](https://img.shields.io/badge/Yii2-2.0.x-orange.svg)](https://yiiframework.com)
 
@@ -10,7 +10,28 @@
 
 ---
 
-## ⚡ Ключевые возможности v1.5.9
+## ⚡ Ключевые возможности v1.5.13
+
+### 1. Ловушка `robots.txt` (Robots.txt Disallow Honeypot)
+- Ловушка для нелегитимных краулеров, скраперов и сканеров уязвимостей, которые считывают `robots.txt` и целенаправленно переходят по запрещённым разделам.
+- Белые поисковые роботы (Яндекс, Google, Bing) строго соблюдают директиву `Disallow` и никогда не заходят в запрещённые пути.
+- При обращении к пути ловушки бот мгновенно изолируется в **Auto-Jail на 24 часа** и блокируется со статусом `403 Forbidden`.
+- В панели настроек доступен генератор директивы с кнопкой копирования в один клик.
+
+### 2. Фильтр облачных датацентров (Cloud Datacenter & ASN Filter)
+- Автономная оффлайн-фильтрация запросов с популярных серверных VPS/облачных провайдеров (**Hetzner, OVHcloud, DigitalOcean, AWS EC2, Scaleway, Vultr, Linode, Selectel**).
+- Настоящие поисковые роботы (Googlebot, Яндекс, Bing), верифицированные через Reverse DNS, строго защищены от блокировок.
+- Гибкие варианты реакции: повышение очков риска (+40 к `RiskEngine`), принудительный JS/PoW Challenge или прямая блокировка.
+
+### 3. Детектор Headless-браузеров и программных WebGL GPU (Puppeteer / Selenium)
+- Выявляет автоматизированные браузеры без физического экрана, запускаемые на серверах.
+- Анализ WebGL-рендерера видеокарты: отлов программных эмуляторов (`SwiftShader`, `llvmpipe`, `Mesa OffScreen`, `VirtualBox`, `VMware`).
+- Проверка флагов `navigator.webdriver`, артефактов автоматизации (Selenium, Nightmare, PhantomJS) и аномалий геометрии экрана.
+
+### 4. Ловушка отсутствия загрузки статики (Missing Assets / Zero-CSS Trap)
+- Вычисляет консольные HTTP-парсеры (Python `requests`, `Scrapy`, Go, PHP `curl`), которые выкачивают десятки HTML-страниц и намеренно не загружают CSS, картинки и шрифты.
+- Автоматическое внедрение невидимого 1x1 маячка (`/antibot-beacon.png`) перед `</body>` в HTML-ответах.
+- Реальные браузеры загружают статику и сбрасывают счётчик; парсеры при превышении порога (6 страниц подряд) попадают под JS Challenge или блокировку.
 
 ### 1. Двуязычная локализация и понятные причины событий на русском (v1.5.9)
 - **Умная локализация (`I18n` Service):**

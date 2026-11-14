@@ -37,7 +37,7 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
-    public const VERSION = '1.5.12';
+    public const VERSION = '1.5.13';
 
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;
@@ -152,6 +152,56 @@ class Antibot extends Component implements BootstrapInterface
      * @var int Quarantine duration in seconds.
      */
     public int $autoJailDuration = 1800;
+
+    /**
+     * @var bool Whether robots.txt Honeypot Disallow Trap is enabled.
+     */
+    public bool $robotsTrapEnabled = true;
+
+    /**
+     * @var string Secret URI route to be disallowed in robots.txt.
+     */
+    public string $robotsTrapRoute = '/antibot-trap-disallow';
+
+    /**
+     * @var bool Whether offline Datacenter / Cloud IP filtering is enabled.
+     */
+    public bool $datacenterFilterEnabled = true;
+
+    /**
+     * @var string Action on datacenter IPs: 'risk' (add risk score), 'challenge' (force challenge), 'block' (403 Forbidden).
+     */
+    public string $datacenterFilterAction = 'risk';
+
+    /**
+     * @var int Risk score points added when client IP belongs to a cloud datacenter.
+     */
+    public int $datacenterRiskScore = 40;
+
+    /**
+     * @var bool Whether Missing Assets Trap (Zero-CSS scraper detector) is enabled.
+     */
+    public bool $missingAssetsTrapEnabled = true;
+
+    /**
+     * @var int Consecutive HTML page requests without asset/beacon hits before triggering anomaly.
+     */
+    public int $missingAssetsThreshold = 6;
+
+    /**
+     * @var int Sliding window in seconds for missing assets tracking.
+     */
+    public int $missingAssetsWindow = 60;
+
+    /**
+     * @var string Route for the 1x1 transparent beacon image.
+     */
+    public string $beaconRoute = '/antibot-beacon.png';
+
+    /**
+     * @var bool Whether WebGL and headless browser detection is enabled in challenges.
+     */
+    public bool $headlessDetectionEnabled = true;
 
     public ?string $storageFile = null;
     public ?string $eventsFile = null;
@@ -291,6 +341,36 @@ class Antibot extends Component implements BootstrapInterface
             if (isset($savedSettings['autoJailDuration'])) {
                 $this->autoJailDuration = (int) $savedSettings['autoJailDuration'];
             }
+            if (isset($savedSettings['robotsTrapEnabled'])) {
+                $this->robotsTrapEnabled = (bool) $savedSettings['robotsTrapEnabled'];
+            }
+            if (isset($savedSettings['robotsTrapRoute']) && is_string($savedSettings['robotsTrapRoute'])) {
+                $this->robotsTrapRoute = $savedSettings['robotsTrapRoute'];
+            }
+            if (isset($savedSettings['datacenterFilterEnabled'])) {
+                $this->datacenterFilterEnabled = (bool) $savedSettings['datacenterFilterEnabled'];
+            }
+            if (isset($savedSettings['datacenterFilterAction']) && is_string($savedSettings['datacenterFilterAction'])) {
+                $this->datacenterFilterAction = $savedSettings['datacenterFilterAction'];
+            }
+            if (isset($savedSettings['datacenterRiskScore'])) {
+                $this->datacenterRiskScore = (int) $savedSettings['datacenterRiskScore'];
+            }
+            if (isset($savedSettings['missingAssetsTrapEnabled'])) {
+                $this->missingAssetsTrapEnabled = (bool) $savedSettings['missingAssetsTrapEnabled'];
+            }
+            if (isset($savedSettings['missingAssetsThreshold'])) {
+                $this->missingAssetsThreshold = (int) $savedSettings['missingAssetsThreshold'];
+            }
+            if (isset($savedSettings['missingAssetsWindow'])) {
+                $this->missingAssetsWindow = (int) $savedSettings['missingAssetsWindow'];
+            }
+            if (isset($savedSettings['beaconRoute']) && is_string($savedSettings['beaconRoute'])) {
+                $this->beaconRoute = $savedSettings['beaconRoute'];
+            }
+            if (isset($savedSettings['headlessDetectionEnabled'])) {
+                $this->headlessDetectionEnabled = (bool) $savedSettings['headlessDetectionEnabled'];
+            }
             if (isset($savedSettings['customBlockMessage']) && is_string($savedSettings['customBlockMessage'])) {
                 $this->customBlockMessage = $savedSettings['customBlockMessage'];
             }
@@ -338,6 +418,18 @@ class Antibot extends Component implements BootstrapInterface
         // Phase 2: Route and controller action checks after routing
         $app->on(WebApplication::EVENT_BEFORE_ACTION, function ($event): void {
             $this->checkAction($event);
+        });
+
+        // Phase 3: Inject beacon into HTML responses if Missing Assets Trap is enabled
+        $app->response->on(\yii\web\Response::EVENT_BEFORE_SEND, function ($event): void {
+            if ($this->missingAssetsTrapEnabled && $event->sender->format === \yii\web\Response::FORMAT_HTML && is_string($event->sender->content)) {
+                $beacon = \larikmc\antibot\services\trap\MissingAssetsTrap::renderBeaconTag($this->beaconRoute);
+                if (str_contains($event->sender->content, '</body>')) {
+                    $event->sender->content = str_replace('</body>', $beacon . '</body>', $event->sender->content);
+                } else {
+                    $event->sender->content .= $beacon;
+                }
+            }
         });
 
         // Ensure in-process metrics are safely closed upon unexpected script exit
@@ -600,6 +692,31 @@ class Antibot extends Component implements BootstrapInterface
                 return;
             }
 
+            // 1d. Check Robots.txt Honeypot Disallow Trap access
+            if ($this->robotsTrapEnabled && \larikmc\antibot\services\trap\RobotsTrapService::isTrapHit($pathInfo, $this->robotsTrapRoute)) {
+                $this->_currentDecision = 'blocked';
+                if ($this->autoJailEnabled) {
+                    AutoJailService::recordViolation($ip, 'Robots.txt Disallow trap hit: ' . $pathInfo, 1, $this->autoJailDuration);
+                }
+                $this->blockRequest('Robots.txt Disallow violation (Scraper Trap)', $ip, $ua, $url);
+                return;
+            }
+
+            // 1e. Check Missing Assets Beacon request
+            if ($this->missingAssetsTrapEnabled && ($pathInfo === 'antibot-beacon.png' || $pathInfo === trim($this->beaconRoute, '/'))) {
+                \larikmc\antibot\services\trap\MissingAssetsTrap::recordAssetHit($ip);
+                $this->_currentDecision = 'allowed';
+                $this->finishInspection('allowed');
+                $response = Yii::$app->response;
+                $response->format = Response::FORMAT_RAW;
+                $response->headers->set('Content-Type', 'image/png');
+                $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate');
+                $response->headers->set('Pragma', 'no-cache');
+                $response->content = \larikmc\antibot\services\trap\MissingAssetsTrap::getTransparentPngBytes();
+                $response->send();
+                exit(0);
+            }
+
             // 2. Whitelist Check
             if (IpMatcher::match($ip, $this->whitelist)) {
                 // Strict loopback verification: if whitelisted IP is loopback, direct connection must also be loopback
@@ -716,10 +833,70 @@ class Antibot extends Component implements BootstrapInterface
                 }
             }
 
+            // 8b. Datacenter / Cloud Provider Inspection (Offline)
+            $dcInfo = null;
+            if ($this->datacenterFilterEnabled) {
+                $dcInfo = \larikmc\antibot\services\behavior\DatacenterDetector::detect($ip);
+                if ($dcInfo !== null) {
+                    if ($this->datacenterFilterAction === 'block' && !$this->isMonitoringMode()) {
+                        $this->_currentDecision = 'blocked';
+                        $this->blockRequest('Cloud hosting / Datacenter IP blocked: ' . $dcInfo['name'] . ' (' . $dcInfo['asn'] . ')', $ip, $ua, $url);
+                        return;
+                    } elseif ($this->datacenterFilterAction === 'challenge' && !$this->isMonitoringMode() && !$isVerifiedVisitor) {
+                        if (!$this->isMachineOrApiRequest() && ($this->jsChallengeEnabled || $this->powEnabled)) {
+                            $this->_currentDecision = 'challenge';
+                            $this->_storage->logEvent([
+                                'ip' => $ip,
+                                'userAgent' => $ua,
+                                'action' => 'challenged',
+                                'reason' => 'Datacenter IP challenge: ' . $dcInfo['name'] . ' (' . $dcInfo['asn'] . ')',
+                                'url' => $url,
+                            ]);
+                            $this->finishInspection('challenge');
+                            $this->renderChallengeScreen($ip, $ua, $secretKey);
+                            exit(0);
+                        }
+                    }
+                }
+            }
+
             // 9. Verified Visitor Cookie Check
             $secretKey = $this->getResolvedSecretKey();
             $cookieToken = $request->cookies->getValue(TokenService::COOKIE_NAME);
             $isVerifiedVisitor = $cookieToken !== null && TokenService::validateToken($cookieToken, $ip, $ua, $secretKey);
+
+            // 9b. Missing Assets Trap (Detects console scrapers loading purely HTML)
+            if ($this->missingAssetsTrapEnabled && $request->isGet && !$request->isAjax && !$this->isMachineOrApiRequest() && !$isVerifiedVisitor) {
+                $htmlCount = \larikmc\antibot\services\trap\MissingAssetsTrap::recordHtmlRequest($ip, $this->missingAssetsWindow);
+                if ($htmlCount >= $this->missingAssetsThreshold) {
+                    $trapReason = sprintf('Missing static assets anomaly (%d consecutive HTML requests without assets)', $htmlCount);
+                    if ($this->isMonitoringMode()) {
+                        $this->_currentDecision = 'monitored';
+                        $this->_storage->logEvent([
+                            'ip' => $ip,
+                            'userAgent' => $ua,
+                            'action' => 'monitored',
+                            'reason' => $trapReason,
+                            'url' => $url,
+                        ]);
+                    } else {
+                        if ($this->autoJailEnabled) {
+                            $threshold = PanicModeService::isActive() ? 1 : $this->autoJailThreshold;
+                            AutoJailService::recordViolation($ip, $trapReason, $threshold, $this->autoJailDuration);
+                        }
+                        if ($this->jsChallengeEnabled && !$this->isMachineOrApiRequest()) {
+                            $this->_currentDecision = 'challenge';
+                            $this->finishInspection('challenge');
+                            $this->renderChallengeScreen($ip, $ua, $secretKey);
+                            exit(0);
+                        } else {
+                            $this->_currentDecision = 'blocked';
+                            $this->blockRequest($trapReason, $ip, $ua, $url);
+                            return;
+                        }
+                    }
+                }
+            }
 
             // 10. URI pattern rules & Rate Limiting
             $matchedRule = $this->findMatchingUriRule($pathInfo, $request->getMethod());
@@ -770,6 +947,16 @@ class Antibot extends Component implements BootstrapInterface
             if ($this->behaviorAnalysisEnabled && !$isVerifiedVisitor) {
                 $isSearch = str_contains($pathInfo, 'search') || $request->get('q') !== null || $request->get('query') !== null;
                 $behavior = \larikmc\antibot\services\behavior\BehaviorAnalyzer::analyze($ip, $pathInfo, $isSearch);
+
+                if ($dcInfo !== null && $this->datacenterFilterAction === 'risk') {
+                    $behavior['risk']['score'] = min(100, $behavior['risk']['score'] + $this->datacenterRiskScore);
+                    $behavior['signals'][] = 'Datacenter IP: ' . $dcInfo['name'];
+                    if ($behavior['risk']['score'] >= 70) {
+                        $behavior['risk']['level'] = 'high';
+                    } elseif ($behavior['risk']['score'] >= 35) {
+                        $behavior['risk']['level'] = 'medium';
+                    }
+                }
 
                 if (!empty($behavior['signals'])) {
                     $risk = $behavior['risk'];
@@ -1397,6 +1584,28 @@ class Antibot extends Component implements BootstrapInterface
         $secretKey = $this->getResolvedSecretKey();
 
         if (TokenService::verifyJsChallenge($seed, $answer, $secretKey)) {
+            // Verify client telemetry for headless / automation indicators
+            if ($this->headlessDetectionEnabled) {
+                $telemetry = [
+                    'webdriver' => $request->post('webdriver'),
+                    'gpu' => (string) $request->post('gpu', ''),
+                    'screen_w' => $request->post('screen_w'),
+                    'screen_h' => $request->post('screen_h'),
+                    'outer_w' => $request->post('outer_w'),
+                    'outer_h' => $request->post('outer_h'),
+                    'artifacts' => (string) $request->post('artifacts', ''),
+                ];
+                $hl = \larikmc\antibot\services\behavior\HeadlessDetector::analyze($telemetry);
+                if ($hl['isHeadless']) {
+                    $this->_currentDecision = 'blocked';
+                    if ($this->autoJailEnabled) {
+                        \larikmc\antibot\services\resilience\AutoJailService::recordViolation($ip, 'Headless browser: ' . $hl['reason'], 1, $this->autoJailDuration);
+                    }
+                    $this->blockRequest('Headless browser emulator detected: ' . $hl['reason'], $ip, $ua, $request->getAbsoluteUrl());
+                    return;
+                }
+            }
+
             $token = TokenService::generateToken($ip, $ua, $secretKey);
             $cookie = new \yii\web\Cookie([
                 'name' => TokenService::COOKIE_NAME,
@@ -1661,6 +1870,33 @@ HTML;
             form.append('antibot_challenge_verify', '1');
             form.append('seed', '{$seed}');
             form.append('answer', '{$target}');
+
+            // Client Environment & Hardware Telemetry Probe
+            var webdriver = navigator.webdriver ? '1' : '0';
+            var gpu = '';
+            try {
+                var c = document.createElement('canvas');
+                var gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+                if (gl) {
+                    var dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (dbg) {
+                        gpu = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '';
+                    }
+                }
+            } catch (e) {}
+            var arts = [];
+            if (window._phantom || window.callPhantom) arts.push('PhantomJS');
+            if (window.__nightmare) arts.push('Nightmare');
+            if (window.__selenium_evaluate || window.__webdriver_evaluate || window.__driver_evaluate) arts.push('Selenium');
+
+            form.append('webdriver', webdriver);
+            form.append('gpu', gpu);
+            form.append('screen_w', screen.width || 0);
+            form.append('screen_h', screen.height || 0);
+            form.append('outer_w', window.outerWidth || 0);
+            form.append('outer_h', window.outerHeight || 0);
+            form.append('artifacts', arts.join(','));
+
             var xhr = new XMLHttpRequest();
             xhr.open('POST', window.location.href, true);
             xhr.onload = function() {
