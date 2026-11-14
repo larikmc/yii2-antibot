@@ -5,6 +5,7 @@ declare(strict_types=1);
 $autoloadCandidates = [
     __DIR__ . '/../../strb64.loc/vendor/autoload.php',
     __DIR__ . '/../../yii2-advanced.loc/vendor/autoload.php',
+    dirname(__DIR__, 2) . '/vendor/autoload.php',
     dirname(__DIR__, 4) . '/vendor/autoload.php',
 ];
 
@@ -26,6 +27,7 @@ $loader->setPsr4('larikmc\\antibot\\', [dirname(__DIR__) . '/src']);
 $yiiCandidates = [
     __DIR__ . '/../../strb64.loc/vendor/yiisoft/yii2/Yii.php',
     __DIR__ . '/../../yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
+    dirname(__DIR__, 2) . '/vendor/yiisoft/yii2/Yii.php',
     dirname(__DIR__, 4) . '/vendor/yiisoft/yii2/Yii.php',
 ];
 
