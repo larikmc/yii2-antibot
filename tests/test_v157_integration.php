@@ -52,7 +52,7 @@ if ($hasEcharts || $hasDashboardCss) {
 // -----------------------------------------------------------------------------
 echo "\n--- Part 2: Backend Analytics AccessControl Check ---\n";
 
-$apiUrl = 'http://admin.yii2-advanced.loc/antibot/default/analytics-data';
+$apiUrl = 'http://yii2-advanced.loc/admin/antibot/default/analytics-data';
 $ch = curl_init($apiUrl);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
