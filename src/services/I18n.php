@@ -333,6 +333,7 @@ class I18n
             'settings_datacenter_action_risk' => 'Повышать риск (+40 к RiskEngine)',
             'settings_datacenter_action_challenge' => 'Обязательный JS Challenge',
             'settings_datacenter_action_block' => 'Прямая блокировка (403)',
+            'settings_datacenter_risk' => 'Очки риска для RiskEngine (+10..100):',
         ],
         'en' => [
             'app_title' => 'AntiBot — Monitoring & Visual Analytics',
@@ -628,6 +629,7 @@ class I18n
             'settings_datacenter_action_risk' => 'Increase Risk Score (+40 points)',
             'settings_datacenter_action_challenge' => 'Enforce JS Challenge',
             'settings_datacenter_action_block' => 'Block Directly (403)',
+            'settings_datacenter_risk' => 'Risk Score for RiskEngine (+10..100):',
         ],
     ];
 
