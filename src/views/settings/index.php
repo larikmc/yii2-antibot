@@ -76,7 +76,7 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
         </div>
     </div>
 
-    <form method="post" action="<?= Url::to(['/antibot/settings/index']) ?>">
+    <form method="post" action="<?= Url::to(['/antibot/settings/index']) ?>" id="antibotSettingsForm">
         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
 
         <div class="antibot-settings-container mx-auto" style="max-width: 1040px;">
@@ -235,7 +235,7 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                     </div>
 
                     <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" name="AntibotSetting[blockCliTools]" value="1" id="cliSwitch" <?= !empty($settings['blockCliTools']) ? 'checked' : '' ?>>
+                        <input class="form-check-input" type="checkbox" name="AntibotSetting[blockCliAndLibraries]" value="1" id="cliSwitch" <?= (!empty($settings['blockCliAndLibraries']) || !empty($settings['blockCliTools'])) ? 'checked' : '' ?>>
                         <label class="form-check-label fw-bold" for="cliSwitch"><?= Html::encode(I18n::t('settings_block_cli', $activeLang)) ?></label>
                         <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_block_cli_desc', $activeLang)) ?></div>
                     </div>
@@ -636,7 +636,7 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                     <span class="text-muted small ms-2 d-none d-md-inline"><?= Html::encode(I18n::t('settings_bar_desc', $activeLang)) ?></span>
                 </div>
                 <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                    <button type="submit" id="btnSaveSettings" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
                         <?= Html::encode(I18n::t('settings_save_btn', $activeLang)) ?>
                     </button>
                 </div>
@@ -688,6 +688,93 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.target && e.target.classList.contains('btn-remove-rule')) {
                 e.target.closest('tr').remove();
             }
+        });
+    }
+
+    // Smooth AJAX Save without disruptive full page reload
+    var form = document.getElementById('antibotSettingsForm');
+    var btnSave = document.getElementById('btnSaveSettings');
+
+    function showToast(message, type) {
+        var container = document.getElementById('antibotToastContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'antibotToastContainer';
+            container.style.cssText = 'position:fixed;top:24px;right:24px;z-index:99999;display:flex;flex-direction:column;gap:10px;pointer-events:none;';
+            document.body.appendChild(container);
+        }
+
+        var toast = document.createElement('div');
+        toast.style.cssText = 'pointer-events:auto;min-width:280px;max-width:440px;padding:12px 20px;border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,0.22);font-size:0.92rem;font-weight:600;display:flex;align-items:center;gap:10px;transition:all 0.35s cubic-bezier(0.16,1,0.3,1);transform:translateY(-20px);opacity:0;color:#ffffff;';
+
+        if (type === 'success') {
+            toast.style.background = '#198754';
+            toast.style.border = '1px solid #157347';
+            toast.innerHTML = '<span style="font-size:1.25rem;line-height:1;">✓</span><span>' + message + '</span>';
+        } else {
+            toast.style.background = '#dc3545';
+            toast.style.border = '1px solid #b02a37';
+            toast.innerHTML = '<span style="font-size:1.25rem;line-height:1;">⚠</span><span>' + message + '</span>';
+        }
+
+        container.appendChild(toast);
+        requestAnimationFrame(function () {
+            toast.style.transform = 'translateY(0)';
+            toast.style.opacity = '1';
+        });
+
+        setTimeout(function () {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-15px)';
+            setTimeout(function () {
+                toast.remove();
+            }, 350);
+        }, 3200);
+    }
+
+    if (form && btnSave) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            var originalText = btnSave.innerHTML;
+            btnSave.disabled = true;
+            btnSave.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Сохранение...';
+
+            var formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function (res) {
+                return res.json();
+            })
+            .then(function (data) {
+                if (data && data.success) {
+                    btnSave.className = 'btn btn-success rounded-pill px-4 shadow-sm fw-bold';
+                    btnSave.innerHTML = '✓ Сохранено!';
+                    showToast(data.message || 'Настройки антибота успешно сохранены!', 'success');
+                } else {
+                    btnSave.className = 'btn btn-danger rounded-pill px-4 shadow-sm fw-bold';
+                    btnSave.innerHTML = 'Ошибка';
+                    showToast((data && data.message) ? data.message : 'Ошибка при сохранении', 'danger');
+                }
+            })
+            .catch(function (err) {
+                btnSave.className = 'btn btn-danger rounded-pill px-4 shadow-sm fw-bold';
+                btnSave.innerHTML = 'Ошибка сети';
+                showToast('Ошибка сети: ' + err.message, 'danger');
+            })
+            .finally(function () {
+                setTimeout(function () {
+                    btnSave.disabled = false;
+                    btnSave.className = 'btn btn-primary rounded-pill px-4 shadow-sm fw-bold';
+                    btnSave.innerHTML = originalText;
+                }, 2200);
+            });
         });
     }
 });

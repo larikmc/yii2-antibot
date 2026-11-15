@@ -94,7 +94,8 @@ class SettingsController extends Controller
                 'mode' => (string) ($post['mode'] ?? 'standard'),
                 'blockAiCrawlers' => !empty($post['blockAiCrawlers']),
                 'blockCommercialScrapers' => !empty($post['blockCommercialScrapers']),
-                'blockCliAndLibraries' => !empty($post['blockCliAndLibraries']),
+                'blockCliAndLibraries' => !empty($post['blockCliAndLibraries']) || !empty($post['blockCliTools']),
+                'blockCliTools' => !empty($post['blockCliAndLibraries']) || !empty($post['blockCliTools']),
                 'headerConsistencyEnabled' => !empty($post['headerConsistencyEnabled']),
                 'autoJailEnabled' => !empty($post['autoJailEnabled']),
                 'autoJailThreshold' => max(1, (int) ($post['autoJailThreshold'] ?? 2)),
@@ -135,8 +136,20 @@ class SettingsController extends Controller
 
             try {
                 $storage->saveSettings($payload);
+                if ($this->request->isAjax) {
+                    return $this->asJson([
+                        'success' => true,
+                        'message' => 'Настройки антибота успешно сохранены!',
+                    ]);
+                }
                 Yii::$app->session->setFlash('success', 'Настройки антибота успешно сохранены!');
             } catch (\Throwable $e) {
+                if ($this->request->isAjax) {
+                    return $this->asJson([
+                        'success' => false,
+                        'message' => 'Ошибка при сохранении: ' . $e->getMessage(),
+                    ]);
+                }
                 Yii::$app->session->setFlash('error', 'Ошибка при сохранении: ' . $e->getMessage());
             }
 
@@ -191,6 +204,13 @@ class SettingsController extends Controller
             $settings['datacenterFilterAction'] = $antibot->datacenterFilterAction;
             $settings['datacenterRiskScore'] = $antibot->datacenterRiskScore;
             $settings['customBlockMessage'] = $antibot->customBlockMessage;
+        }
+
+        if (!isset($settings['blockCliTools']) && isset($settings['blockCliAndLibraries'])) {
+            $settings['blockCliTools'] = $settings['blockCliAndLibraries'];
+        }
+        if (!isset($settings['blockCliAndLibraries']) && isset($settings['blockCliTools'])) {
+            $settings['blockCliAndLibraries'] = $settings['blockCliTools'];
         }
 
         return $this->render('index', [

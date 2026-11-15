@@ -272,8 +272,13 @@ class StorageService
         $json = Json::encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $saved = file_put_contents($file, $json, LOCK_EX) !== false;
 
-        if ($saved && !empty($changedKeys)) {
-            $this->recordAudit($changedKeys, $adminIp);
+        if ($saved) {
+            $this->_cachedSettings = $merged;
+            if (!empty($changedKeys)) {
+                $this->recordAudit($changedKeys, $adminIp);
+            }
+        } else {
+            $this->_cachedSettings = null;
         }
 
         return $saved;
