@@ -23,8 +23,8 @@ class DashboardAnalyticsService
     public const PERIOD_ALL = 'all';
 
     public const CACHE_TTL = 120; // 120 seconds as required
-    public const CACHE_VERSION = 'v157';
-    public const SCAN_LIMIT = 1500; // Efficient tail scanning
+    public const CACHE_VERSION = 'v161';
+    public const SCAN_LIMIT = 5000; // Efficient tail scanning (default 5000 events)
     public const REFRESH_COOLDOWN = 5; // Prevent hammer on force-refresh
 
     /**
@@ -41,14 +41,17 @@ class DashboardAnalyticsService
         string $period = self::PERIOD_24H,
         string $mode = StorageService::MODE_STANDARD,
         bool $forceRefresh = false,
-        string $lang = 'ru'
+        string $lang = 'ru',
+        ?int $scanLimit = null
     ): array {
         $period = in_array($period, [self::PERIOD_24H, self::PERIOD_7D, self::PERIOD_ALL], true)
             ? $period
             : self::PERIOD_24H;
 
+        $effectiveScanLimit = $scanLimit !== null ? max(500, $scanLimit) : self::SCAN_LIMIT;
+        $tzString = \larikmc\antibot\services\I18n::getTimeZone();
         $cache = (Yii::$app !== null && Yii::$app->has('cache')) ? Yii::$app->cache : null;
-        $cacheKey = 'antibot_analytics_' . self::CACHE_VERSION . '_' . $period . '_' . $mode . '_' . $lang;
+        $cacheKey = 'antibot_analytics_' . self::CACHE_VERSION . '_' . md5($tzString) . '_' . $period . '_' . $mode . '_' . $lang . '_' . $effectiveScanLimit;
         $cooldownKey = 'antibot_analytics_cooldown_' . $period . '_' . $lang;
 
         if ($cache !== null && !$forceRefresh) {
@@ -75,9 +78,9 @@ class DashboardAnalyticsService
         }
 
         // Fetch events efficiently from tail of JSONL
-        $events = $storage->getRecentEvents(self::SCAN_LIMIT);
+        $events = $storage->getRecentEvents($effectiveScanLimit);
 
-        $data = self::processEvents($events, $period, $mode, $lang);
+        $data = self::processEvents($events, $period, $mode, $lang, $effectiveScanLimit);
 
         if ($cache !== null) {
             $cache->set($cacheKey, $data, self::CACHE_TTL);
@@ -95,7 +98,7 @@ class DashboardAnalyticsService
      * @param string $lang
      * @return array<string, mixed>
      */
-    public static function processEvents(array $events, string $period, string $mode, string $lang = 'ru'): array
+    public static function processEvents(array $events, string $period, string $mode, string $lang = 'ru', int $scanLimit = self::SCAN_LIMIT): array
     {
         $now = time();
         $startTime = match ($period) {
@@ -127,8 +130,8 @@ class DashboardAnalyticsService
         if ($totalInSample > 0) {
             if ($period === self::PERIOD_ALL) {
                 $coverageStatus = 'sample_available';
-                $isTruncated = ($totalInSample >= self::SCAN_LIMIT);
-            } elseif ($oldestTimestamp !== null && $oldestTimestamp > $startTime && $totalInSample >= self::SCAN_LIMIT) {
+                $isTruncated = ($totalInSample >= $scanLimit);
+            } elseif ($oldestTimestamp !== null && $oldestTimestamp > $startTime && $totalInSample >= $scanLimit) {
                 $coverageStatus = 'partial_window';
                 $isTruncated = true;
             } else {
@@ -295,9 +298,9 @@ class DashboardAnalyticsService
 
         return [
             'period' => $period,
-            'generated_at' => date('Y-m-d H:i:s', $now),
-            'first_event_at' => $oldestTimestamp !== null ? date('Y-m-d H:i:s', $oldestTimestamp) : null,
-            'last_event_at' => $newestTimestamp !== null ? date('Y-m-d H:i:s', $newestTimestamp) : null,
+            'generated_at' => \larikmc\antibot\services\I18n::formatTimestamp($now),
+            'first_event_at' => $oldestTimestamp !== null ? \larikmc\antibot\services\I18n::formatTimestamp($oldestTimestamp) : null,
+            'last_event_at' => $newestTimestamp !== null ? \larikmc\antibot\services\I18n::formatTimestamp($newestTimestamp) : null,
             'events_processed' => $eventsProcessed,
             'events_in_sample' => $totalInSample,
             'coverage_status' => $coverageStatus,
@@ -440,7 +443,7 @@ class DashboardAnalyticsService
     }
 
     /**
-     * Initializes timeline buckets based on period.
+     * Initializes timeline buckets based on period in the application's configured time zone.
      *
      * @param string $period
      * @param int $now
@@ -453,18 +456,30 @@ class DashboardAnalyticsService
         $buckets = [];
         $bucketKeys = [];
         $slotFormat = 'Y-m-d H:00';
+        $tzString = \larikmc\antibot\services\I18n::getTimeZone();
+
+        try {
+            $tz = new \DateTimeZone($tzString);
+        } catch (\Throwable) {
+            $tz = new \DateTimeZone(date_default_timezone_get() ?: 'UTC');
+        }
+
+        $dtNow = new \DateTime('@' . $now);
+        $dtNow->setTimezone($tz);
 
         if ($period === self::PERIOD_24H) {
-            // 24 hourly buckets from 23 hours ago to current hour
+            // 24 hourly buckets in application time zone from 23 hours ago to current hour
             $slotFormat = 'Y-m-d H:00';
-            $currentHour = (int) floor($now / 3600) * 3600;
+            $currentHour = (int) $dtNow->format('H');
+            $startHourDt = (clone $dtNow)->setTime($currentHour, 0, 0);
+
             for ($i = 23; $i >= 0; $i--) {
-                $bTs = $currentHour - ($i * 3600);
-                $key = date($slotFormat, $bTs);
+                $bDt = (clone $startHourDt)->modify("-{$i} hours");
+                $key = $bDt->format($slotFormat);
                 $bucketKeys[] = $key;
                 $buckets[$key] = [
-                    'label' => date('H:00', $bTs),
-                    'timestamp' => $bTs,
+                    'label' => $bDt->format('H:00'),
+                    'timestamp' => $bDt->getTimestamp(),
                     'monitoring' => 0,
                     'blocked' => 0,
                     'throttled' => 0,
@@ -474,16 +489,17 @@ class DashboardAnalyticsService
                 ];
             }
         } elseif ($period === self::PERIOD_7D) {
-            // 7 daily buckets from 6 days ago to today
+            // 7 daily buckets in application time zone from 6 days ago to today
             $slotFormat = 'Y-m-d';
-            $today = strtotime('today', $now);
+            $todayDt = (clone $dtNow)->setTime(0, 0, 0);
+
             for ($i = 6; $i >= 0; $i--) {
-                $bTs = $today - ($i * 86400);
-                $key = date($slotFormat, $bTs);
+                $bDt = (clone $todayDt)->modify("-{$i} days");
+                $key = $bDt->format($slotFormat);
                 $bucketKeys[] = $key;
                 $buckets[$key] = [
-                    'label' => date('d.m', $bTs),
-                    'timestamp' => $bTs,
+                    'label' => $bDt->format('d.m'),
+                    'timestamp' => $bDt->getTimestamp(),
                     'monitoring' => 0,
                     'blocked' => 0,
                     'throttled' => 0,
@@ -497,17 +513,21 @@ class DashboardAnalyticsService
             $first = ($oldestTimestamp !== null && $oldestTimestamp > 0) ? $oldestTimestamp : ($now - 86400);
             $span = max(3600, $now - $first);
 
+            $dtFirst = new \DateTime('@' . $first);
+            $dtFirst->setTimezone($tz);
+
             if ($span <= 86400) {
                 // Within 24h: hourly
                 $slotFormat = 'Y-m-d H:00';
-                $startHour = (int) floor($first / 3600) * 3600;
-                $endHour = (int) floor($now / 3600) * 3600;
-                for ($ts = $startHour; $ts <= $endHour; $ts += 3600) {
-                    $key = date($slotFormat, $ts);
+                $cur = (clone $dtFirst)->setTime((int) $dtFirst->format('H'), 0, 0);
+                $end = (clone $dtNow)->setTime((int) $dtNow->format('H'), 0, 0);
+
+                while ($cur <= $end) {
+                    $key = $cur->format($slotFormat);
                     $bucketKeys[] = $key;
                     $buckets[$key] = [
-                        'label' => date('H:00', $ts),
-                        'timestamp' => $ts,
+                        'label' => $cur->format('H:00'),
+                        'timestamp' => $cur->getTimestamp(),
                         'monitoring' => 0,
                         'blocked' => 0,
                         'throttled' => 0,
@@ -515,18 +535,20 @@ class DashboardAnalyticsService
                         'other' => 0,
                         'total' => 0,
                     ];
+                    $cur->modify('+1 hour');
                 }
             } else {
                 // Multi-day: daily
                 $slotFormat = 'Y-m-d';
-                $startDay = strtotime('today', $first);
-                $endDay = strtotime('today', $now);
-                for ($ts = $startDay; $ts <= $endDay; $ts += 86400) {
-                    $key = date($slotFormat, $ts);
+                $cur = (clone $dtFirst)->setTime(0, 0, 0);
+                $end = (clone $dtNow)->setTime(0, 0, 0);
+
+                while ($cur <= $end) {
+                    $key = $cur->format($slotFormat);
                     $bucketKeys[] = $key;
                     $buckets[$key] = [
-                        'label' => date('d.m', $ts),
-                        'timestamp' => $ts,
+                        'label' => $cur->format('d.m'),
+                        'timestamp' => $cur->getTimestamp(),
                         'monitoring' => 0,
                         'blocked' => 0,
                         'throttled' => 0,
@@ -534,6 +556,7 @@ class DashboardAnalyticsService
                         'other' => 0,
                         'total' => 0,
                     ];
+                    $cur->modify('+1 day');
                 }
             }
         }
@@ -542,7 +565,7 @@ class DashboardAnalyticsService
     }
 
     /**
-     * Matches event timestamp to its bucket key.
+     * Matches event timestamp to its bucket key in the application's configured time zone.
      *
      * @param int $ts
      * @param string $period
@@ -551,6 +574,6 @@ class DashboardAnalyticsService
      */
     protected static function matchBucketKey(int $ts, string $period, string $slotFormat): string
     {
-        return date($slotFormat, $ts);
+        return \larikmc\antibot\services\I18n::formatTimestamp($ts, null, $slotFormat);
     }
 }

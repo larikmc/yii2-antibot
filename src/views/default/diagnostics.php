@@ -434,7 +434,7 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                                 <tbody>
                                     <?php foreach ($auditTrail as $audit): ?>
                                         <tr>
-                                            <td class="text-muted font-monospace"><?= Html::encode($audit['date'] ?? date('Y-m-d H:i:s', (int) ($audit['timestamp'] ?? time()))) ?></td>
+                                            <td class="text-muted font-monospace"><?= Html::encode(I18n::formatTimestamp($audit['timestamp'] ?? null, $audit['date'] ?? ($audit['datetime'] ?? null))) ?></td>
                                             <td><code class="antibot-code-badge"><?= Html::encode($audit['actor_ip'] ?? '127.0.0.1') ?></code></td>
                                             <td>
                                                 <span class="badge badge-soft-secondary"><?= Html::encode($audit['action'] ?? 'settings_saved') ?></span>

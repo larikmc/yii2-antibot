@@ -107,6 +107,43 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                     </div>
                 <?php endif; ?>
 
+                <div class="dropdown d-inline-block">
+                    <button class="btn btn-outline-primary btn-sm rounded-pill px-3 py-2 fw-semibold shadow-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        📥 <?= Html::encode(I18n::t('export_btn', $activeLang)) ?>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3" style="min-width: 280px; z-index: 1050;">
+                        <li><h6 class="dropdown-header small text-muted text-uppercase"><?= Html::encode(I18n::t('export_header_format', $activeLang)) ?></h6></li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="<?= Url::to(['/antibot/default/export-events', 'format' => 'csv', 'filter' => 'all']) ?>">
+                                <span class="fs-5">📊</span>
+                                <div>
+                                    <div class="fw-semibold small"><?= Html::encode(I18n::t('export_csv_all', $activeLang)) ?></div>
+                                    <div class="text-muted" style="font-size: 0.72rem;"><?= Html::encode(I18n::t('export_csv_all_desc', $activeLang)) ?></div>
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="<?= Url::to(['/antibot/default/export-events', 'format' => 'csv', 'filter' => 'blocked']) ?>">
+                                <span class="fs-5">⛔</span>
+                                <div>
+                                    <div class="fw-semibold small text-danger"><?= Html::encode(I18n::t('export_csv_blocked', $activeLang)) ?></div>
+                                    <div class="text-muted" style="font-size: 0.72rem;"><?= Html::encode(I18n::t('export_csv_blocked_desc', $activeLang)) ?></div>
+                                </div>
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="<?= Url::to(['/antibot/default/export-events', 'format' => 'jsonl', 'filter' => 'all']) ?>">
+                                <span class="fs-5">📄</span>
+                                <div>
+                                    <div class="fw-semibold small"><?= Html::encode(I18n::t('export_jsonl_all', $activeLang)) ?></div>
+                                    <div class="text-muted" style="font-size: 0.72rem;"><?= Html::encode(I18n::t('export_jsonl_all_desc', $activeLang)) ?></div>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
                 <?php if (!empty($events)): ?>
                     <?= Html::beginForm(['/antibot/default/clear-events'], 'post', ['class' => 'd-inline']) ?>
                         <?= Html::submitButton(I18n::t('clear_log_btn', $activeLang), [
@@ -218,7 +255,7 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                     <span class="badge bg-light text-dark border"><?= Html::encode($jail['reason']) ?></span>
                                 </td>
                                 <td class="text-muted small">
-                                    <?= date('H:i:s d.m.Y', (int) $jail['jailed_at']) ?>
+                                    <?= Html::encode(I18n::formatTimestamp($jail['jailed_at'] ?? null, null, 'H:i:s d.m.Y')) ?>
                                 </td>
                                 <td>
                                     <span class="badge bg-warning text-dark rounded-pill px-2 py-1 font-monospace">
@@ -521,7 +558,12 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                 <span class="text-muted small"><?= Html::encode(I18n::t('table_desc', $activeLang)) ?></span>
             </div>
             <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-light text-muted border rounded-pill px-3 py-1 small">JSON Lines (.jsonl)</span>
+                <a href="<?= Url::to(['/antibot/default/export-events', 'format' => 'csv', 'filter' => 'all']) ?>" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold" title="<?= Html::encode(I18n::t('export_csv_all', $activeLang)) ?>" style="font-size: 0.78rem;">
+                    📊 CSV
+                </a>
+                <a href="<?= Url::to(['/antibot/default/export-events', 'format' => 'jsonl', 'filter' => 'all']) ?>" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold" title="<?= Html::encode(I18n::t('export_jsonl_all', $activeLang)) ?>" style="font-size: 0.78rem;">
+                    📄 JSONL
+                </a>
             </div>
         </div>
 
@@ -583,11 +625,48 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                             <tr>
                                 <th style="width: 160px;"><?= Html::encode(I18n::t('th_time', $activeLang)) ?></th>
                                 <th style="width: 140px;"><?= Html::encode(I18n::t('th_ip', $activeLang)) ?></th>
-                                <th style="width: 140px;"><?= Html::encode(I18n::t('th_action', $activeLang)) ?></th>
+                                <th style="width: 155px;"><?= Html::encode(I18n::t('th_action', $activeLang)) ?></th>
                                 <th><?= Html::encode(I18n::t('th_reason', $activeLang)) ?></th>
                                 <th class="feed-col-url" style="min-width: 220px; max-width: 320px;"><?= Html::encode(I18n::t('th_url', $activeLang)) ?></th>
                                 <th class="feed-col-ua"><?= Html::encode(I18n::t('th_ua', $activeLang)) ?></th>
                                 <th class="text-end" style="width: 130px;"><?= Html::encode(I18n::t('th_actions', $activeLang)) ?></th>
+                            </tr>
+                            <tr class="filters" id="liveFeedFiltersRow">
+                                <td>
+                                    <input type="text" class="form-control form-control-sm feed-col-filter" data-col="time" placeholder="<?= Html::encode(I18n::t('grid_filter_time', $activeLang)) ?>">
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control form-control-sm feed-col-filter font-monospace" data-col="ip" placeholder="<?= Html::encode(I18n::t('grid_filter_ip', $activeLang)) ?>">
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm feed-col-filter" data-col="action">
+                                        <option value=""><?= Html::encode(I18n::t('grid_filter_all_actions', $activeLang)) ?></option>
+                                        <option value="monitored">👁️ <?= Html::encode(I18n::t('grid_filter_action_monitored', $activeLang)) ?></option>
+                                        <option value="blocked">⛔ <?= Html::encode(I18n::t('grid_filter_action_blocked', $activeLang)) ?></option>
+                                        <option value="allowed_search_bot">🤖 <?= Html::encode(I18n::t('grid_filter_action_search', $activeLang)) ?></option>
+                                        <option value="allowed_ad_bot">📢 <?= Html::encode(I18n::t('grid_filter_action_ad', $activeLang)) ?></option>
+                                        <option value="allowed_seo_bot">🔍 <?= Html::encode(I18n::t('grid_filter_action_seo', $activeLang)) ?></option>
+                                        <option value="allowed_social_bot">💬 <?= Html::encode(I18n::t('grid_filter_action_social', $activeLang)) ?></option>
+                                        <option value="rate_limited">⏱️ <?= Html::encode(I18n::t('grid_filter_action_rate', $activeLang)) ?></option>
+                                        <option value="allowed_bot">🤖 <?= Html::encode(I18n::t('grid_filter_action_bot', $activeLang)) ?></option>
+                                        <option value="allowed_user">👤 <?= Html::encode(I18n::t('grid_filter_action_user', $activeLang)) ?></option>
+                                        <option value="challenge_passed">✅ <?= Html::encode(I18n::t('grid_filter_action_challenge', $activeLang)) ?></option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control form-control-sm feed-col-filter" data-col="reason" placeholder="<?= Html::encode(I18n::t('grid_filter_reason', $activeLang)) ?>">
+                                </td>
+                                <td class="feed-col-url">
+                                    <input type="text" class="form-control form-control-sm feed-col-filter font-monospace" data-col="url" placeholder="<?= Html::encode(I18n::t('grid_filter_url', $activeLang)) ?>">
+                                </td>
+                                <td class="feed-col-ua">
+                                    <input type="text" class="form-control form-control-sm feed-col-filter" data-col="ua" placeholder="<?= Html::encode(I18n::t('grid_filter_ua', $activeLang)) ?>">
+                                </td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-2" id="resetColumnFilters" title="<?= Html::encode(I18n::t('grid_filter_reset_title', $activeLang)) ?>" style="font-size: 0.72rem; white-space: nowrap;">
+                                        ✕ <?= Html::encode(I18n::t('grid_filter_reset', $activeLang)) ?>
+                                    </button>
+                                </td>
                             </tr>
                         </thead>
                         <tbody>
@@ -604,10 +683,20 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                         $displayUrl = ($parsed['path'] ?? '/') . (isset($parsed['query']) && $parsed['query'] !== '' ? '?' . $parsed['query'] : '');
                                     }
                                     $searchBlob = mb_strtolower($ip . ' ' . $reqUrl . ' ' . ($event['route'] ?? '') . ' ' . ($event['userAgent'] ?? '') . ' ' . ($event['reason'] ?? '') . ' ' . ($reasonData['title'] ?? ''));
+                                    $formattedTime = I18n::formatTimestamp($event['timestamp'] ?? null, $event['date'] ?? null);
                                 ?>
-                                <tr data-action="<?= Html::encode($action) ?>" data-reason="<?= Html::encode((string)($event['reason'] ?? '')) ?>" data-search="<?= Html::encode($searchBlob) ?>">
+                                <tr data-action="<?= Html::encode($action) ?>"
+                                    data-reason="<?= Html::encode((string)($event['reason'] ?? '')) ?>"
+                                    data-search="<?= Html::encode($searchBlob) ?>"
+                                    data-col-time="<?= Html::encode(mb_strtolower($formattedTime)) ?>"
+                                    data-col-ip="<?= Html::encode(mb_strtolower($ip)) ?>"
+                                    data-col-action="<?= Html::encode(mb_strtolower($action)) ?>"
+                                    data-col-reason="<?= Html::encode(mb_strtolower(($reasonData['badge'] ?? '') . ' ' . ($reasonData['title'] ?? '') . ' ' . ($reasonData['raw'] ?? '') . ' ' . ((string)($event['reason'] ?? '')))) ?>"
+                                    data-col-url="<?= Html::encode(mb_strtolower($displayUrl . ' ' . $reqUrl)) ?>"
+                                    data-col-ua="<?= Html::encode(mb_strtolower($event['userAgent'] ?? '')) ?>"
+                                >
                                     <td class="small text-muted font-monospace">
-                                        <?= Html::encode($event['date'] ?? date('Y-m-d H:i:s', (int) ($event['timestamp'] ?? time()))) ?>
+                                        <?= Html::encode($formattedTime) ?>
                                     </td>
                                     <td>
                                         <code class="antibot-code-badge"><?= Html::encode($ip) ?></code>
@@ -641,7 +730,9 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                                 'allowed_seo_bot',
                                                 'allowed_social_bot',
                                                 'allowed_bot',
-                                            ], true) || (isset($event['verification_status']) && $event['verification_status'] === 'verified');
+                                            ], true)
+                                            || (isset($event['verification_status']) && $event['verification_status'] === 'verified')
+                                            || (in_array($event['bot_category'] ?? '', ['search', 'ad'], true) && ($event['verification_status'] ?? '') !== 'fake');
                                         ?>
                                         <?php if ($isProtectedLegitBot): ?>
                                             <span class="badge bg-light text-success border rounded-pill px-2 py-1 small fw-normal d-inline-flex align-items-center gap-1" title="<?= Html::encode(I18n::t('verified_bot_protected_title', $activeLang)) ?>">
@@ -702,6 +793,17 @@ $this->registerJs("
         var emptyRow = document.getElementById('feedEmptyMatchRow');
         var activeFilter = 'all';
 
+        // GridView Column Filters
+        var colFilters = {
+            time: document.querySelector(\".feed-col-filter[data-col='time']\"),
+            ip: document.querySelector(\".feed-col-filter[data-col='ip']\"),
+            action: document.querySelector(\".feed-col-filter[data-col='action']\"),
+            reason: document.querySelector(\".feed-col-filter[data-col='reason']\"),
+            url: document.querySelector(\".feed-col-filter[data-col='url']\"),
+            ua: document.querySelector(\".feed-col-filter[data-col='ua']\")
+        };
+        var resetColFiltersBtn = document.getElementById('resetColumnFilters');
+
         // URL Column Toggle & Persistence
         var toggleShowUrl = document.getElementById('toggleShowUrl');
         var feedTable = document.getElementById('liveFeedTable');
@@ -734,6 +836,24 @@ $this->registerJs("
 
         function filterTable() {
             var query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            var colTime = colFilters.time ? colFilters.time.value.toLowerCase().trim() : '';
+            var colIp = colFilters.ip ? colFilters.ip.value.toLowerCase().trim() : '';
+            var colAction = colFilters.action ? colFilters.action.value.toLowerCase().trim() : '';
+            var colReason = colFilters.reason ? colFilters.reason.value.toLowerCase().trim() : '';
+            var colUrl = colFilters.url ? colFilters.url.value.toLowerCase().trim() : '';
+            var colUa = colFilters.ua ? colFilters.ua.value.toLowerCase().trim() : '';
+
+            var hasActiveColFilter = (colTime !== '' || colIp !== '' || colAction !== '' || colReason !== '' || colUrl !== '' || colUa !== '');
+            if (resetColFiltersBtn) {
+                if (hasActiveColFilter) {
+                    resetColFiltersBtn.classList.remove('btn-outline-secondary');
+                    resetColFiltersBtn.classList.add('btn-primary');
+                } else {
+                    resetColFiltersBtn.classList.remove('btn-primary');
+                    resetColFiltersBtn.classList.add('btn-outline-secondary');
+                }
+            }
+
             var visible = 0;
 
             rows.forEach(function(row) {
@@ -753,7 +873,7 @@ $this->registerJs("
                 } else if (activeFilter === 'social') {
                     matchesFilter = (action === 'allowed_social_bot' || reason.toLowerCase().indexOf('social') !== -1 || reason.toLowerCase().indexOf('соцсет') !== -1 || searchData.indexOf('telegram') !== -1 || searchData.indexOf('whatsapp') !== -1 || searchData.indexOf('facebook') !== -1);
                 } else if (activeFilter === 'ratelimit') {
-                    matchesFilter = (action === 'rate_limited' || reason.indexOf('rate') !== -1 || reason.indexOf('limit') !== -1);
+                    matchesFilter = (action === 'rate_limited' || action === 'throttled' || reason.indexOf('rate') !== -1 || reason.indexOf('limit') !== -1);
                 } else if (activeFilter === 'traps') {
                     matchesFilter = (reason.indexOf('trap') !== -1 || reason.indexOf('honey') !== -1);
                 } else if (activeFilter === 'monitored') {
@@ -765,7 +885,38 @@ $this->registerJs("
                     matchesSearch = searchData.indexOf(query) !== -1;
                 }
 
-                if (matchesFilter && matchesSearch) {
+                var matchesColumns = true;
+                if (colTime !== '' && (row.getAttribute('data-col-time') || '').indexOf(colTime) === -1) {
+                    matchesColumns = false;
+                }
+                if (matchesColumns && colIp !== '' && (row.getAttribute('data-col-ip') || '').indexOf(colIp) === -1) {
+                    matchesColumns = false;
+                }
+                if (matchesColumns && colAction !== '') {
+                    var rowAction = (row.getAttribute('data-col-action') || '').toLowerCase();
+                    if (colAction === 'rate_limited') {
+                        if (rowAction !== 'rate_limited' && rowAction !== 'throttled') {
+                            matchesColumns = false;
+                        }
+                    } else if (colAction === 'blocked') {
+                        if (rowAction !== 'blocked' && rowAction.indexOf('block') === -1) {
+                            matchesColumns = false;
+                        }
+                    } else if (rowAction !== colAction) {
+                        matchesColumns = false;
+                    }
+                }
+                if (matchesColumns && colReason !== '' && (row.getAttribute('data-col-reason') || '').indexOf(colReason) === -1) {
+                    matchesColumns = false;
+                }
+                if (matchesColumns && colUrl !== '' && (row.getAttribute('data-col-url') || '').indexOf(colUrl) === -1) {
+                    matchesColumns = false;
+                }
+                if (matchesColumns && colUa !== '' && (row.getAttribute('data-col-ua') || '').indexOf(colUa) === -1) {
+                    matchesColumns = false;
+                }
+
+                if (matchesFilter && matchesSearch && matchesColumns) {
                     row.style.display = '';
                     visible++;
                 } else {
@@ -779,6 +930,25 @@ $this->registerJs("
 
         if (searchInput) {
             searchInput.addEventListener('input', filterTable);
+        }
+
+        document.querySelectorAll('.feed-col-filter').forEach(function(el) {
+            el.addEventListener('input', filterTable);
+            el.addEventListener('change', filterTable);
+        });
+
+        if (resetColFiltersBtn) {
+            resetColFiltersBtn.addEventListener('click', function() {
+                for (var k in colFilters) {
+                    if (colFilters[k]) {
+                        colFilters[k].value = '';
+                        if (colFilters[k].tagName === 'SELECT') {
+                            colFilters[k].selectedIndex = 0;
+                        }
+                    }
+                }
+                filterTable();
+            });
         }
 
         filterBtns.forEach(function(btn) {

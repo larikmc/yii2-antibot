@@ -35,9 +35,9 @@ class StorageService
     public ?string $eventsFile = null;
 
     /**
-     * @var int Maximum events log file size in bytes before rotation (5 MB).
+     * @var int Maximum events log file size in bytes before rotation (10 MB default).
      */
-    public int $maxLogSizeBytes = 5242880;
+    public int $maxLogSizeBytes = 10485760;
 
     /**
      * In-memory cache for loaded settings within the current request.
@@ -199,6 +199,9 @@ class StorageService
             'honeyTrapsEnabled' => false,
             'trapRoute' => 'antibot/trap',
             'customBlockMessage' => 'Access Denied: Automated bot activity detected.',
+            'eventHistoryScanLimit' => 5000,
+            'liveFeedTableLimit' => 100,
+            'maxLogSizeBytes' => 10485760,
         ];
 
         $file = $this->resolveStorageFile();
@@ -470,6 +473,70 @@ class StorageService
 
         // Return most recent first
         return array_reverse($events);
+    }
+
+    /**
+     * Streams events line-by-line from events file (and optionally rotated .1 file) to a callback.
+     * Memory-efficient stream processor for large log exports.
+     *
+     * @param callable $callback function(array $event, string $rawLine): bool (return false to stop streaming)
+     * @param bool $includeRotated Whether to also read rotated antibot_events.jsonl.1
+     * @param int $maxEvents Maximum events to process (0 = unlimited)
+     * @return int Number of events streamed
+     */
+    public function streamEvents(callable $callback, bool $includeRotated = true, int $maxEvents = 0): int
+    {
+        $file = $this->resolveEventsFile();
+        $this->ensureMigration($file);
+
+        $files = [];
+        // Older file first, then active file for natural chronological stream
+        if ($includeRotated && file_exists($file . '.1') && is_readable($file . '.1')) {
+            $files[] = $file . '.1';
+        }
+        if (file_exists($file) && is_readable($file)) {
+            $files[] = $file;
+        }
+
+        if (empty($files)) {
+            return 0;
+        }
+
+        $count = 0;
+        foreach ($files as $filePath) {
+            $fp = @fopen($filePath, 'rb');
+            if (!$fp) {
+                continue;
+            }
+
+            try {
+                while (($line = fgets($fp)) !== false) {
+                    $line = trim($line);
+                    if ($line === '') {
+                        continue;
+                    }
+
+                    $decoded = json_decode($line, true);
+                    if (!is_array($decoded)) {
+                        continue;
+                    }
+
+                    $count++;
+                    $continue = $callback($decoded, $line);
+                    if ($continue === false) {
+                        return $count;
+                    }
+
+                    if ($maxEvents > 0 && $count >= $maxEvents) {
+                        return $count;
+                    }
+                }
+            } finally {
+                @fclose($fp);
+            }
+        }
+
+        return $count;
     }
 
     /**

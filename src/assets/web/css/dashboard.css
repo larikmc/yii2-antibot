@@ -1251,3 +1251,42 @@ body.dark .feed-url-badge:hover {
     background: rgba(49, 137, 247, 0.28);
     color: #badcff;
 }
+
+/* ==========================================================================
+   GridView Column Filters Row for Live Event Feed
+   ========================================================================== */
+.antibot-table thead tr.filters td {
+    padding: 0.35rem 0.5rem;
+    background: rgba(113, 157, 235, 0.04);
+    border-bottom: 2px solid var(--ab-line);
+    vertical-align: middle;
+}
+.antibot-table thead tr.filters .form-control,
+.antibot-table thead tr.filters .form-select {
+    font-size: 0.78rem;
+    padding: 0.25rem 0.5rem;
+    height: 30px;
+    border-radius: 6px;
+    border: 1px solid var(--ab-line);
+    background-color: #ffffff;
+    color: var(--ab-text);
+}
+.antibot-table thead tr.filters .form-control:focus,
+.antibot-table thead tr.filters .form-select:focus {
+    border-color: var(--ab-primary);
+    box-shadow: 0 0 0 2px rgba(49, 137, 247, 0.15);
+}
+html.dark .antibot-table thead tr.filters td,
+body.dark .antibot-table thead tr.filters td {
+    background: #141f33 !important;
+    border-bottom-color: #334863 !important;
+}
+html.dark .antibot-table thead tr.filters .form-control,
+html.dark .antibot-table thead tr.filters .form-select,
+body.dark .antibot-table thead tr.filters .form-control,
+body.dark .antibot-table thead tr.filters .form-select {
+    background-color: #1a2942 !important;
+    border-color: #334863 !important;
+    color: #e2e8f0 !important;
+}
+

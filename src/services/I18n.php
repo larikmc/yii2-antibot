@@ -362,11 +362,52 @@ class I18n
             'catalog_verify_none' => 'Без проверки (Cautious)',
             'catalog_last_seen' => 'Посл. активность:',
             'catalog_never_seen' => 'Не наблюдался',
+            'catalog_btn_toggle_show' => 'Развернуть каталог роботов (50+)',
+            'catalog_btn_toggle_hide' => 'Свернуть каталог',
             'filter_ad' => 'Рекламные боты',
             'filter_social' => 'Соцсети',
             'verified_bot_protected_badge' => 'Защищён (Бот)',
             'verified_bot_protected_title' => 'Проверенный поисковый/рекламный робот или белый список. Блокировка отключена для защиты SEO и монетизации сайта.',
             'cant_block_verified_bot' => 'Действие отклонено: IP принадлежит проверенному поисковому или рекламному роботу. Блокировка подсети сломает индексацию и монетизацию сайта!',
+            // Live Feed GridView Filters
+            'grid_filter_time' => 'Время...',
+            'grid_filter_ip' => 'IP адрес...',
+            'grid_filter_all_actions' => 'Все действия',
+            'grid_filter_action_monitored' => 'Мониторинг',
+            'grid_filter_action_blocked' => 'Заблокирован',
+            'grid_filter_action_search' => 'Поисковик (SEO)',
+            'grid_filter_action_ad' => 'Рекламный робот',
+            'grid_filter_action_seo' => 'SEO робот',
+            'grid_filter_action_social' => 'Социальный робот',
+            'grid_filter_action_rate' => 'Лимит частоты (429)',
+            'grid_filter_action_bot' => 'Прочий робот',
+            'grid_filter_action_user' => 'Пользователь',
+            'grid_filter_action_challenge' => 'Проверка пройдена',
+            'grid_filter_reason' => 'Событие / причина...',
+            'grid_filter_url' => 'URL путь...',
+            'grid_filter_ua' => 'User-Agent...',
+            'grid_filter_reset' => 'Сброс',
+            'grid_filter_reset_title' => 'Сбросить все фильтры колонок',
+            // Section 17 & Export
+            'settings_sec_17' => '17. Журналирование и глубина аналитики',
+            'settings_log_history_desc' => 'Настройка глубины выборки истории событий, лимитов строк для таблиц и ротации лог-файлов.',
+            'settings_event_scan_limit' => 'Глубина выборки для аналитики и KPI:',
+            'settings_event_scan_limit_desc' => 'Количество последних событий для построения графиков динамики и распределения атак (кэшируется 120с).',
+            'settings_feed_table_limit' => 'Строк в таблице Live Feed (мониторинг):',
+            'settings_feed_table_limit_desc' => 'Сколько свежих записей загружать в живую таблицу мониторинга.',
+            'settings_max_log_size' => 'Максимальный размер лог-файла перед ротацией:',
+            'settings_max_log_size_desc' => 'При достижении лимита текущий файл ротируется в .jsonl.1, сохраняя архив без перегрузки диска.',
+            'unit_events' => 'событий',
+            'unit_records' => 'строк',
+            'recommended' => 'рекомендуется',
+            'export_btn' => 'Экспорт журнала',
+            'export_header_format' => 'Формат экспорта',
+            'export_csv_all' => 'CSV для Excel (Все события)',
+            'export_csv_all_desc' => 'Полная таблица с IP, датой, URL, User-Agent',
+            'export_csv_blocked' => 'CSV для Excel (Только блокировки)',
+            'export_csv_blocked_desc' => 'Только 403 Forbidden и 429 Rate Limit',
+            'export_jsonl_all' => 'Сырой JSON Lines (.jsonl)',
+            'export_jsonl_all_desc' => 'Полный журнал для SIEM, ELK, Python, Splunk',
         ],
         'en' => [
             'app_title' => 'AntiBot — Monitoring & Visual Analytics',
@@ -691,11 +732,52 @@ class I18n
             'catalog_verify_none' => 'No Verification (Cautious)',
             'catalog_last_seen' => 'Last active:',
             'catalog_never_seen' => 'Never seen',
+            'catalog_btn_toggle_show' => 'Expand Bot Catalog (50+)',
+            'catalog_btn_toggle_hide' => 'Collapse Catalog',
             'filter_ad' => 'Advertising Bots',
             'filter_social' => 'Social Previews',
             'verified_bot_protected_badge' => 'Protected (Bot)',
             'verified_bot_protected_title' => 'Verified search/advertising bot or whitelisted IP. Blocking is disabled to protect SEO and website monetization.',
             'cant_block_verified_bot' => 'Action rejected: IP belongs to a verified search or advertising bot. Blocking this subnet would harm SEO and ad revenue!',
+            // Live Feed GridView Filters
+            'grid_filter_time' => 'Time...',
+            'grid_filter_ip' => 'IP address...',
+            'grid_filter_all_actions' => 'All actions',
+            'grid_filter_action_monitored' => 'Monitored',
+            'grid_filter_action_blocked' => 'Blocked',
+            'grid_filter_action_search' => 'Search Engine (SEO)',
+            'grid_filter_action_ad' => 'Ad Crawler',
+            'grid_filter_action_seo' => 'SEO Bot',
+            'grid_filter_action_social' => 'Social Bot',
+            'grid_filter_action_rate' => 'Rate Limited (429)',
+            'grid_filter_action_bot' => 'Other Bot',
+            'grid_filter_action_user' => 'User',
+            'grid_filter_action_challenge' => 'Challenge Passed',
+            'grid_filter_reason' => 'Reason / event...',
+            'grid_filter_url' => 'URL path...',
+            'grid_filter_ua' => 'User-Agent...',
+            'grid_filter_reset' => 'Reset',
+            'grid_filter_reset_title' => 'Reset all column filters',
+            // Section 17 & Export
+            'settings_sec_17' => '17. Event Logging & Analytics Depth',
+            'settings_log_history_desc' => 'Configure event history retention depth, table row limits, and log file rotation.',
+            'settings_event_scan_limit' => 'Analytics & KPI scan sample depth:',
+            'settings_event_scan_limit_desc' => 'Number of recent events scanned for traffic charts, attack dynamics, and metrics (cached 120s).',
+            'settings_feed_table_limit' => 'Live Feed monitoring table rows:',
+            'settings_feed_table_limit_desc' => 'How many recent records to render in the live monitoring feed.',
+            'settings_max_log_size' => 'Maximum log file size before rotation:',
+            'settings_max_log_size_desc' => 'When reached, active log is rotated to .jsonl.1, preserving history without overflowing disk.',
+            'unit_events' => 'events',
+            'unit_records' => 'rows',
+            'recommended' => 'recommended',
+            'export_btn' => 'Export Log',
+            'export_header_format' => 'Export format',
+            'export_csv_all' => 'CSV for Excel (All events)',
+            'export_csv_all_desc' => 'Full table with IP, Date, URL, and User-Agent',
+            'export_csv_blocked' => 'CSV for Excel (Blocked only)',
+            'export_csv_blocked_desc' => 'Only 403 Forbidden and 429 Rate Limit events',
+            'export_jsonl_all' => 'Raw JSON Lines (.jsonl)',
+            'export_jsonl_all_desc' => 'Full event log for SIEM, ELK, Python, Splunk',
         ],
     ];
 
@@ -1100,5 +1182,53 @@ class I18n
             'badge' => $isRu ? 'Событие' : 'Event',
             'raw' => $raw,
         ];
+    }
+
+    /**
+     * Resolves the configured time zone of the host Yii2 application.
+     *
+     * @return string Valid IANA time zone identifier (e.g. 'Europe/Saratov', 'Europe/Moscow').
+     */
+    public static function getTimeZone(): string
+    {
+        if (Yii::$app !== null && !empty(Yii::$app->timeZone)) {
+            return (string) Yii::$app->timeZone;
+        }
+
+        return date_default_timezone_get() ?: 'UTC';
+    }
+
+    /**
+     * Formats a Unix timestamp or legacy date string into the host Yii2 application's time zone.
+     *
+     * Rules:
+     * 1. Uses numeric Unix timestamp as the primary source of truth.
+     * 2. Converts timestamp into the current application's configured time zone.
+     * 3. For legacy records without timestamp, provides safe fallback to legacy date string without guessing.
+     *
+     * @param int|string|null $timestamp Unix timestamp or string representation.
+     * @param string|null $legacyDate Pre-formatted string date (e.g. from older events or audits).
+     * @param string $format Target PHP date format (default: 'Y-m-d H:i:s').
+     * @return string Formatted date/time string.
+     */
+    public static function formatTimestamp(int|string|null $timestamp, ?string $legacyDate = null, string $format = 'Y-m-d H:i:s'): string
+    {
+        if ($timestamp !== null && is_numeric($timestamp) && (int) $timestamp > 0) {
+            $ts = (int) $timestamp;
+            $tzString = self::getTimeZone();
+            try {
+                $dt = new \DateTime('@' . $ts);
+                $dt->setTimezone(new \DateTimeZone($tzString));
+                return $dt->format($format);
+            } catch (\Throwable) {
+                return date($format, $ts);
+            }
+        }
+
+        if ($legacyDate !== null && trim($legacyDate) !== '') {
+            return trim($legacyDate);
+        }
+
+        return '';
     }
 }

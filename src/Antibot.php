@@ -38,7 +38,7 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
-    public const VERSION = '1.6.0';
+    public const VERSION = '1.6.1';
 
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;
@@ -400,6 +400,9 @@ class Antibot extends Component implements BootstrapInterface
             }
             if (isset($savedSettings['customBlockMessage']) && is_string($savedSettings['customBlockMessage'])) {
                 $this->customBlockMessage = $savedSettings['customBlockMessage'];
+            }
+            if (isset($savedSettings['maxLogSizeBytes'])) {
+                $this->_storage->maxLogSizeBytes = (int) $savedSettings['maxLogSizeBytes'];
             }
             if (!empty($savedSettings['secretKey']) && is_string($savedSettings['secretKey'])) {
                 $this->secretKey = $savedSettings['secretKey'];

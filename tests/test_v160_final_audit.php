@@ -293,9 +293,9 @@ assertTest(Antibot::isClosedRoute('antibot/default/index'), '8.6 Route "antibot/
 assertTest(!Antibot::isClosedRoute('articles/how-to-fix-error'), '8.7 Public content route is NOT recognized as closed');
 
 // --- 9. Endpoint Security & Version Alignment ---
-echo "\n--- Section 9: Endpoint Security & Version v1.6.0 ---\n";
-assertTest(\larikmc\antibot\Module::VERSION === '1.6.0', '9.1 Module::VERSION is 1.6.0');
-assertTest(Antibot::VERSION === '1.6.0', '9.2 Antibot::VERSION is 1.6.0');
+echo "\n--- Section 9: Endpoint Security & Version Alignment ---\n";
+assertTest(version_compare(\larikmc\antibot\Module::VERSION, '1.6.0', '>='), '9.1 Module::VERSION is >= 1.6.0');
+assertTest(version_compare(Antibot::VERSION, '1.6.0', '>='), '9.2 Antibot::VERSION is >= 1.6.0');
 
 // Verify SettingsController verb filter contains update-ranges as POST
 $settingsCtrl = new \larikmc\antibot\controllers\SettingsController('settings', Yii::$app->getModule('antibot') ?? new \larikmc\antibot\Module('antibot'));

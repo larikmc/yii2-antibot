@@ -79,7 +79,7 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
     <form method="post" action="<?= Url::to(['/antibot/settings/index']) ?>" id="antibotSettingsForm">
         <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
 
-        <div class="antibot-settings-container mx-auto" style="max-width: 1040px;">
+        <div class="antibot-settings-container w-100">
             <!-- 1. Основные режимы -->
             <div class="antibot-card mb-4">
                 <div class="antibot-card-header">
@@ -236,6 +236,9 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <span class="antibot-card-title-badge">SEO, Ads, Social & AI</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 shadow-sm d-inline-flex align-items-center gap-1" id="catalogToggleBtn" aria-expanded="false">
+                            <span id="catalogToggleIcon">▶</span> <span id="catalogToggleText"><?= Html::encode(I18n::t('catalog_btn_toggle_show', $activeLang)) ?></span>
+                        </button>
                         <?= Html::beginForm(['/antibot/settings/update-ranges'], 'post', ['class' => 'd-inline m-0']) ?>
                             <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 shadow-sm d-inline-flex align-items-center gap-1" title="Актуализировать официальные списки CIDR Google Special Crawlers и IAS">
                                 🔄 <span>Обновить диапазоны CIDR/IP</span>
@@ -243,7 +246,7 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                         <?= Html::endForm() ?>
                     </div>
                 </div>
-                <div class="antibot-card-body">
+                <div class="antibot-card-body" id="botCatalogBody" style="display: none;">
                     <!-- Category Level Quick Policies -->
                     <div class="mb-4 p-3 rounded-3" style="background: rgba(113, 157, 235, 0.04); border: 1px solid var(--ab-line);">
                         <div class="fw-bold fs-6 mb-2">🏷️ Политики по умолчанию для категорий (Category Defaults):</div>
@@ -364,7 +367,7 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                                                     <?php endif; ?>
                                                 </div>
                                                 <div class="text-muted" style="font-size: 0.72rem;">
-                                                    <?= Html::encode(I18n::t('catalog_last_seen', $activeLang)) ?> <?= date('d.m H:i', (int)$bStat['last_seen']) ?>
+                                                    <?= Html::encode(I18n::t('catalog_last_seen', $activeLang)) ?> <?= Html::encode(I18n::formatTimestamp($bStat['last_seen'] ?? null, null, 'd.m H:i')) ?>
                                                 </div>
                                             <?php else: ?>
                                                 <span class="small text-muted fst-italic"><?= Html::encode(I18n::t('catalog_never_seen', $activeLang)) ?></span>
@@ -384,6 +387,49 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 var catButtons = document.querySelectorAll('#catalogCategoryFilters .cat-filter-btn');
                 var rows = document.querySelectorAll('#botCatalogTable .catalog-row');
                 var activeCat = 'all';
+
+                // Slider / Accordion Toggle for Bot Catalog Body
+                var toggleBtn = document.getElementById('catalogToggleBtn');
+                var catalogBody = document.getElementById('botCatalogBody');
+                var toggleIcon = document.getElementById('catalogToggleIcon');
+                var toggleText = document.getElementById('catalogToggleText');
+                var txtShow = <?= json_encode(I18n::t('catalog_btn_toggle_show', $activeLang)) ?>;
+                var txtHide = <?= json_encode(I18n::t('catalog_btn_toggle_hide', $activeLang)) ?>;
+
+                var savedState = localStorage.getItem('antibot_catalog_expanded');
+                if (savedState === '1') {
+                    if (catalogBody) catalogBody.style.display = '';
+                    if (toggleBtn) {
+                        toggleBtn.setAttribute('aria-expanded', 'true');
+                        toggleBtn.classList.remove('btn-outline-secondary');
+                        toggleBtn.classList.add('btn-secondary');
+                    }
+                    if (toggleIcon) toggleIcon.textContent = '▼';
+                    if (toggleText) toggleText.textContent = txtHide;
+                }
+
+                if (toggleBtn && catalogBody) {
+                    toggleBtn.addEventListener('click', function() {
+                        var isHidden = (catalogBody.style.display === 'none' || getComputedStyle(catalogBody).display === 'none');
+                        if (isHidden) {
+                            catalogBody.style.display = '';
+                            toggleBtn.setAttribute('aria-expanded', 'true');
+                            toggleBtn.classList.remove('btn-outline-secondary');
+                            toggleBtn.classList.add('btn-secondary');
+                            if (toggleIcon) toggleIcon.textContent = '▼';
+                            if (toggleText) toggleText.textContent = txtHide;
+                            localStorage.setItem('antibot_catalog_expanded', '1');
+                        } else {
+                            catalogBody.style.display = 'none';
+                            toggleBtn.setAttribute('aria-expanded', 'false');
+                            toggleBtn.classList.remove('btn-secondary');
+                            toggleBtn.classList.add('btn-outline-secondary');
+                            if (toggleIcon) toggleIcon.textContent = '▶';
+                            if (toggleText) toggleText.textContent = txtShow;
+                            localStorage.setItem('antibot_catalog_expanded', '0');
+                        }
+                    });
+                }
 
                 function filterRows() {
                     var query = (searchInput ? searchInput.value : '').toLowerCase().trim();
@@ -817,6 +863,62 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                         <div class="col-md-6">
                             <label class="form-label small fw-bold"><?= Html::encode(I18n::t('settings_datacenter_risk', $activeLang)) ?></label>
                             <input type="number" name="AntibotSetting[datacenterRiskScore]" class="form-control rounded-3" value="<?= (int) ($settings['datacenterRiskScore'] ?? 40) ?>" min="10" max="100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 17. Журналирование и глубина аналитики (Event Log & Analytics Depth) -->
+            <div class="antibot-card mb-4">
+                <div class="antibot-card-header">
+                    <div>
+                        <h2 class="antibot-card-title">
+                            <span>📜</span> <?= Html::encode(I18n::t('settings_sec_17', $activeLang)) ?>
+                        </h2>
+                        <span class="antibot-card-title-badge">Log & History</span>
+                    </div>
+                    <div class="text-muted small">
+                        <?= Html::encode(I18n::t('settings_log_history_desc', $activeLang)) ?>
+                    </div>
+                </div>
+                <div class="antibot-card-body">
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold"><?= Html::encode(I18n::t('settings_event_scan_limit', $activeLang)) ?></label>
+                            <select name="AntibotSetting[eventHistoryScanLimit]" class="form-select rounded-3">
+                                <?php $curScan = (int) ($settings['eventHistoryScanLimit'] ?? 5000); ?>
+                                <option value="1000" <?= $curScan === 1000 ? 'selected' : '' ?>>1 000 <?= Html::encode(I18n::t('unit_events', $activeLang)) ?></option>
+                                <option value="2500" <?= $curScan === 2500 ? 'selected' : '' ?>>2 500 <?= Html::encode(I18n::t('unit_events', $activeLang)) ?></option>
+                                <option value="5000" <?= $curScan === 5000 ? 'selected' : '' ?>>5 000 <?= Html::encode(I18n::t('unit_events', $activeLang)) ?> (<?= Html::encode(I18n::t('recommended', $activeLang)) ?>)</option>
+                                <option value="10000" <?= $curScan === 10000 ? 'selected' : '' ?>>10 000 <?= Html::encode(I18n::t('unit_events', $activeLang)) ?></option>
+                                <option value="25000" <?= $curScan === 25000 ? 'selected' : '' ?>>25 000 <?= Html::encode(I18n::t('unit_events', $activeLang)) ?></option>
+                                <option value="50000" <?= $curScan === 50000 ? 'selected' : '' ?>>50 000 <?= Html::encode(I18n::t('unit_events', $activeLang)) ?></option>
+                            </select>
+                            <div class="form-text small"><?= Html::encode(I18n::t('settings_event_scan_limit_desc', $activeLang)) ?></div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold"><?= Html::encode(I18n::t('settings_feed_table_limit', $activeLang)) ?></label>
+                            <select name="AntibotSetting[liveFeedTableLimit]" class="form-select rounded-3">
+                                <?php $curFeed = (int) ($settings['liveFeedTableLimit'] ?? 100); ?>
+                                <option value="50" <?= $curFeed === 50 ? 'selected' : '' ?>>50 <?= Html::encode(I18n::t('unit_records', $activeLang)) ?></option>
+                                <option value="100" <?= $curFeed === 100 ? 'selected' : '' ?>>100 <?= Html::encode(I18n::t('unit_records', $activeLang)) ?> (<?= Html::encode(I18n::t('recommended', $activeLang)) ?>)</option>
+                                <option value="250" <?= $curFeed === 250 ? 'selected' : '' ?>>250 <?= Html::encode(I18n::t('unit_records', $activeLang)) ?></option>
+                                <option value="500" <?= $curFeed === 500 ? 'selected' : '' ?>>500 <?= Html::encode(I18n::t('unit_records', $activeLang)) ?></option>
+                            </select>
+                            <div class="form-text small"><?= Html::encode(I18n::t('settings_feed_table_limit_desc', $activeLang)) ?></div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold"><?= Html::encode(I18n::t('settings_max_log_size', $activeLang)) ?></label>
+                            <select name="AntibotSetting[maxLogSizeBytes]" class="form-select rounded-3">
+                                <?php $curSize = (int) ($settings['maxLogSizeBytes'] ?? 10485760); ?>
+                                <option value="5242880" <?= $curSize === 5242880 ? 'selected' : '' ?>>5 MB (~17 000 <?= Html::encode(I18n::t('unit_records', $activeLang)) ?>)</option>
+                                <option value="10485760" <?= $curSize === 10485760 ? 'selected' : '' ?>>10 MB (~35 000 <?= Html::encode(I18n::t('unit_records', $activeLang)) ?>) (<?= Html::encode(I18n::t('recommended', $activeLang)) ?>)</option>
+                                <option value="26214400" <?= $curSize === 26214400 ? 'selected' : '' ?>>25 MB (~90 000 <?= Html::encode(I18n::t('unit_records', $activeLang)) ?>)</option>
+                                <option value="52428800" <?= $curSize === 52428800 ? 'selected' : '' ?>>50 MB (~180 000 <?= Html::encode(I18n::t('unit_records', $activeLang)) ?>)</option>
+                            </select>
+                            <div class="form-text small"><?= Html::encode(I18n::t('settings_max_log_size_desc', $activeLang)) ?></div>
                         </div>
                     </div>
                 </div>

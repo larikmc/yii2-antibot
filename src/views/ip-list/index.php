@@ -147,7 +147,7 @@ $this->params['breadcrumbs'] = [
                                     <span class="badge bg-light text-dark border"><?= Html::encode($jail['reason']) ?></span>
                                 </td>
                                 <td class="text-muted small">
-                                    <?= date('H:i:s d.m.Y', (int) $jail['jailed_at']) ?>
+                                    <?= Html::encode(I18n::formatTimestamp($jail['jailed_at'] ?? null, null, 'H:i:s d.m.Y')) ?>
                                 </td>
                                 <td>
                                     <span class="badge bg-warning text-dark rounded-pill px-2 py-1 font-monospace">

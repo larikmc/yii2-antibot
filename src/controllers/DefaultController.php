@@ -50,9 +50,13 @@ class DefaultController extends Controller
     {
         $antibot = $this->module->getAntibot();
         $storage = $antibot->getStorage();
+        $settings = $storage->loadSettings();
 
-        $stats = $storage->getStatistics(1000);
-        $events = $storage->getRecentEvents(100);
+        $scanLimit = max(500, (int) ($settings['eventHistoryScanLimit'] ?? 5000));
+        $tableLimit = max(20, min(1000, (int) ($settings['liveFeedTableLimit'] ?? 100)));
+
+        $stats = $storage->getStatistics($scanLimit);
+        $events = $storage->getRecentEvents($tableLimit);
         $perf = $antibot->getInspectionMetrics();
 
         $currentLang = \larikmc\antibot\services\I18n::getLanguage();
@@ -63,7 +67,8 @@ class DefaultController extends Controller
             \larikmc\antibot\services\analytics\DashboardAnalyticsService::PERIOD_24H,
             $antibot->mode,
             false,
-            $currentLang
+            $currentLang,
+            $scanLimit
         );
 
         $jailedIps = \larikmc\antibot\services\resilience\AutoJailService::getJailedIps();
@@ -195,7 +200,9 @@ class DefaultController extends Controller
         $forceRefresh = (bool) $this->request->get('refresh', false);
         $antibot = $this->module->getAntibot();
         $storage = $antibot->getStorage();
+        $settings = $storage->loadSettings();
 
+        $scanLimit = max(500, (int) ($settings['eventHistoryScanLimit'] ?? 5000));
         $currentLang = \larikmc\antibot\services\I18n::getLanguage();
 
         $data = \larikmc\antibot\services\analytics\DashboardAnalyticsService::getAnalytics(
@@ -203,10 +210,122 @@ class DefaultController extends Controller
             $period,
             $antibot->mode,
             $forceRefresh,
-            $currentLang
+            $currentLang,
+            $scanLimit
         );
 
         return $this->asJson($data);
+    }
+
+    /**
+     * Streams and exports event history in CSV or JSONL format for offline analysis.
+     * Protected by module's AccessControl behavior (administrators only).
+     *
+     * @return Response
+     */
+    public function actionExportEvents(): Response
+    {
+        $format = strtolower(trim((string) $this->request->get('format', 'csv')));
+        $filter = strtolower(trim((string) $this->request->get('filter', 'all')));
+        $includeRotated = (bool) $this->request->get('include_rotated', true);
+
+        $antibot = $this->module->getAntibot();
+        $storage = $antibot->getStorage();
+
+        $timestamp = date('Ymd_His');
+        $filterSuffix = $filter === 'blocked' ? '_blocked' : '';
+
+        $response = Yii::$app->response;
+        $response->format = Response::FORMAT_RAW;
+
+        if ($format === 'jsonl') {
+            $filename = "antibot_events{$filterSuffix}_{$timestamp}.jsonl";
+            $response->headers->set('Content-Type', 'application/x-ndjson; charset=UTF-8');
+            $response->headers->set('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+            $response->stream = function () use ($storage, $filter, $includeRotated): void {
+                $storage->streamEvents(function (array $event, string $rawLine) use ($filter): bool {
+                    if ($filter === 'blocked') {
+                        $action = (string) ($event['action'] ?? '');
+                        if ($action !== 'blocked' && $action !== 'throttled') {
+                            return true;
+                        }
+                    }
+                    echo $rawLine . "\n";
+                    if (ob_get_level() > 0) {
+                        ob_flush();
+                    }
+                    flush();
+                    return true;
+                }, $includeRotated);
+            };
+
+            return $response;
+        }
+
+        // Default: CSV format
+        $filename = "antibot_events{$filterSuffix}_{$timestamp}.csv";
+        $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
+        $response->headers->set('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+        $response->stream = function () use ($storage, $filter, $includeRotated): void {
+            $out = fopen('php://output', 'wb');
+            if (!$out) {
+                return;
+            }
+
+            // UTF-8 BOM for Microsoft Excel compatibility
+            fwrite($out, "\xEF\xBB\xBF");
+
+            // CSV Header
+            fputcsv($out, [
+                'Timestamp',
+                'DateTime',
+                'IP Address',
+                'Action',
+                'Reason',
+                'Bot Key',
+                'Bot Category',
+                'Verification',
+                'URL',
+                'User-Agent',
+            ]);
+
+            $storage->streamEvents(function (array $event) use ($out, $filter): bool {
+                $action = (string) ($event['action'] ?? '');
+                if ($filter === 'blocked' && $action !== 'blocked' && $action !== 'throttled') {
+                    return true;
+                }
+
+                $ts = (int) ($event['timestamp'] ?? time());
+                $formattedDate = \larikmc\antibot\services\I18n::formatTimestamp($ts, $event['date'] ?? null);
+
+                fputcsv($out, [
+                    $ts,
+                    $formattedDate,
+                    (string) ($event['ip'] ?? ''),
+                    $action,
+                    (string) ($event['reason'] ?? ''),
+                    (string) ($event['bot_key'] ?? ''),
+                    (string) ($event['bot_category'] ?? ''),
+                    (string) ($event['verification_status'] ?? ''),
+                    (string) ($event['url'] ?? ($event['route'] ?? '')),
+                    (string) ($event['userAgent'] ?? ''),
+                ]);
+
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+                return true;
+            }, $includeRotated);
+
+            fclose($out);
+        };
+
+        return $response;
     }
 
     /**

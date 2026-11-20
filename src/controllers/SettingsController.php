@@ -152,6 +152,11 @@ class SettingsController extends Controller
                 'aiCrawlerPolicies' => $cleanAiPolicies,
                 'botCategoryPolicies' => $cleanCatPolicies,
                 'botPolicies' => $cleanBotPolicies,
+                'eventHistoryScanLimit' => max(1000, min(50000, (int) ($post['eventHistoryScanLimit'] ?? 5000))),
+                'liveFeedTableLimit' => max(20, min(1000, (int) ($post['liveFeedTableLimit'] ?? 100))),
+                'maxLogSizeBytes' => in_array((int) ($post['maxLogSizeBytes'] ?? 0), [5242880, 10485760, 26214400, 52428800], true)
+                    ? (int) $post['maxLogSizeBytes']
+                    : 10485760,
                 'customBlockMessage' => trim((string) ($post['customBlockMessage'] ?? 'Access Denied: Automated bot activity detected.')),
             ];
 
