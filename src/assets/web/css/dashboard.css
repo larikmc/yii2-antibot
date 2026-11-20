@@ -1213,3 +1213,41 @@ body.dark .antibot-ip-item:hover {
 .animate-pulse {
     animation: antibotPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Live Feed URL column toggle & badge */
+#liveFeedTable .feed-col-url {
+    display: none;
+}
+#liveFeedTable.show-url-column .feed-col-url {
+    display: table-cell;
+}
+.feed-url-badge {
+    max-width: 320px;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.8rem;
+    color: var(--ab-primary, #3189f7);
+    background: rgba(49, 137, 247, 0.08);
+    border: 1px solid rgba(49, 137, 247, 0.16);
+    border-radius: 6px;
+    padding: 2px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+.feed-url-badge:hover {
+    background: rgba(49, 137, 247, 0.16);
+    color: #1a6fd0;
+    text-decoration: none;
+}
+html.dark .feed-url-badge,
+body.dark .feed-url-badge {
+    background: rgba(49, 137, 247, 0.18);
+    border-color: rgba(49, 137, 247, 0.3);
+    color: #8ec3ff;
+}
+html.dark .feed-url-badge:hover,
+body.dark .feed-url-badge:hover {
+    background: rgba(49, 137, 247, 0.28);
+    color: #badcff;
+}

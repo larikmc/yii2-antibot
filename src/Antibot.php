@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace larikmc\antibot;
 
+use larikmc\antibot\services\BotCatalog;
 use larikmc\antibot\services\BotDetector;
 use larikmc\antibot\services\IpMatcher;
 use larikmc\antibot\services\RateLimiter;
@@ -37,7 +38,7 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
-    public const VERSION = '1.5.14';
+    public const VERSION = '1.6.0';
 
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;
@@ -82,6 +83,23 @@ class Antibot extends Component implements BootstrapInterface
      * @var array<string, string> Individual AI crawler policies (name => 'allow'|'monitor'|'throttle'|'block').
      */
     public array $aiCrawlerPolicies = [];
+
+    /**
+     * @var array<string, string> Category-level policies (category => 'allow'|'monitor'|'throttle'|'block').
+     * Categories: 'search', 'ad', 'seo', 'social', 'ai_search', 'ai_training'.
+     */
+    public array $botCategoryPolicies = [];
+
+    /**
+     * @var array<string, string> Individual bot policies (botKey => 'allow'|'monitor'|'throttle'|'block').
+     * Overrides category-level policies for specific bots.
+     */
+    public array $botPolicies = [];
+
+    /**
+     * @var array<string, array{max: int, window: int}> Custom throttling limits per bot or category.
+     */
+    public array $botThrottleLimits = [];
 
     /**
      * @var array<int, array{pattern: string, methods?: array, maxRequests: int, window: int, action?: string}>
@@ -298,6 +316,15 @@ class Antibot extends Component implements BootstrapInterface
             }
             if (isset($savedSettings['aiCrawlerPolicies']) && is_array($savedSettings['aiCrawlerPolicies'])) {
                 $this->aiCrawlerPolicies = $savedSettings['aiCrawlerPolicies'];
+            }
+            if (isset($savedSettings['botCategoryPolicies']) && is_array($savedSettings['botCategoryPolicies'])) {
+                $this->botCategoryPolicies = $savedSettings['botCategoryPolicies'];
+            }
+            if (isset($savedSettings['botPolicies']) && is_array($savedSettings['botPolicies'])) {
+                $this->botPolicies = $savedSettings['botPolicies'];
+            }
+            if (isset($savedSettings['botThrottleLimits']) && is_array($savedSettings['botThrottleLimits'])) {
+                $this->botThrottleLimits = $savedSettings['botThrottleLimits'];
             }
             if (isset($savedSettings['routeRules']) && is_array($savedSettings['routeRules'])) {
                 $this->routeRules = $savedSettings['routeRules'];
@@ -594,6 +621,52 @@ class Antibot extends Component implements BootstrapInterface
     }
 
     /**
+     * Resolves the effective policy for a detected bot ('allow', 'monitor', 'throttle', 'block').
+     *
+     * Precedence:
+     * 1. Individual bot override in $this->botPolicies[$botKey]
+     * 2. Legacy $this->aiCrawlerPolicies[$botName] for AI bots
+     * 3. Category policy in $this->botCategoryPolicies[$category]
+     * 4. Legacy boolean flags ($this->blockCommercialScrapers, $this->blockAiCrawlers)
+     * 5. Catalog default policy
+     *
+     * @param string $botKey
+     * @param array<string, mixed> $botData
+     * @return string
+     */
+    public function resolveBotPolicy(string $botKey, array $botData): string
+    {
+        // 1. Explicit bot-level override
+        if (isset($this->botPolicies[$botKey]) && in_array($this->botPolicies[$botKey], ['allow', 'monitor', 'throttle', 'block'], true)) {
+            return $this->botPolicies[$botKey];
+        }
+
+        $botName = (string) ($botData['name'] ?? $botKey);
+        $category = (string) ($botData['category'] ?? '');
+
+        // 2. Backward compatibility with legacy aiCrawlerPolicies
+        if (($category === BotCatalog::CATEGORY_AI_SEARCH || $category === BotCatalog::CATEGORY_AI_TRAINING) && isset($this->aiCrawlerPolicies[$botName])) {
+            return $this->aiCrawlerPolicies[$botName];
+        }
+
+        // 3. Category-level policy
+        if ($category !== '' && isset($this->botCategoryPolicies[$category]) && in_array($this->botCategoryPolicies[$category], ['allow', 'monitor', 'throttle', 'block'], true)) {
+            return $this->botCategoryPolicies[$category];
+        }
+
+        // 4. Backward-compatible legacy fallback flags
+        if ($category === BotCatalog::CATEGORY_AI_TRAINING && !$this->blockAiCrawlers) {
+            return 'allow';
+        }
+        if ($category === BotCatalog::CATEGORY_SEO && !$this->blockCommercialScrapers) {
+            return 'allow';
+        }
+
+        // 5. Catalog default policy
+        return $botData['default_policy'] ?? BotCatalog::POLICY_ALLOW;
+    }
+
+    /**
      * Checks whether the module is currently operating in Monitoring mode.
      */
     public function isMonitoringMode(): bool
@@ -741,53 +814,169 @@ class Antibot extends Component implements BootstrapInterface
 
             // 3. Blacklist Check
             if (IpMatcher::match($ip, $this->blacklist)) {
-                $this->_currentDecision = 'blocked';
-                $this->blockRequest('Blacklisted IP address or subnet', $ip, $ua, $url);
-                return;
-            }
-
-            // 4. Legitimate vs Fake Search Bot Verification
-            $searchEngine = BotDetector::detectSearchBot($ua);
-            if ($searchEngine !== null) {
-                if ($this->verifySearchBots) {
-                    $dnsStatus = ReverseDnsVerifier::check($ip, $searchEngine);
-
-                    if ($dnsStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
-                        $this->_storage->logEvent([
-                            'ip' => $ip,
-                            'userAgent' => $ua,
-                            'action' => 'allowed_search_bot',
-                            'reason' => 'Authentic Search Engine: ' . ucfirst($searchEngine),
-                            'url' => $url,
-                        ]);
-                        $this->_currentDecision = 'allowed';
-                        return; // Pass verified search engine through
-                    }
-
-                    if ($dnsStatus === ReverseDnsVerifier::STATUS_FAKE && $this->blockFakeSearchBots) {
-                        $this->_currentDecision = 'blocked';
-                        if ($this->autoJailEnabled) {
-                            $threshold = PanicModeService::isActive() ? 1 : $this->autoJailThreshold;
-                            AutoJailService::recordViolation($ip, 'Fake search bot spoofing ' . ucfirst($searchEngine), $threshold, $this->autoJailDuration);
+                // Safe verification check: protect confirmed legitimate search and ad crawlers from accidental blacklist bans
+                $isVerifiedCrawler = false;
+                if ($this->verifySearchBots && $ua !== '' && !self::isClosedRoute($pathInfo) && $this->findMatchingUriRule($pathInfo, $request->getMethod()) === null) {
+                    $candBot = BotCatalog::identify($ua);
+                    if ($candBot !== null) {
+                        $candData = $candBot['data'];
+                        $candCat = $candData['category'] ?? '';
+                        $candVType = $candData['verification'] ?? BotCatalog::VERIFY_NONE;
+                        if (($candCat === BotCatalog::CATEGORY_SEARCH || $candCat === BotCatalog::CATEGORY_AD) && $candVType !== BotCatalog::VERIFY_NONE) {
+                            $checkStatus = ReverseDnsVerifier::checkBot($ip, $candData);
+                            if ($checkStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
+                                $isVerifiedCrawler = true;
+                            }
                         }
-                        $this->blockRequest('Fake search bot spoofing ' . ucfirst($searchEngine), $ip, $ua, $url);
-                        return;
                     }
-                    // STATUS_UNKNOWN: do NOT block as fake; proceed with standard checks
-                } else {
-                    $this->_currentDecision = 'allowed';
+                }
+
+                if (!$isVerifiedCrawler) {
+                    $this->_currentDecision = 'blocked';
+                    $this->blockRequest('Blacklisted IP address or subnet', $ip, $ua, $url);
                     return;
                 }
             }
 
-            // 5. AI Crawlers (Search vs Training Scrapers)
+            // 9. Verified Visitor Cookie Check (Early initialization)
+            $secretKey = $this->getResolvedSecretKey();
+            $cookieToken = $request->cookies->getValue(TokenService::COOKIE_NAME);
+            $isVerifiedVisitor = $cookieToken !== null && TokenService::validateToken($cookieToken, $ip, $ua, $secretKey);
+
+            // 4. Known Bot Catalog Detection & Policy Enforcement
+            $isSocialPreviewGet = false;
+            $identifiedBot = BotCatalog::identify($ua);
+            if ($identifiedBot !== null) {
+                $bKey = $identifiedBot['key'];
+                $bData = $identifiedBot['data'];
+                $bCat = $bData['category'];
+                $bName = $bData['name'];
+                $vType = $bData['verification'] ?? BotCatalog::VERIFY_NONE;
+
+                // Security check for Social Preview bots: preview bots strictly issue read requests (GET/HEAD)
+                if ($bCat === BotCatalog::CATEGORY_SOCIAL && ($request->isPost || $request->isPut || $request->isDelete)) {
+                    $this->_currentDecision = 'blocked';
+                    $this->blockRequest('Suspicious write request spoofing social preview bot: ' . $bName, $ip, $ua, $url);
+                    return;
+                }
+
+                // Verification check
+                $vStatus = ReverseDnsVerifier::STATUS_UNKNOWN;
+                if ($this->verifySearchBots && $vType !== BotCatalog::VERIFY_NONE) {
+                    $vStatus = ReverseDnsVerifier::checkBot($ip, $bData);
+                }
+
+                // If confirmed fake crawler impersonating a legitimate search engine or ad partner
+                if ($vStatus === ReverseDnsVerifier::STATUS_FAKE && $this->blockFakeSearchBots) {
+                    $this->_currentDecision = 'blocked';
+                    if ($this->autoJailEnabled) {
+                        $threshold = PanicModeService::isActive() ? 1 : $this->autoJailThreshold;
+                        AutoJailService::recordViolation($ip, 'Fake bot spoofing ' . $bName, $threshold, $this->autoJailDuration);
+                    }
+                    $this->blockRequest('Fake bot spoofing ' . $bName, $ip, $ua, $url);
+                    return;
+                }
+
+                // Resolve effective policy
+                $effectivePolicy = $this->resolveBotPolicy($bKey, $bData);
+
+                // Mark social preview read requests allowed by policy for safe public HTML parsing
+                $isPublicRoute = !self::isClosedRoute($pathInfo) && $this->findMatchingUriRule($pathInfo, $request->getMethod()) === null;
+                if ($bCat === BotCatalog::CATEGORY_SOCIAL && $effectivePolicy === 'allow' && ($request->isGet || $request->isHead) && $isPublicRoute && $vStatus !== ReverseDnsVerifier::STATUS_FAKE) {
+                    $isSocialPreviewGet = true;
+                }
+
+                // If policy is 'block'
+                if ($effectivePolicy === 'block') {
+                    $this->_currentDecision = 'blocked';
+                    $this->blockRequest('Bot blocked by policy: ' . $bName, $ip, $ua, $url);
+                    return;
+                }
+
+                // If policy is 'monitor'
+                if ($effectivePolicy === 'monitor') {
+                    $this->_currentDecision = 'monitored';
+                    $this->_storage->logEvent([
+                        'ip' => $ip,
+                        'userAgent' => $ua,
+                        'action' => 'monitored',
+                        'reason' => 'Bot monitored: ' . $bName,
+                        'url' => $url,
+                        'bot_key' => $bKey,
+                        'bot_category' => $bCat,
+                        'verification_status' => $vStatus,
+                    ]);
+                    // Monitor policy allows request to proceed through inspection pipeline
+                }
+
+                // If policy is 'throttle'
+                if ($effectivePolicy === 'throttle' && $this->rateLimitEnabled) {
+                    $throttleMax = $this->botThrottleLimits[$bKey]['max'] ?? max(5, (int) floor($this->rateLimitMax / 3));
+                    $throttleWin = $this->botThrottleLimits[$bKey]['window'] ?? $this->rateLimitWindow;
+
+                    $limitKey = sprintf('%s_bot_%s', $ip, $bKey);
+                    $limitResult = RateLimiter::check($limitKey, $throttleMax, $throttleWin, $this->rateLimitBanDuration);
+                    if ($limitResult['exceeded']) {
+                        $this->_currentDecision = 'throttled';
+                        $this->throttleRequest(
+                            sprintf('Bot rate limit exceeded: %s (%d req/%ds)', $bName, $throttleMax, $throttleWin),
+                            $ip,
+                            $limitResult['retryAfter']
+                        );
+                        return;
+                    }
+                }
+
+                // 1. If confirmed authentic crawler with 'allow' policy
+                if ($vStatus === ReverseDnsVerifier::STATUS_VERIFIED && $effectivePolicy === 'allow') {
+                    $actionCode = match ($bCat) {
+                        BotCatalog::CATEGORY_SEARCH => 'allowed_search_bot',
+                        BotCatalog::CATEGORY_AD => 'allowed_ad_bot',
+                        BotCatalog::CATEGORY_SEO => 'allowed_seo_bot',
+                        BotCatalog::CATEGORY_SOCIAL => 'allowed_social_bot',
+                        default => 'allowed_bot',
+                    };
+
+                    $this->_storage->logEvent([
+                        'ip' => $ip,
+                        'userAgent' => $ua,
+                        'action' => $actionCode,
+                        'reason' => 'Verified ' . ucfirst($bCat) . ' Bot: ' . $bName,
+                        'url' => $url,
+                        'bot_key' => $bKey,
+                        'bot_category' => $bCat,
+                        'verification_status' => $vStatus,
+                    ]);
+
+                    // Confirmed authentic bots safely pass through without triggering browser traps (JS challenge, CSS/asset trap, Datacenter challenge)
+                    $this->_currentDecision = 'allowed';
+                    return;
+                }
+
+                // 2. If policy is 'allow' but identity is unverified or in Cautious mode (VERIFY_NONE)
+                if ($effectivePolicy === 'allow') {
+                    $this->_storage->logEvent([
+                        'ip' => $ip,
+                        'userAgent' => $ua,
+                        'action' => 'monitored',
+                        'reason' => ($vType === BotCatalog::VERIFY_NONE ? 'Cautious' : 'Unverified') . ' bot allowed by policy: ' . $bName,
+                        'url' => $url,
+                        'bot_key' => $bKey,
+                        'bot_category' => $bCat,
+                        'verification_status' => $vStatus,
+                    ]);
+                    // Security Guarantee: Unverified or unauthenticated User-Agents NEVER bypass the inspection pipeline!
+                    // Request proceeds through standard filters (Traps, Datacenter, Rate Limits, Anomaly detection).
+                }
+            }
+
+            // 5. Legacy AI Crawlers fallback (for custom user-agents not yet in catalog)
             $aiBot = BotDetector::detectAiCrawler($ua);
             if ($aiBot !== null) {
                 $botName = $aiBot['name'];
                 $policy = $this->aiCrawlerPolicies[$botName] ?? null;
 
                 if ($policy === null) {
-                    // Default: allow AI Search bots to preserve referral traffic, block training scrapers
                     $policy = $aiBot['type'] === 'search' ? 'allow' : ($this->blockAiCrawlers ? 'block' : 'allow');
                 }
 
@@ -807,7 +996,7 @@ class Antibot extends Component implements BootstrapInterface
                 }
             }
 
-            // 6. Commercial SEO Scrapers
+            // 6. Commercial SEO Scrapers fallback
             $scraper = BotDetector::detectCommercialScraper($ua);
             if ($scraper !== null && $this->blockCommercialScrapers) {
                 $this->_currentDecision = 'blocked';
@@ -842,7 +1031,7 @@ class Antibot extends Component implements BootstrapInterface
                         $this->_currentDecision = 'blocked';
                         $this->blockRequest('Cloud hosting / Datacenter IP blocked: ' . $dcInfo['name'] . ' (' . $dcInfo['asn'] . ')', $ip, $ua, $url);
                         return;
-                    } elseif ($this->datacenterFilterAction === 'challenge' && !$this->isMonitoringMode() && !$isVerifiedVisitor) {
+                    } elseif ($this->datacenterFilterAction === 'challenge' && !$this->isMonitoringMode() && !$isVerifiedVisitor && !$isSocialPreviewGet) {
                         if (!$this->isMachineOrApiRequest() && ($this->jsChallengeEnabled || $this->powEnabled)) {
                             $this->_currentDecision = 'challenge';
                             $this->_storage->logEvent([
@@ -860,13 +1049,8 @@ class Antibot extends Component implements BootstrapInterface
                 }
             }
 
-            // 9. Verified Visitor Cookie Check
-            $secretKey = $this->getResolvedSecretKey();
-            $cookieToken = $request->cookies->getValue(TokenService::COOKIE_NAME);
-            $isVerifiedVisitor = $cookieToken !== null && TokenService::validateToken($cookieToken, $ip, $ua, $secretKey);
-
             // 9b. Missing Assets Trap (Detects console scrapers loading purely HTML)
-            if ($this->missingAssetsTrapEnabled && $request->isGet && !$request->isAjax && !$this->isMachineOrApiRequest() && !$isVerifiedVisitor) {
+            if ($this->missingAssetsTrapEnabled && $request->isGet && !$request->isAjax && !$this->isMachineOrApiRequest() && !$isVerifiedVisitor && !$isSocialPreviewGet) {
                 $htmlCount = \larikmc\antibot\services\trap\MissingAssetsTrap::recordHtmlRequest($ip, $this->missingAssetsWindow);
                 if ($htmlCount >= $this->missingAssetsThreshold) {
                     $trapReason = sprintf('Missing static assets anomaly (%d consecutive HTML requests without assets)', $htmlCount);
@@ -1023,7 +1207,7 @@ class Antibot extends Component implements BootstrapInterface
             }
 
             // 12b. Elevated Panic Mode Challenge (Strict verification for unverified visitors)
-            if (PanicModeService::isActive() && !$isVerifiedVisitor && !$this->isMachineOrApiRequest() && !$this->isMonitoringMode()) {
+            if (PanicModeService::isActive() && !$isVerifiedVisitor && !$this->isMachineOrApiRequest() && !$this->isMonitoringMode() && !$isSocialPreviewGet) {
                 if ($this->powEnabled) {
                     $this->_currentDecision = 'challenge';
                     $pow = \larikmc\antibot\services\pow\PowService::generateChallenge($ip, $secretKey, $this->powDifficulty);
@@ -1055,7 +1239,7 @@ class Antibot extends Component implements BootstrapInterface
             }
 
             // 13. Strict Mode Challenge (disabled in Monitoring mode)
-            if ($this->mode === StorageService::MODE_STRICT && !$isVerifiedVisitor && $this->jsChallengeEnabled && !$this->isMonitoringMode()) {
+            if ($this->mode === StorageService::MODE_STRICT && !$isVerifiedVisitor && $this->jsChallengeEnabled && !$this->isMonitoringMode() && !$isSocialPreviewGet) {
                 if (!$this->isMachineOrApiRequest()) {
                     $this->_currentDecision = 'challenge';
                     $this->finishInspection('challenge');
@@ -1726,6 +1910,31 @@ class Antibot extends Component implements BootstrapInterface
         $prefix = rtrim($pattern, '*');
         if ($prefix !== '' && (str_starts_with($path, $prefix) || str_starts_with($path, rtrim($prefix, '/') . '/'))) {
             return true;
+        }
+        return false;
+    }
+
+    /**
+     * Checks if a request path targets sensitive, administrative, or authentication routes.
+     */
+    public static function isClosedRoute(string $pathInfo): bool
+    {
+        $normalized = strtolower(trim($pathInfo, '/'));
+        $closedPrefixes = [
+            'admin',
+            'antibot',
+            'backend',
+            'wp-admin',
+            'wp-login',
+            'api',
+            'user/login',
+            'site/login',
+            'auth',
+        ];
+        foreach ($closedPrefixes as $prefix) {
+            if ($normalized === $prefix || str_starts_with($normalized, $prefix . '/')) {
+                return true;
+            }
         }
         return false;
     }

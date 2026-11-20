@@ -108,6 +108,17 @@ class HoneyUrlService
     public static function handleTrapHit(string $ip, string $ua, Antibot $antibot): array
     {
         // 1. Strict SEO Safety: Verify whether this is an authentic search engine crawler
+        $identifiedBot = \larikmc\antibot\services\BotCatalog::identify($ua);
+        if ($identifiedBot !== null && ($identifiedBot['data']['category'] === \larikmc\antibot\services\BotCatalog::CATEGORY_SEARCH || $identifiedBot['data']['category'] === \larikmc\antibot\services\BotCatalog::CATEGORY_AD)) {
+            $status = ReverseDnsVerifier::checkBot($ip, $identifiedBot['data']);
+            if ($status === ReverseDnsVerifier::STATUS_VERIFIED) {
+                return [
+                    'status' => 'ignored_verified_search_bot',
+                    'penalized' => false,
+                    'reason' => 'Authentic ' . ucfirst($identifiedBot['data']['category']) . ' Bot: ' . $identifiedBot['data']['name'],
+                ];
+            }
+        }
         $searchEngine = BotDetector::detectSearchBot($ua);
         if ($searchEngine !== null) {
             $status = ReverseDnsVerifier::check($ip, $searchEngine);

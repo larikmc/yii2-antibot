@@ -98,8 +98,10 @@ class I18n
             'th_ip' => 'IP адрес',
             'th_action' => 'Действие',
             'th_reason' => 'Причина',
+            'th_url' => 'URL / Страница',
             'th_ua' => 'User-Agent',
             'th_actions' => 'Действия',
+            'toggle_show_url' => 'Показывать URL',
             'btn_ban' => 'Бан',
             'btn_whitelist' => 'В белый',
             'ban_ip_title' => 'Заблокировать этот IP',
@@ -334,6 +336,37 @@ class I18n
             'settings_datacenter_action_challenge' => 'Обязательный JS Challenge',
             'settings_datacenter_action_block' => 'Прямая блокировка (403)',
             'settings_datacenter_risk' => 'Очки риска для RiskEngine (+10..100):',
+            // Bot Catalog & Policies
+            'catalog_title' => 'Каталог роботов и управление доступом',
+            'catalog_desc' => 'Индивидуальные политики, мониторинг и проверка подлинности (Reverse DNS, CIDR, ASN)',
+            'catalog_search_placeholder' => 'Поиск робота по названию, оператору или категории...',
+            'catalog_filter_all' => 'Все категории',
+            'catalog_filter_search' => 'Поисковые',
+            'catalog_filter_ad' => 'Рекламные',
+            'catalog_filter_seo' => 'SEO и аудит',
+            'catalog_filter_social' => 'Соцсети и превью',
+            'catalog_filter_ai' => 'AI-краулеры',
+            'catalog_th_bot' => 'Робот / Оператор',
+            'catalog_th_category' => 'Категория',
+            'catalog_th_verification' => 'Верификация',
+            'catalog_th_policy' => 'Политика доступа',
+            'catalog_th_stats' => 'Активность (Запросы / Блокировки)',
+            'catalog_policy_allow' => 'Разрешать (Allow)',
+            'catalog_policy_monitor' => 'Мониторинг (Monitor)',
+            'catalog_policy_throttle' => 'Лимит частоты (Throttle)',
+            'catalog_policy_block' => 'Блокировать (Block)',
+            'catalog_policy_inherited' => 'По умолчанию категории',
+            'catalog_verify_rdns' => 'Двойной DNS (FCrDNS)',
+            'catalog_verify_cidr' => 'Диапазоны IP / ASN',
+            'catalog_verify_cidr_rdns' => 'CIDR + FCrDNS',
+            'catalog_verify_none' => 'Без проверки (Cautious)',
+            'catalog_last_seen' => 'Посл. активность:',
+            'catalog_never_seen' => 'Не наблюдался',
+            'filter_ad' => 'Рекламные боты',
+            'filter_social' => 'Соцсети',
+            'verified_bot_protected_badge' => 'Защищён (Бот)',
+            'verified_bot_protected_title' => 'Проверенный поисковый/рекламный робот или белый список. Блокировка отключена для защиты SEO и монетизации сайта.',
+            'cant_block_verified_bot' => 'Действие отклонено: IP принадлежит проверенному поисковому или рекламному роботу. Блокировка подсети сломает индексацию и монетизацию сайта!',
         ],
         'en' => [
             'app_title' => 'AntiBot — Monitoring & Visual Analytics',
@@ -394,8 +427,10 @@ class I18n
             'th_ip' => 'IP Address',
             'th_action' => 'Action',
             'th_reason' => 'Reason',
+            'th_url' => 'URL / Route',
             'th_ua' => 'User-Agent',
             'th_actions' => 'Actions',
+            'toggle_show_url' => 'Show URL',
             'btn_ban' => 'Ban',
             'btn_whitelist' => 'Whitelist',
             'ban_ip_title' => 'Block this IP address',
@@ -630,6 +665,37 @@ class I18n
             'settings_datacenter_action_challenge' => 'Enforce JS Challenge',
             'settings_datacenter_action_block' => 'Block Directly (403)',
             'settings_datacenter_risk' => 'Risk Score for RiskEngine (+10..100):',
+            // Bot Catalog & Policies
+            'catalog_title' => 'Bot Catalog & Granular Access Control',
+            'catalog_desc' => 'Individual bot policies, monitoring, and authenticity verification (Reverse DNS, CIDR, ASN)',
+            'catalog_search_placeholder' => 'Search bot by name, operator, or category...',
+            'catalog_filter_all' => 'All Categories',
+            'catalog_filter_search' => 'Search Engines',
+            'catalog_filter_ad' => 'Advertising',
+            'catalog_filter_seo' => 'SEO & Audit',
+            'catalog_filter_social' => 'Social & Preview',
+            'catalog_filter_ai' => 'AI Crawlers',
+            'catalog_th_bot' => 'Bot / Operator',
+            'catalog_th_category' => 'Category',
+            'catalog_th_verification' => 'Verification',
+            'catalog_th_policy' => 'Access Policy',
+            'catalog_th_stats' => 'Activity (Hits / Blocks)',
+            'catalog_policy_allow' => 'Allow',
+            'catalog_policy_monitor' => 'Monitor',
+            'catalog_policy_throttle' => 'Throttle',
+            'catalog_policy_block' => 'Block',
+            'catalog_policy_inherited' => 'Category Default',
+            'catalog_verify_rdns' => 'Two-Way DNS (FCrDNS)',
+            'catalog_verify_cidr' => 'IP Ranges / ASN',
+            'catalog_verify_cidr_rdns' => 'CIDR + FCrDNS',
+            'catalog_verify_none' => 'No Verification (Cautious)',
+            'catalog_last_seen' => 'Last active:',
+            'catalog_never_seen' => 'Never seen',
+            'filter_ad' => 'Advertising Bots',
+            'filter_social' => 'Social Previews',
+            'verified_bot_protected_badge' => 'Protected (Bot)',
+            'verified_bot_protected_title' => 'Verified search/advertising bot or whitelisted IP. Blocking is disabled to protect SEO and website monetization.',
+            'cant_block_verified_bot' => 'Action rejected: IP belongs to a verified search or advertising bot. Blocking this subnet would harm SEO and ad revenue!',
         ],
     ];
 
@@ -778,6 +844,48 @@ class I18n
         }
 
         $isRu = self::isRussian($lang);
+
+        // 0. Bot catalog reason handlers
+        if (preg_match('/^(?:Verified|Allowed)\s+(Search|Ad|SEO|Social|AI)\s+Bot:\s*(.+)$/i', $raw, $m)) {
+            $catType = ucfirst(strtolower($m[1]));
+            $botName = trim($m[2]);
+            $catBadge = match($catType) {
+                'Ad' => ($isRu ? 'Реклама' : 'Ad Bot'),
+                'Seo' => ($isRu ? 'SEO' : 'SEO Bot'),
+                'Social' => ($isRu ? 'Соцсети' : 'Social'),
+                'Ai' => ($isRu ? 'AI-робот' : 'AI Bot'),
+                default => ($isRu ? 'Поисковик' : 'Search Engine'),
+            };
+            return [
+                'title' => $isRu ? "Подлинный {$catBadge}: {$botName}" : "Verified {$catType} Bot: {$botName}",
+                'badge' => $catBadge,
+                'raw' => $raw,
+            ];
+        }
+        if (preg_match('/^Bot blocked by policy:\s*(.+)$/i', $raw, $m)) {
+            $botName = trim($m[1]);
+            return [
+                'title' => $isRu ? "Бот заблокирован политикой: {$botName}" : "Bot blocked by policy: {$botName}",
+                'badge' => $isRu ? 'Блокировка' : 'Policy Block',
+                'raw' => $raw,
+            ];
+        }
+        if (preg_match('/^Bot rate limit exceeded:\s*(.+)$/i', $raw, $m)) {
+            $detail = trim($m[1]);
+            return [
+                'title' => $isRu ? "Лимит частоты бота: {$detail}" : "Bot rate limit exceeded: {$detail}",
+                'badge' => $isRu ? 'Rate Limit' : 'Throttled',
+                'raw' => $raw,
+            ];
+        }
+        if (preg_match('/^Fake bot spoofing\s+(.+)$/i', $raw, $m)) {
+            $bName = trim($m[1]);
+            return [
+                'title' => $isRu ? "Поддельный бот (выдаёт себя за {$bName})" : "Fake bot spoofing {$bName}",
+                'badge' => $isRu ? 'Фейк-бот' : 'Fake Bot',
+                'raw' => $raw,
+            ];
+        }
 
         // 1. Fake search bot spoofing Engine
         if (preg_match('/^Fake search bot spoofing\s+(.+)$/i', $raw, $m)) {

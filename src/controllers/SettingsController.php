@@ -31,6 +31,7 @@ class SettingsController extends Controller
             'class' => VerbFilter::class,
             'actions' => [
                 'index' => ['GET', 'POST'],
+                'update-ranges' => ['POST'],
             ],
         ];
         return $behaviors;
@@ -65,6 +66,24 @@ class SettingsController extends Controller
             foreach ($aiPolicies as $bot => $action) {
                 if (in_array($action, ['allow', 'monitor', 'throttle', 'block'], true)) {
                     $cleanAiPolicies[$bot] = $action;
+                }
+            }
+
+            // Process bot category policies
+            $catPoliciesRaw = (array) ($post['botCategoryPolicies'] ?? []);
+            $cleanCatPolicies = [];
+            foreach ($catPoliciesRaw as $cat => $action) {
+                if (in_array($action, ['allow', 'monitor', 'throttle', 'block'], true)) {
+                    $cleanCatPolicies[$cat] = $action;
+                }
+            }
+
+            // Process individual bot policies
+            $botPoliciesRaw = (array) ($post['botPolicies'] ?? []);
+            $cleanBotPolicies = [];
+            foreach ($botPoliciesRaw as $botKey => $action) {
+                if (in_array($action, ['allow', 'monitor', 'throttle', 'block'], true)) {
+                    $cleanBotPolicies[$botKey] = $action;
                 }
             }
 
@@ -131,6 +150,8 @@ class SettingsController extends Controller
                 'autoTrustLocalProxy' => !empty($post['autoTrustLocalProxy']),
                 'language' => in_array($post['language'] ?? '', ['auto', 'ru', 'en'], true) ? $post['language'] : 'auto',
                 'aiCrawlerPolicies' => $cleanAiPolicies,
+                'botCategoryPolicies' => $cleanCatPolicies,
+                'botPolicies' => $cleanBotPolicies,
                 'customBlockMessage' => trim((string) ($post['customBlockMessage'] ?? 'Access Denied: Automated bot activity detected.')),
             ];
 
@@ -183,6 +204,9 @@ class SettingsController extends Controller
             $settings['language'] = $antibot->language;
             $settings['ipHeaders'] = $antibot->ipHeaders;
             $settings['aiCrawlerPolicies'] = $antibot->aiCrawlerPolicies;
+            $settings['botCategoryPolicies'] = $antibot->botCategoryPolicies;
+            $settings['botPolicies'] = $antibot->botPolicies;
+            $settings['botThrottleLimits'] = $antibot->botThrottleLimits;
             $settings['routeRules'] = $antibot->routeRules;
             $settings['behaviorAnalysisEnabled'] = $antibot->behaviorAnalysisEnabled;
             $settings['weightedRateLimitEnabled'] = $antibot->weightedRateLimitEnabled;
@@ -213,9 +237,39 @@ class SettingsController extends Controller
             $settings['blockCliAndLibraries'] = $settings['blockCliTools'];
         }
 
+        $catalogBots = \larikmc\antibot\services\BotCatalog::getAll();
+        $botStats = $storage->getBotActivityStats(1500);
+
         return $this->render('index', [
             'settings' => $settings,
             'antibot' => $antibot,
+            'catalogBots' => $catalogBots,
+            'botStats' => $botStats,
         ]);
+    }
+
+    /**
+     * Updates Google Special Crawlers and IAS crawler IP ranges from official endpoints.
+     *
+     * @return Response
+     */
+    public function actionUpdateRanges(): Response
+    {
+        $googleRes = \larikmc\antibot\data\GoogleSpecialRanges::update(5);
+        $iasRes = \larikmc\antibot\data\IasRanges::update(5);
+
+        $msg = sprintf(
+            'Google: %s | IAS: %s',
+            $googleRes['message'],
+            $iasRes['message']
+        );
+
+        if ($googleRes['success'] || $iasRes['success']) {
+            Yii::$app->session->setFlash('success', 'Списки диапазонов успешно актуализированы. ' . $msg);
+        } else {
+            Yii::$app->session->setFlash('warning', 'Обновление не выполнено, сохранены последние валидные списки. ' . $msg);
+        }
+
+        return $this->redirect(['index']);
     }
 }

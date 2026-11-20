@@ -21,15 +21,17 @@ class BotDetector
 {
     /**
      * Search engines map: engine key => regex pattern.
+     * Note: PetalBot is now properly classified under search engines.
      */
     public const SEARCH_BOTS = [
-        'yandex' => 'YandexBot|YandexMobileBot|YandexDirect|YandexMetrika|YandexImages|YandexNews|YandexVideo|YandexMedia|YandexFavicons|YandexWebmaster|YandexSpravBot',
-        'google' => 'Googlebot|Googlebot-Image|Googlebot-News|Googlebot-Video|Mediapartners-Google|AdsBot-Google|Feedfetcher-Google|Google-Read-Aloud',
+        'yandex' => 'YandexBot|YandexMobileBot|YandexDirect|YandexDirectDyn|YandexAdNet|YandexPartner|YaDirectFetcher|YandexMetrika|YandexImages|YandexNews|YandexVideo|YandexMedia|YandexFavicons|YandexWebmaster|YandexSpravBot|YandexRenderResourcesBot',
+        'google' => 'Googlebot|Googlebot-Image|Googlebot-News|Googlebot-Video|Google-InspectionTool|Mediapartners-Google|AdsBot-Google|AdsBot-Google-Mobile|Google-Display-Ads-Bot|Feedfetcher-Google|Google-Read-Aloud',
         'bing' => 'bingbot|msnbot|BingPreview|adidxbot|MicrosoftPreview',
         'mailru' => 'Mail\.RU_Bot|Mail\.Ru',
         'duckduckgo' => 'DuckDuckBot|DuckDuckGo-Favicons-Bot',
         'yahoo' => 'Slurp',
         'apple' => 'Applebot',
+        'petalbot' => 'PetalBot',
         'baidu' => 'Baiduspider',
     ];
 
@@ -44,13 +46,14 @@ class BotDetector
 
     /**
      * AI Training crawlers and offline LLM scrapers.
+     * Note: Google-Extended is an instruction token for robots.txt only, not an HTTP User-Agent crawler.
+     * It is intentionally omitted from HTTP classification to avoid false-positive blocks of Googlebot.
      */
     public const AI_TRAINING_CRAWLERS = [
         'GPTBot' => 'GPTBot',
         'ClaudeBot' => 'ClaudeBot|anthropic-ai|Claude-Web',
         'Bytespider' => 'Bytespider',
         'CCBot' => 'CCBot',
-        'Google-Extended' => 'Google-Extended',
         'Meta-ExternalAgent' => 'FacebookBot|Meta-ExternalAgent',
         'Amazonbot' => 'Amazonbot',
         'cohere-ai' => 'cohere-ai',
@@ -59,20 +62,50 @@ class BotDetector
     ];
 
     /**
-     * Aggressive SEO scrapers and commercial parsers.
+     * Commercial SEO crawlers and parsers (Ahrefs, Semrush, DotBot, etc.).
+     * Note: CriteoBot and PetalBot moved to their respective specialized categories (Ad and Search).
      */
     public const COMMERCIAL_SCRAPERS = [
-        'Ahrefs' => 'AhrefsBot',
-        'Semrush' => 'SemrushBot',
+        'Ahrefs' => 'AhrefsBot|AhrefsSiteAudit',
+        'Semrush' => 'SemrushBot|SiteAuditBot|SemrushBot-BA|SemrushBot-SI|SemrushBot-SWA|SemrushBot-OCOB|SemrushBot-FT|SemrushBot-ESI|SplitSignalBot',
         'DotBot' => 'DotBot',
         'MJ12bot' => 'MJ12bot',
-        'PetalBot' => 'PetalBot',
-        'Seekport' => 'SeekportBot',
         'MegaIndex' => 'MegaIndex',
         'BLEXBot' => 'BLEXBot',
         'DataForSeo' => 'DataForSeoBot',
         'Serpstat' => 'SerpstatBot',
+        'Ryte' => 'RyteBot',
+        'Seekport' => 'SeekportBot',
+    ];
+
+    /**
+     * Advertising & verification bots.
+     */
+    public const ADVERTISING_BOTS = [
+        'YandexDirect' => 'YandexDirect|YandexDirectDyn',
+        'YandexAdNet' => 'YandexAdNet|YandexPartner',
+        'YaDirectFetcher' => 'YaDirectFetcher',
+        'YandexMetrika' => 'YandexMetrika',
+        'GoogleAds' => 'AdsBot-Google|AdsBot-Google-Mobile|Mediapartners-Google|Google-Display-Ads-Bot',
         'Criteo' => 'CriteoBot',
+        'Quantcast' => 'Quantcastbot',
+        'IAS' => 'IAS[ _-]Crawler|ias_crawler|ias_wombles',
+        'OpenAIAds' => 'OAI-AdsBot',
+        'DoubleVerify' => 'DoubleVerify',
+    ];
+
+    /**
+     * Social networks & messenger preview bots (link unfurling).
+     */
+    public const SOCIAL_PREVIEW_BOTS = [
+        'Telegram' => 'TelegramBot',
+        'WhatsApp' => 'WhatsApp',
+        'Facebook' => 'facebookexternalhit|facebookcatalog|meta-externalfetcher',
+        'Twitter' => 'Twitterbot',
+        'LinkedIn' => 'LinkedInBot',
+        'Discord' => 'Discordbot',
+        'Slack' => 'Slackbot|Slackbot-LinkExpanding',
+        'VK' => 'vkShare',
     ];
 
     /**
@@ -154,6 +187,53 @@ class BotDetector
         }
 
         return null;
+    }
+
+    /**
+     * Detects advertising & verification bots.
+     */
+    public static function detectAdvertisingBot(string $userAgent): ?string
+    {
+        if ($userAgent === '') {
+            return null;
+        }
+
+        foreach (self::ADVERTISING_BOTS as $name => $pattern) {
+            if (preg_match('/' . $pattern . '/i', $userAgent)) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Detects social media and messenger link preview bots.
+     */
+    public static function detectSocialPreviewBot(string $userAgent): ?string
+    {
+        if ($userAgent === '') {
+            return null;
+        }
+
+        foreach (self::SOCIAL_PREVIEW_BOTS as $name => $pattern) {
+            if (preg_match('/' . $pattern . '/i', $userAgent)) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Fast identification via BotCatalog.
+     *
+     * @param string $userAgent
+     * @return array{key: string, data: array<string, mixed>}|null
+     */
+    public static function identifyBot(string $userAgent): ?array
+    {
+        return BotCatalog::identify($userAgent);
     }
 
     /**

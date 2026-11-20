@@ -274,6 +274,19 @@ class DefaultController extends Controller
                 $target = \larikmc\antibot\services\IpMatcher::getSubnet24($ip) ?? $ip;
             }
 
+            // Safety guard: Check entire candidate range (/24 subnet or single IP) for intersection with protected search & ad systems
+            $intersection = \larikmc\antibot\services\IpMatcher::checkProtectedIntersection($target);
+            if ($intersection['intersects']) {
+                $lang = \larikmc\antibot\services\I18n::getLanguage();
+                $sysName = $intersection['system'] ?? 'Protected Bot';
+                $matchedRange = $intersection['range'] ?? '';
+                $msg = $lang === 'en'
+                    ? "Cannot block '{$target}': range intersects with protected {$sysName} ({$matchedRange})!"
+                    : "Невозможно заблокировать '{$target}': диапазон пересекается с защищенной инфраструктурой {$sysName} ({$matchedRange})!";
+                Yii::$app->session->setFlash('warning', $msg);
+                return $this->redirect(Yii::$app->request->referrer ?: ['index']);
+            }
+
             $blacklist = (array) ($settings['blacklist'] ?? []);
             if (!in_array($target, $blacklist, true)) {
                 $blacklist[] = $target;

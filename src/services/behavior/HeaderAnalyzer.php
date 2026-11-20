@@ -65,8 +65,8 @@ class HeaderAnalyzer
             ];
         }
 
-        // Search engines (Google, Yandex, etc.) have distinct header patterns; do not flag them
-        if (BotDetector::detectSearchBot($ua) !== null) {
+        // Known catalog bots (search, ad, social, ai) have distinct header patterns; do not flag them
+        if (\larikmc\antibot\services\BotCatalog::identify($ua) !== null || BotDetector::detectSearchBot($ua) !== null) {
             return $defaultResult;
         }
 

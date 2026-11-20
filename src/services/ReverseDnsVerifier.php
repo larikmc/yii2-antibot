@@ -43,16 +43,23 @@ class ReverseDnsVerifier
     public const BINGBOT_CIDR_SOURCE = 'https://www.bing.com/toolbox/bingbot.json';
 
     /**
-     * Legitimate hostname domain suffixes for each search engine.
+     * Legitimate hostname domain suffixes for each search engine and crawler.
      */
     public const VALID_DOMAINS = [
         'yandex' => ['.yandex.ru', '.yandex.net', '.yandex.com'],
         'google' => ['.googlebot.com', '.google.com'],
+        'google_special' => ['.google.com', '.googlebot.com'],
         'bing' => ['.search.msn.com'],
         'mailru' => ['.mail.ru'],
         'apple' => ['.applebot.apple.com'],
         'baidu' => ['.baidu.com', '.baidu.jp'],
         'duckduckgo' => ['.duckduckgo.com'],
+        'petalbot' => ['.aspiegel.com', '.petalsearch.com'],
+        'ahrefs' => ['.ahrefs.com', '.ahrefs.net'],
+        'semrush' => ['.semrush.com'],
+        'dotbot' => ['.opensiteexplorer.org', '.moz.com'],
+        'mj12bot' => ['.majestic12.co.uk', '.majesticseo.com'],
+        'dataforseo' => ['.dataforseo.com'],
     ];
 
     /**
@@ -482,6 +489,59 @@ class ReverseDnsVerifier
     }
 
     /**
+     * Runtime registry of confirmed verified bot IPs.
+     * @var array<string, string> [$ip => $botName]
+     */
+    public static array $verifiedIpRegistry = [];
+
+    /**
+     * Registers a confirmed authentic bot IP into the runtime registry.
+     */
+    public static function registerVerifiedIp(string $ip, string $botName): void
+    {
+        $ip = trim($ip);
+        if ($ip !== '') {
+            self::$verifiedIpRegistry[$ip] = $botName;
+        }
+    }
+
+    /**
+     * Retrieves known confirmed verified bot IPs from runtime memory and recent event logs.
+     *
+     * @param int $limit Maximum event lines to analyze.
+     * @return array<string, string> Map of IP => Crawler name
+     */
+    public static function getKnownVerifiedBotIps(int $limit = 500): array
+    {
+        $verified = self::$verifiedIpRegistry;
+
+        try {
+            $storage = Yii::$app !== null && Yii::$app->has('antibot')
+                ? Yii::$app->get('antibot')->getStorage()
+                : new StorageService();
+
+            $events = $storage->getRecentEvents($limit);
+            foreach ($events as $event) {
+                $status = $event['verification_status'] ?? null;
+                $action = (string) ($event['action'] ?? '');
+                if ($status === self::STATUS_VERIFIED || str_starts_with($action, 'allowed_')) {
+                    $ip = trim((string) ($event['ip'] ?? ''));
+                    if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP)) {
+                        $botName = (string) ($event['reason'] ?? ($event['bot_key'] ?? 'Verified Crawler'));
+                        if (!isset($verified[$ip])) {
+                            $verified[$ip] = $botName;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Fail-safe: return available in-memory registry
+        }
+
+        return $verified;
+    }
+
+    /**
      * Verifies whether an IP belongs to a legitimate search engine.
      *
      * Order of evaluation:
@@ -512,14 +572,19 @@ class ReverseDnsVerifier
             }
         }
 
-        // 2. Pre-filter official CIDR ranges where published (Google & Bing)
-        if ($engine === 'google' || $engine === 'bing') {
-            $knownCidrs = $engine === 'google' ? self::GOOGLEBOT_CIDRS : self::BINGBOT_CIDRS;
+        // 2. Pre-filter official CIDR ranges where published (Google, Google Special, Bing)
+        if ($engine === 'google' || $engine === 'google_special' || $engine === 'bing') {
+            $knownCidrs = match ($engine) {
+                'google' => self::GOOGLEBOT_CIDRS,
+                'google_special' => \larikmc\antibot\data\GoogleSpecialRanges::getCidrs(),
+                'bing' => self::BINGBOT_CIDRS,
+            };
             if (IpMatcher::match($ip, $knownCidrs)) {
-                // Official CIDR match confirms authentic search engine infrastructure without slow DNS!
+                // Official CIDR match confirms authentic infrastructure without slow DNS!
                 if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
                     Yii::$app->cache->set($cacheKey, self::STATUS_VERIFIED, self::$cacheVerified);
                 }
+                self::registerVerifiedIp($ip, ucfirst($engine) . ' Bot');
                 return self::STATUS_VERIFIED;
             }
             // If outside known official snapshot, do NOT mark FAKE (snapshot may be incomplete or outdated).
@@ -550,7 +615,81 @@ class ReverseDnsVerifier
             Yii::$app->cache->set($cacheKey, $status, $ttl);
         }
 
+        if ($status === self::STATUS_VERIFIED) {
+            self::registerVerifiedIp($ip, ucfirst($engine) . ' Bot');
+        }
+
         return $status;
+    }
+
+    /**
+     * Verifies a bot using its catalog entry definition.
+     *
+     * Supports:
+     * - 'rdns': Two-way DNS verification with authorized suffixes
+     * - 'cidr_or_rdns': Pre-filtered CIDR check + fallback to two-way DNS
+     * - 'cidr': Official published subnets/IPs check (Criteo, Quantcast, Meta)
+     * - 'none': Returns STATUS_UNKNOWN (no verification mechanism available)
+     *
+     * @param string $ip Client IP.
+     * @param array<string, mixed> $botData Bot metadata from BotCatalog.
+     * @return string One of STATUS_VERIFIED, STATUS_FAKE, or STATUS_UNKNOWN.
+     */
+    public static function checkBot(string $ip, array $botData): string
+    {
+        $vMethod = $botData['verification'] ?? BotCatalog::VERIFY_NONE;
+
+        if ($vMethod === BotCatalog::VERIFY_NONE) {
+            return self::STATUS_UNKNOWN;
+        }
+
+        $botName = (string) ($botData['name'] ?? 'Verified Crawler');
+
+        if ($vMethod === BotCatalog::VERIFY_CIDR) {
+            $cidrKey = $botData['cidr_key'] ?? '';
+            $matched = match ($cidrKey) {
+                'criteo' => IpMatcher::match($ip, BotCatalog::CRITEO_CIDRS),
+                'quantcast' => in_array($ip, BotCatalog::QUANTCAST_IPS, true),
+                'meta' => IpMatcher::match($ip, BotCatalog::META_CIDRS),
+                'ias' => \larikmc\antibot\data\IasRanges::match($ip),
+                'openai' => IpMatcher::match($ip, BotCatalog::OPENAI_ADS_CIDRS),
+                'telegram' => IpMatcher::match($ip, BotCatalog::TELEGRAM_CIDRS),
+                'vk' => IpMatcher::match($ip, BotCatalog::VK_CIDRS),
+                default => false,
+            };
+            if ($matched) {
+                self::registerVerifiedIp($ip, $botName);
+                return self::STATUS_VERIFIED;
+            }
+            return self::STATUS_FAKE;
+        }
+
+        $engineKey = $botData['engine_key'] ?? '';
+        if ($engineKey !== '' && isset(self::VALID_DOMAINS[$engineKey])) {
+            $status = self::check($ip, $engineKey);
+            if ($status === self::STATUS_VERIFIED) {
+                self::registerVerifiedIp($ip, $botName);
+            }
+            return $status;
+        }
+
+        if (!empty($botData['domains'])) {
+            $slotLease = self::acquireDnsBudgetSlot($ip);
+            if ($slotLease === null) {
+                return self::STATUS_UNKNOWN;
+            }
+            try {
+                $status = self::performTwoWayDns($ip, (array) $botData['domains']);
+                if ($status === self::STATUS_VERIFIED) {
+                    self::registerVerifiedIp($ip, $botName);
+                }
+                return $status;
+            } finally {
+                self::releaseDnsBudgetSlot($slotLease, $ip);
+            }
+        }
+
+        return self::STATUS_UNKNOWN;
     }
 
     /**

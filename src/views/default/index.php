@@ -538,6 +538,12 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                     <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="search">
                         🤖 <?= Html::encode(I18n::t('filter_search', $activeLang)) ?>
                     </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="ad">
+                        📢 <?= Html::encode(I18n::t('filter_ad', $activeLang)) ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="social">
+                        💬 <?= Html::encode(I18n::t('filter_social', $activeLang)) ?>
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-semibold feed-filter-btn" data-filter="ratelimit">
                         ⏱️ <?= Html::encode(I18n::t('filter_ratelimit', $activeLang)) ?>
                     </button>
@@ -549,9 +555,18 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                     </button>
                 </div>
 
-                <div class="position-relative" style="min-width: 260px; max-width: 360px; flex: 1;">
-                    <input type="text" id="liveFeedSearchInput" class="form-control form-control-sm rounded-pill pe-4" placeholder="<?= Html::encode(I18n::t('feed_search_placeholder', $activeLang)) ?>" style="height: 34px; padding-left: 14px;">
-                    <span class="position-absolute end-0 top-50 translate-middle-y me-3 text-muted small" style="pointer-events: none;">🔍</span>
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-2">
+                        <input class="form-check-input" type="checkbox" role="switch" id="toggleShowUrl" style="cursor: pointer;">
+                        <label class="form-check-label small fw-semibold text-secondary" for="toggleShowUrl" style="cursor: pointer; user-select: none;">
+                            🔗 <?= Html::encode(I18n::t('toggle_show_url', $activeLang)) ?>
+                        </label>
+                    </div>
+
+                    <div class="position-relative" style="min-width: 240px; max-width: 340px;">
+                        <input type="text" id="liveFeedSearchInput" class="form-control form-control-sm rounded-pill pe-4" placeholder="<?= Html::encode(I18n::t('feed_search_placeholder', $activeLang)) ?>" style="height: 34px; padding-left: 14px;">
+                        <span class="position-absolute end-0 top-50 translate-middle-y me-3 text-muted small" style="pointer-events: none;">🔍</span>
+                    </div>
                 </div>
             </div>
         <?php endif; ?>
@@ -566,11 +581,12 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                     <table class="table table-hover align-middle antibot-table mb-0" id="liveFeedTable">
                         <thead>
                             <tr>
-                                <th style="width: 170px;"><?= Html::encode(I18n::t('th_time', $activeLang)) ?></th>
-                                <th style="width: 150px;"><?= Html::encode(I18n::t('th_ip', $activeLang)) ?></th>
+                                <th style="width: 160px;"><?= Html::encode(I18n::t('th_time', $activeLang)) ?></th>
+                                <th style="width: 140px;"><?= Html::encode(I18n::t('th_ip', $activeLang)) ?></th>
                                 <th style="width: 140px;"><?= Html::encode(I18n::t('th_action', $activeLang)) ?></th>
                                 <th><?= Html::encode(I18n::t('th_reason', $activeLang)) ?></th>
-                                <th><?= Html::encode(I18n::t('th_ua', $activeLang)) ?></th>
+                                <th class="feed-col-url" style="min-width: 220px; max-width: 320px;"><?= Html::encode(I18n::t('th_url', $activeLang)) ?></th>
+                                <th class="feed-col-ua"><?= Html::encode(I18n::t('th_ua', $activeLang)) ?></th>
                                 <th class="text-end" style="width: 130px;"><?= Html::encode(I18n::t('th_actions', $activeLang)) ?></th>
                             </tr>
                         </thead>
@@ -581,7 +597,13 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                     $actionData = I18n::formatAction($action, $activeLang);
                                     $reasonData = I18n::formatReason((string) ($event['reason'] ?? ''), $activeLang);
                                     $ip = (string) ($event['ip'] ?? '');
-                                    $searchBlob = mb_strtolower($ip . ' ' . ($event['route'] ?? '') . ' ' . ($event['userAgent'] ?? '') . ' ' . ($event['reason'] ?? '') . ' ' . ($reasonData['title'] ?? ''));
+                                    $reqUrl = (string) ($event['url'] ?? $event['route'] ?? '/');
+                                    $displayUrl = $reqUrl;
+                                    if (str_starts_with($reqUrl, 'http://') || str_starts_with($reqUrl, 'https://')) {
+                                        $parsed = parse_url($reqUrl);
+                                        $displayUrl = ($parsed['path'] ?? '/') . (isset($parsed['query']) && $parsed['query'] !== '' ? '?' . $parsed['query'] : '');
+                                    }
+                                    $searchBlob = mb_strtolower($ip . ' ' . $reqUrl . ' ' . ($event['route'] ?? '') . ' ' . ($event['userAgent'] ?? '') . ' ' . ($event['reason'] ?? '') . ' ' . ($reasonData['title'] ?? ''));
                                 ?>
                                 <tr data-action="<?= Html::encode($action) ?>" data-reason="<?= Html::encode((string)($event['reason'] ?? '')) ?>" data-search="<?= Html::encode($searchBlob) ?>">
                                     <td class="small text-muted font-monospace">
@@ -602,11 +624,31 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                             <span class="small fw-semibold text-dark" title="<?= Html::encode($reasonData['raw']) ?>"><?= Html::encode($reasonData['title']) ?></span>
                                         </div>
                                     </td>
-                                    <td class="small text-muted text-truncate" style="max-width: 300px;" title="<?= Html::encode($event['userAgent'] ?? '') ?>">
+                                    <td class="feed-col-url">
+                                        <a href="<?= Html::encode($reqUrl) ?>" target="_blank" rel="noopener noreferrer" class="feed-url-badge text-truncate text-decoration-none" title="<?= Html::encode($reqUrl) ?>">
+                                            <span class="opacity-75">🔗</span>
+                                            <span class="text-truncate"><?= Html::encode($displayUrl) ?></span>
+                                        </a>
+                                    </td>
+                                    <td class="small text-muted text-truncate feed-col-ua" style="max-width: 300px;" title="<?= Html::encode($event['userAgent'] ?? '') ?>">
                                         <?= Html::encode($event['userAgent'] ?? '—') ?>
                                     </td>
                                     <td class="text-end">
-                                        <?php if ($action !== 'blocked'): ?>
+                                        <?php
+                                            $isProtectedLegitBot = in_array($action, [
+                                                'allowed_search_bot',
+                                                'allowed_ad_bot',
+                                                'allowed_seo_bot',
+                                                'allowed_social_bot',
+                                                'allowed_bot',
+                                            ], true) || (isset($event['verification_status']) && $event['verification_status'] === 'verified');
+                                        ?>
+                                        <?php if ($isProtectedLegitBot): ?>
+                                            <span class="badge bg-light text-success border rounded-pill px-2 py-1 small fw-normal d-inline-flex align-items-center gap-1" title="<?= Html::encode(I18n::t('verified_bot_protected_title', $activeLang)) ?>">
+                                                <span>🛡️</span>
+                                                <span><?= Html::encode(I18n::t('verified_bot_protected_badge', $activeLang)) ?></span>
+                                            </span>
+                                        <?php elseif ($action !== 'blocked'): ?>
                                             <div class="d-inline-flex align-items-center gap-1 justify-content-end">
                                                 <?= Html::beginForm(['/antibot/default/quick-block'], 'post', ['class' => 'd-inline']) ?>
                                                     <?= Html::hiddenInput('ip', $ip) ?>
@@ -630,7 +672,7 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                                 </tr>
                             <?php endforeach; ?>
                             <tr id="feedEmptyMatchRow" style="display: none;">
-                                <td colspan="6" class="p-4 text-center text-muted">
+                                <td colspan="7" class="p-4 text-center text-muted">
                                     Ничего не найдено по текущему фильтру или поисковому запросу.
                                 </td>
                             </tr>
@@ -651,7 +693,7 @@ $this->registerJs("
         window.AntibotCharts.init({$initialDataJson}, '{$analyticsEndpointUrl}', '{$activeLang}');
     }
 
-    // Live Feed Instant Filter & Search
+    // Live Feed Instant Filter & Search & URL Column Toggle
     (function() {
         var searchInput = document.getElementById('liveFeedSearchInput');
         var filterBtns = document.querySelectorAll('.feed-filter-btn');
@@ -659,6 +701,36 @@ $this->registerJs("
         var countEl = document.getElementById('feedVisibleCount');
         var emptyRow = document.getElementById('feedEmptyMatchRow');
         var activeFilter = 'all';
+
+        // URL Column Toggle & Persistence
+        var toggleShowUrl = document.getElementById('toggleShowUrl');
+        var feedTable = document.getElementById('liveFeedTable');
+
+        function applyUrlColumn(visible) {
+            if (!feedTable) return;
+            if (visible) {
+                feedTable.classList.add('show-url-column');
+                if (toggleShowUrl) toggleShowUrl.checked = true;
+            } else {
+                feedTable.classList.remove('show-url-column');
+                if (toggleShowUrl) toggleShowUrl.checked = false;
+            }
+        }
+
+        var savedShowUrl = localStorage.getItem('antibot_show_feed_url');
+        if (savedShowUrl === '1' || (savedShowUrl === null && window.innerWidth >= 1400)) {
+            applyUrlColumn(true);
+        } else {
+            applyUrlColumn(false);
+        }
+
+        if (toggleShowUrl) {
+            toggleShowUrl.addEventListener('change', function() {
+                var isChecked = this.checked;
+                localStorage.setItem('antibot_show_feed_url', isChecked ? '1' : '0');
+                applyUrlColumn(isChecked);
+            });
+        }
 
         function filterTable() {
             var query = searchInput ? searchInput.value.toLowerCase().trim() : '';
@@ -675,7 +747,11 @@ $this->registerJs("
                 if (activeFilter === 'blocked') {
                     matchesFilter = (action === 'blocked' || action.indexOf('block') !== -1);
                 } else if (activeFilter === 'search') {
-                    matchesFilter = (action === 'allowed_search_bot' || reason.indexOf('search') !== -1 || reason.indexOf('yandex') !== -1 || reason.indexOf('google') !== -1);
+                    matchesFilter = (action === 'allowed_search_bot' || reason.toLowerCase().indexOf('search') !== -1 || reason.toLowerCase().indexOf('поисков') !== -1);
+                } else if (activeFilter === 'ad') {
+                    matchesFilter = (action === 'allowed_ad_bot' || reason.toLowerCase().indexOf('ad') !== -1 || reason.toLowerCase().indexOf('реклам') !== -1 || searchData.indexOf('direct') !== -1 || searchData.indexOf('criteo') !== -1);
+                } else if (activeFilter === 'social') {
+                    matchesFilter = (action === 'allowed_social_bot' || reason.toLowerCase().indexOf('social') !== -1 || reason.toLowerCase().indexOf('соцсет') !== -1 || searchData.indexOf('telegram') !== -1 || searchData.indexOf('whatsapp') !== -1 || searchData.indexOf('facebook') !== -1);
                 } else if (activeFilter === 'ratelimit') {
                     matchesFilter = (action === 'rate_limited' || reason.indexOf('rate') !== -1 || reason.indexOf('limit') !== -1);
                 } else if (activeFilter === 'traps') {

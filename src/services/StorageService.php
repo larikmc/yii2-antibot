@@ -161,6 +161,16 @@ class StorageService
             'language' => 'auto',
             'ipHeaders' => ['CF-Connecting-IP', 'X-Forwarded-For', 'X-Real-IP'],
             'aiCrawlerPolicies' => [],
+            'botCategoryPolicies' => [
+                'search' => 'allow',
+                'ad' => 'allow',
+                'seo' => 'throttle',
+                'social' => 'allow',
+                'ai_search' => 'allow',
+                'ai_training' => 'block',
+            ],
+            'botPolicies' => [],
+            'botThrottleLimits' => [],
             'headerConsistencyEnabled' => true,
             'autoJailEnabled' => true,
             'autoJailThreshold' => 2,
@@ -511,6 +521,9 @@ class StorageService
             'searchBots' => 0,
             'powSolved' => 0,
             'trapHits' => 0,
+            'adBots' => 0,
+            'seoBots' => 0,
+            'socialBots' => 0,
             'last24h' => ['blocked' => 0, 'total' => 0],
             'last7d' => ['blocked' => 0, 'total' => 0],
             'topIps' => [],
@@ -539,6 +552,12 @@ class StorageService
                 $isBlocked = true;
             } elseif ($action === 'allowed_search_bot') {
                 $stats['searchBots']++;
+            } elseif ($action === 'allowed_ad_bot') {
+                $stats['adBots']++;
+            } elseif ($action === 'allowed_seo_bot') {
+                $stats['seoBots']++;
+            } elseif ($action === 'allowed_social_bot') {
+                $stats['socialBots']++;
             } elseif ($action === 'pow_solved') {
                 $stats['powSolved']++;
             } elseif ($action === 'honey_trap_hit' || $action === 'honeypot_triggered') {
@@ -582,6 +601,55 @@ class StorageService
         $stats['topRoutes'] = array_slice($stats['topRoutes'], 0, 8, true);
 
         return $stats;
+    }
+
+    /**
+     * Aggregates activity statistics for known bots from recent event logs.
+     *
+     * @param int $scanLimit
+     * @return array<string, array{detected: int, blocked: int, last_seen: int|null}>
+     */
+    public function getBotActivityStats(int $scanLimit = 2000): array
+    {
+        $events = $this->getRecentEvents($scanLimit);
+        $result = [];
+
+        foreach ($events as $e) {
+            $botKey = $e['bot_key'] ?? null;
+            $ua = (string) ($e['userAgent'] ?? '');
+
+            if ($botKey === null && $ua !== '') {
+                $identified = BotCatalog::identify($ua);
+                if ($identified !== null) {
+                    $botKey = $identified['key'];
+                }
+            }
+
+            if ($botKey === null || !is_string($botKey)) {
+                continue;
+            }
+
+            if (!isset($result[$botKey])) {
+                $result[$botKey] = [
+                    'detected' => 0,
+                    'blocked' => 0,
+                    'last_seen' => null,
+                ];
+            }
+
+            $result[$botKey]['detected']++;
+            $action = (string) ($e['action'] ?? '');
+            if ($action === 'blocked' || $action === 'throttled') {
+                $result[$botKey]['blocked']++;
+            }
+
+            $ts = (int) ($e['timestamp'] ?? 0);
+            if ($ts > 0) {
+                $result[$botKey]['last_seen'] = max($result[$botKey]['last_seen'] ?? 0, $ts);
+            }
+        }
+
+        return $result;
     }
 
     /**

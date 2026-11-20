@@ -7,6 +7,7 @@ declare(strict_types=1);
  */
 
 $autoloadCandidates = [
+    'D:/OpenServer6.5.0/home/yii2-fresh-install.loc/vendor/autoload.php',
     __DIR__ . '/../../strb64.loc/vendor/autoload.php',
     __DIR__ . '/../../yii2-advanced.loc/vendor/autoload.php',
     dirname(__DIR__, 3) . '/vendor/autoload.php',
@@ -29,6 +30,7 @@ if ($loader === null) {
 $loader->setPsr4('larikmc\\antibot\\', [dirname(__DIR__) . '/src']);
 
 $yiiCandidates = [
+    'D:/OpenServer6.5.0/home/yii2-fresh-install.loc/vendor/yiisoft/yii2/Yii.php',
     __DIR__ . '/../../strb64.loc/vendor/yiisoft/yii2/Yii.php',
     __DIR__ . '/../../yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
     dirname(__DIR__, 3) . '/vendor/yiisoft/yii2/Yii.php',
@@ -90,8 +92,8 @@ function assertTest(string $name, bool $condition, string $detail = ''): void {
 // Section 0: Version Alignment
 // ----------------------------------------------------
 echo "--- Section 0: Version Alignment ---\n";
-assertTest('0.1 Module::VERSION is 1.5.14', Module::VERSION === '1.5.14', Module::VERSION);
-assertTest('0.2 Antibot::VERSION is 1.5.14', Antibot::VERSION === '1.5.14', Antibot::VERSION);
+assertTest('0.1 Module::VERSION is >= 1.5.14', version_compare(Module::VERSION, '1.5.14', '>='), Module::VERSION);
+assertTest('0.2 Antibot::VERSION is >= 1.5.14', version_compare(Antibot::VERSION, '1.5.14', '>='), Antibot::VERSION);
 
 // ----------------------------------------------------
 // Section 1: Robots.txt Honeypot Disallow Trap

@@ -166,4 +166,99 @@ class IpMatcher
 
         return (bool) filter_var($entry, FILTER_VALIDATE_IP);
     }
+
+    /**
+     * Checks if two CIDR blocks or IP addresses intersect (overlap).
+     *
+     * @param string $cidrA IP or CIDR block (e.g. "192.168.1.0/24" or "10.0.0.1")
+     * @param string $cidrB IP or CIDR block (e.g. "192.168.0.0/16" or "10.0.0.1")
+     * @return bool True if they overlap or share any IP addresses.
+     */
+    public static function cidrsIntersect(string $cidrA, string $cidrB): bool
+    {
+        $cidrA = trim($cidrA);
+        $cidrB = trim($cidrB);
+
+        if ($cidrA === '' || $cidrB === '') {
+            return false;
+        }
+
+        $baseA = str_contains($cidrA, '/') ? explode('/', $cidrA, 2)[0] : $cidrA;
+        $baseB = str_contains($cidrB, '/') ? explode('/', $cidrB, 2)[0] : $cidrB;
+
+        // Two dyadic CIDR blocks intersect if and only if one's network address is inside the other
+        if (self::matchCidr($baseA, $cidrB)) {
+            return true;
+        }
+        if (self::matchCidr($baseB, $cidrA)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if a candidate IP or CIDR subnet intersects with any protected search or advertising infrastructure.
+     *
+     * @param string $entry Candidate IP or CIDR subnet to be tested for blocking.
+     * @return array{intersects: bool, system: string|null, range: string|null}
+     */
+    public static function checkProtectedIntersection(string $entry): array
+    {
+        $entry = trim($entry);
+        if ($entry === '') {
+            return ['intersects' => false, 'system' => null, 'range' => null];
+        }
+
+        // Single IP FCrDNS check for Yandex
+        if (!str_contains($entry, '/') && filter_var($entry, FILTER_VALIDATE_IP)) {
+            if (\larikmc\antibot\services\ReverseDnsVerifier::check($entry, 'yandex') === \larikmc\antibot\services\ReverseDnsVerifier::STATUS_VERIFIED) {
+                return [
+                    'intersects' => true,
+                    'system' => 'Yandex Search / Direct (FCrDNS)',
+                    'range' => $entry,
+                ];
+            }
+        }
+
+        // Check against known confirmed verified crawler IPs (from FCrDNS logs & runtime cache)
+        $knownVerified = \larikmc\antibot\services\ReverseDnsVerifier::getKnownVerifiedBotIps();
+        foreach ($knownVerified as $verifiedIp => $botName) {
+            if (self::cidrsIntersect($entry, $verifiedIp)) {
+                return [
+                    'intersects' => true,
+                    'system' => "Verified Crawler ({$botName})",
+                    'range' => $verifiedIp,
+                ];
+            }
+        }
+
+        // Registry of protected CIDR ranges and systems
+        $systems = [
+            'Googlebot (SEO Search)' => \larikmc\antibot\services\ReverseDnsVerifier::GOOGLEBOT_CIDRS,
+            'Google Ads / Special Crawlers' => \larikmc\antibot\data\GoogleSpecialRanges::getCidrs(),
+            'Microsoft Bingbot' => \larikmc\antibot\services\ReverseDnsVerifier::BINGBOT_CIDRS,
+            'Criteo Advertising' => \larikmc\antibot\services\BotCatalog::CRITEO_CIDRS,
+            'Quantcast Measurement' => \larikmc\antibot\services\BotCatalog::QUANTCAST_IPS,
+            'Meta / Facebook Preview' => \larikmc\antibot\services\BotCatalog::META_CIDRS,
+            'Integral Ad Science (IAS)' => \larikmc\antibot\data\IasRanges::getIps(),
+            'OpenAI AdsBot' => \larikmc\antibot\services\BotCatalog::OPENAI_ADS_CIDRS,
+            'Telegram Link Preview' => \larikmc\antibot\services\BotCatalog::TELEGRAM_CIDRS,
+            'VKontakte Link Preview' => \larikmc\antibot\services\BotCatalog::VK_CIDRS,
+        ];
+
+        foreach ($systems as $systemName => $ranges) {
+            foreach ($ranges as $protectedRange) {
+                if (self::cidrsIntersect($entry, $protectedRange)) {
+                    return [
+                        'intersects' => true,
+                        'system' => $systemName,
+                        'range' => $protectedRange,
+                    ];
+                }
+            }
+        }
+
+        return ['intersects' => false, 'system' => null, 'range' => null];
+    }
 }

@@ -188,7 +188,6 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                                     'ClaudeBot' => ['Сбор данных Anthropic Claude', 'training'],
                                     'Bytespider' => ['Скрапер ByteDance (TikTok)', 'training'],
                                     'CCBot' => ['Common Crawl датасет', 'training'],
-                                    'Google-Extended' => ['Обучение Gemini / Bard', 'training'],
                                 ];
                                 foreach ($botsList as $bKey => [$bDesc, $bType]):
                                     $currentPolicy = $aiPolicies[$bKey] ?? ($bType === 'search' ? 'allow' : 'block');
@@ -219,7 +218,201 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                 </div>
             </div>
 
-            <!-- 4. Коммерческие парсеры и CLI -->
+                        <!-- 3b. Каталог роботов и индивидуальные политики (Bot Catalog & Policies) -->
+            <?php
+                $catalog = $catalogBots ?? \larikmc\antibot\services\BotCatalog::getAll();
+                $stats = $botStats ?? [];
+                $botPolicies = (array) ($settings['botPolicies'] ?? []);
+                $catPolicies = (array) ($settings['botCategoryPolicies'] ?? \larikmc\antibot\services\BotCatalog::getDefaultCategoryPolicies());
+                $categoryLabels = \larikmc\antibot\services\BotCatalog::getCategoryLabels($activeLang);
+            ?>
+            <div class="antibot-card mb-4" id="botCatalogSection">
+                <div class="antibot-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div>
+                        <h2 class="antibot-card-title">
+                            <span>🤖</span> <?= Html::encode(I18n::t('catalog_title', $activeLang)) ?>
+                        </h2>
+                        <div class="text-muted small"><?= Html::encode(I18n::t('catalog_desc', $activeLang)) ?></div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="antibot-card-title-badge">SEO, Ads, Social & AI</span>
+                        <?= Html::beginForm(['/antibot/settings/update-ranges'], 'post', ['class' => 'd-inline m-0']) ?>
+                            <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 shadow-sm d-inline-flex align-items-center gap-1" title="Актуализировать официальные списки CIDR Google Special Crawlers и IAS">
+                                🔄 <span>Обновить диапазоны CIDR/IP</span>
+                            </button>
+                        <?= Html::endForm() ?>
+                    </div>
+                </div>
+                <div class="antibot-card-body">
+                    <!-- Category Level Quick Policies -->
+                    <div class="mb-4 p-3 rounded-3" style="background: rgba(113, 157, 235, 0.04); border: 1px solid var(--ab-line);">
+                        <div class="fw-bold fs-6 mb-2">🏷️ Политики по умолчанию для категорий (Category Defaults):</div>
+                        <div class="row g-2">
+                            <?php foreach ($categoryLabels as $catKey => $catLabel): ?>
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="p-2 border rounded bg-white shadow-sm">
+                                        <div class="small fw-semibold text-truncate mb-1" title="<?= Html::encode($catLabel) ?>"><?= Html::encode($catLabel) ?></div>
+                                        <select name="AntibotSetting[botCategoryPolicies][<?= Html::encode($catKey) ?>]" class="form-select form-select-sm">
+                                            <option value="allow" <?= ($catPolicies[$catKey] ?? 'allow') === 'allow' ? 'selected' : '' ?>>Разрешать (Allow)</option>
+                                            <option value="monitor" <?= ($catPolicies[$catKey] ?? '') === 'monitor' ? 'selected' : '' ?>>Мониторинг (Monitor)</option>
+                                            <option value="throttle" <?= ($catPolicies[$catKey] ?? '') === 'throttle' ? 'selected' : '' ?>>Лимит частоты (Throttle)</option>
+                                            <option value="block" <?= ($catPolicies[$catKey] ?? '') === 'block' ? 'selected' : '' ?>>Блокировать (Block)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Search and Filters Bar -->
+                    <div class="d-flex align-items-center justify-content-between gap-3 mb-3 flex-wrap">
+                        <div class="d-flex align-items-center gap-1 flex-wrap" id="catalogCategoryFilters">
+                            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1 cat-filter-btn active" data-cat="all">
+                                <?= Html::encode(I18n::t('catalog_filter_all', $activeLang)) ?>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 cat-filter-btn" data-cat="ad">
+                                📢 <?= Html::encode(I18n::t('catalog_filter_ad', $activeLang)) ?>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 cat-filter-btn" data-cat="search">
+                                🔍 <?= Html::encode(I18n::t('catalog_filter_search', $activeLang)) ?>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 cat-filter-btn" data-cat="seo">
+                                📊 <?= Html::encode(I18n::t('catalog_filter_seo', $activeLang)) ?>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 cat-filter-btn" data-cat="social">
+                                💬 <?= Html::encode(I18n::t('catalog_filter_social', $activeLang)) ?>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 cat-filter-btn" data-cat="ai">
+                                🤖 <?= Html::encode(I18n::t('catalog_filter_ai', $activeLang)) ?>
+                            </button>
+                        </div>
+                        <div class="position-relative" style="min-width: 250px; flex: 1; max-width: 350px;">
+                            <input type="text" id="catalogSearchInput" class="form-control form-control-sm rounded-pill pe-4" placeholder="<?= Html::encode(I18n::t('catalog_search_placeholder', $activeLang)) ?>" style="height: 34px; padding-left: 14px;">
+                            <span class="position-absolute end-0 top-50 translate-middle-y me-3 text-muted small" style="pointer-events: none;">🔍</span>
+                        </div>
+                    </div>
+
+                    <!-- Catalog Table -->
+                    <div class="table-responsive rounded-3 border">
+                        <table class="table table-hover align-middle mb-0" id="botCatalogTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 220px;"><?= Html::encode(I18n::t('catalog_th_bot', $activeLang)) ?></th>
+                                    <th><?= Html::encode(I18n::t('catalog_th_category', $activeLang)) ?></th>
+                                    <th><?= Html::encode(I18n::t('catalog_th_verification', $activeLang)) ?></th>
+                                    <th style="min-width: 190px;"><?= Html::encode(I18n::t('catalog_th_policy', $activeLang)) ?></th>
+                                    <th style="min-width: 170px;"><?= Html::encode(I18n::t('catalog_th_stats', $activeLang)) ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($catalog as $bKey => $bData):
+                                    $bCat = $bData['category'];
+                                    $bName = $bData['name'];
+                                    $bOp = $bData['operator'];
+                                    $bDesc = $activeLang === 'ru' ? $bData['description_ru'] : $bData['description_en'];
+                                    $vMethod = $bData['verification'];
+                                    $bPolicy = $botPolicies[$bKey] ?? '';
+                                    $bStat = $stats[$bKey] ?? null;
+                                    $searchBlob = mb_strtolower($bName . ' ' . $bOp . ' ' . $bCat . ' ' . $bDesc);
+                                ?>
+                                    <tr class="catalog-row" data-cat="<?= Html::encode(str_starts_with($bCat, 'ai_') ? 'ai' : $bCat) ?>" data-search="<?= Html::encode($searchBlob) ?>">
+                                        <td>
+                                            <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                                                <span><?= Html::encode($bName) ?></span>
+                                                <a href="<?= Html::encode($bData['documentation_url']) ?>" target="_blank" rel="noopener noreferrer" class="text-muted small" title="Официальная документация">🔗</a>
+                                            </div>
+                                            <div class="small text-muted"><?= Html::encode($bOp) ?></div>
+                                            <div class="small text-secondary" style="font-size: 0.76rem;"><?= Html::encode($bDesc) ?></div>
+                                        </td>
+                                        <td>
+                                            <span class="badge rounded-pill px-2 py-1 <?= match($bCat) {
+                                                'search' => 'badge-soft-success',
+                                                'ad' => 'badge-soft-success',
+                                                'seo' => 'badge-soft-warning',
+                                                'social' => 'badge-soft-primary',
+                                                'ai_search' => 'badge-soft-info',
+                                                default => 'badge-soft-secondary',
+                                            } ?>">
+                                                <?= Html::encode($categoryLabels[$bCat] ?? $bCat) ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="small font-monospace text-muted d-block">
+                                                <?= match($vMethod) {
+                                                    'rdns' => '🔒 ' . I18n::t('catalog_verify_rdns', $activeLang),
+                                                    'cidr' => '🌐 ' . I18n::t('catalog_verify_cidr', $activeLang),
+                                                    'cidr_or_rdns' => '⚡ ' . I18n::t('catalog_verify_cidr_rdns', $activeLang),
+                                                    default => '⚠️ ' . I18n::t('catalog_verify_none', $activeLang),
+                                                } ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <select name="AntibotSetting[botPolicies][<?= Html::encode($bKey) ?>]" class="form-select form-select-sm rounded-3">
+                                                <option value="" <?= $bPolicy === '' ? 'selected' : '' ?>><?= Html::encode(I18n::t('catalog_policy_inherited', $activeLang)) ?> (<?= Html::encode($catPolicies[$bCat] ?? 'allow') ?>)</option>
+                                                <option value="allow" <?= $bPolicy === 'allow' ? 'selected' : '' ?>><?= Html::encode(I18n::t('catalog_policy_allow', $activeLang)) ?></option>
+                                                <option value="monitor" <?= $bPolicy === 'monitor' ? 'selected' : '' ?>><?= Html::encode(I18n::t('catalog_policy_monitor', $activeLang)) ?></option>
+                                                <option value="throttle" <?= $bPolicy === 'throttle' ? 'selected' : '' ?>><?= Html::encode(I18n::t('catalog_policy_throttle', $activeLang)) ?></option>
+                                                <option value="block" <?= $bPolicy === 'block' ? 'selected' : '' ?>><?= Html::encode(I18n::t('catalog_policy_block', $activeLang)) ?></option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <?php if ($bStat !== null && $bStat['detected'] > 0): ?>
+                                                <div class="small">
+                                                    <span class="badge bg-light text-dark border"><?= (int)$bStat['detected'] ?> зап.</span>
+                                                    <?php if ($bStat['blocked'] > 0): ?>
+                                                        <span class="badge bg-danger text-white"><?= (int)$bStat['blocked'] ?> блок.</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="text-muted" style="font-size: 0.72rem;">
+                                                    <?= Html::encode(I18n::t('catalog_last_seen', $activeLang)) ?> <?= date('d.m H:i', (int)$bStat['last_seen']) ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <span class="small text-muted fst-italic"><?= Html::encode(I18n::t('catalog_never_seen', $activeLang)) ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                var searchInput = document.getElementById('catalogSearchInput');
+                var catButtons = document.querySelectorAll('#catalogCategoryFilters .cat-filter-btn');
+                var rows = document.querySelectorAll('#botCatalogTable .catalog-row');
+                var activeCat = 'all';
+
+                function filterRows() {
+                    var query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+                    rows.forEach(function(row) {
+                        var rowCat = row.getAttribute('data-cat') || '';
+                        var rowSearch = row.getAttribute('data-search') || '';
+                        var catMatch = (activeCat === 'all' || rowCat === activeCat);
+                        var queryMatch = (query === '' || rowSearch.indexOf(query) !== -1);
+                        row.style.display = (catMatch && queryMatch) ? '' : 'none';
+                    });
+                }
+
+                if (searchInput) {
+                    searchInput.addEventListener('input', filterRows);
+                }
+
+                catButtons.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        catButtons.forEach(function(b) { b.classList.remove('btn-primary', 'active'); b.classList.add('btn-outline-secondary'); });
+                        this.classList.remove('btn-outline-secondary');
+                        this.classList.add('btn-primary', 'active');
+                        activeCat = this.getAttribute('data-cat') || 'all';
+                        filterRows();
+                    });
+                });
+            });
+            </script>
+
+<!-- 4. Коммерческие парсеры и CLI -->
             <div class="antibot-card mb-4">
                 <div class="antibot-card-header">
                     <h2 class="antibot-card-title">

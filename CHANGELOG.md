@@ -2,6 +2,40 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.6.0] - 2026-11-20
+
+### Expanded Bot Catalog, Resilient Multi-Source Verification, Subnet Protection & Dashboard Enhancements
+- **Bot Catalog & Granular Policy Engine (`BotCatalog`):**
+  - Unified catalog across Search Engines, Advertising Crawlers, SEO Tools, Social Link Previews, AI Search, and AI Training bots.
+  - Per-bot and per-category access policies (`allow`, `monitor`, `throttle`, `block`) configurable directly in the Admin Panel without restarts.
+  - Removed Google-Extended from HTTP crawler detection (strictly treated as robots.txt token to prevent collateral blocking of Googlebot).
+  - Added full official support for newly verified crawlers: `YandexMetrika`, `YandexRenderResourcesBot`, `Google-InspectionTool`, `OAI-AdsBot` (OpenAI Advertising).
+  - Reclassified PetalBot to Search Engines category with FCrDNS domain verification.
+- **Resilient Advertising Verification (`IasRanges` & `GoogleSpecialRanges`):**
+  - Added official CIDR matching for Integral Ad Science (`ias_crawler`, `ias_wombles`) via cached offline list with atomic update and fallback preservation.
+  - Updated Google Special Crawlers to the canonical 2026 endpoint (`https://developers.google.com/static/crawling/ipranges/special-crawlers.json`) with zero blocking HTTP calls on visitor paths.
+- **IP & Subnet /24 Overlap Protection (`IpMatcher`):**
+  - Added mathematical dyadic CIDR overlap detection (`IpMatcher::cidrsIntersect()`) covering IPv4 and IPv6.
+  - Intersects candidate IP/CIDR bans against protected infrastructure (Googlebot, Google Special, Bing, Criteo, IAS, Meta, Telegram, VK, OpenAI).
+  - Dynamic Yandexbot protection: checks confirmed FCrDNS records from runtime cache and event logs to reject subnets containing authentic Yandex crawlers.
+  - Safe Blacklist priority: authentic verified search/ad crawlers are protected from accidental 403 blocks on public pages while strictly isolating administrative routes (`/admin`, `/wp-admin`, `/antibot`, `/api`).
+- **Social Link Preview Unfurling (`BotCatalog` & `Antibot`):**
+  - Enabled OpenGraph preview link unfurling for Telegram, WhatsApp, VK, and Meta on public `GET`/`HEAD` requests without JS challenge or missing assets false positives.
+  - Strictly blocked spoofed write requests (`POST`/`PUT`/`DELETE`) and isolated private routes.
+- **Live Feed & Dashboard Upgrades (`default/index` & `dashboard.css`):**
+  - Added toggleable "URL / Запрашиваемая страница" column with state persistence in `localStorage`.
+  - Removed Quick-Ban button for verified and allowed search/advertising bots in the Live Feed to prevent accidental bans of critical crawlers.
+  - Secured range update endpoint with strict `POST` verb requirement and CSRF protection.
+- **Verification Suite:**
+  - 126 unit and integration tests passing with 100% success rate (`test_v160_final_audit.php`, `test_v160_catalog.php`, `test_v1514.php`).
+
+## [1.5.14] - 2026-11-15
+
+### Settings Persistence Fixes & UI Enhancements
+- Fixed AJAX settings save without page reload.
+- Fixed CLI and Library scraper toggle persistence.
+- Unified settings layout into sequential single-column configuration.
+
 ## [1.5.13] - 2026-11-15
 
 ### Advanced Rogue Bot Defense Suite: Robots.txt Trap, Cloud Datacenter ASN Filter, Headless WebGL Detection & Missing Assets Trap

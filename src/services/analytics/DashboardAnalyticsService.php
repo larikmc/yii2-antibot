@@ -198,7 +198,7 @@ class DashboardAnalyticsService
             }
 
             // Reasons aggregation (for suspicious / monitored / blocked actions)
-            if ($actionCategory !== 'other' || in_array($actionRaw, ['allowed_search_bot', 'pow_solved'], true)) {
+            if ($actionCategory !== 'other' || in_array($actionRaw, ['allowed_search_bot', 'allowed_ad_bot', 'allowed_seo_bot', 'allowed_social_bot', 'allowed_bot', 'pow_solved'], true)) {
                 $normalizedReason = self::normalizeReason($reasonRaw, $lang);
                 $label = $normalizedReason['label'];
                 $reasonsCount[$label] = ($reasonsCount[$label] ?? 0) + 1;

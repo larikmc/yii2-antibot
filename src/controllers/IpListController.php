@@ -62,6 +62,7 @@ class IpListController extends Controller
                 $added = 0;
                 $skipped = 0;
                 $invalid = 0;
+                $protectedSkipped = 0;
                 $list = (array) ($settings[$type] ?? []);
 
                 foreach ($rawLines as $line) {
@@ -73,6 +74,15 @@ class IpListController extends Controller
                     if (!IpMatcher::isValidIpOrCidr($entry)) {
                         $invalid++;
                         continue;
+                    }
+
+                    // Blacklist protection guard: reject entries intersecting with search or ad crawlers
+                    if ($type === 'blacklist') {
+                        $intersect = IpMatcher::checkProtectedIntersection($entry);
+                        if ($intersect['intersects']) {
+                            $protectedSkipped++;
+                            continue;
+                        }
                     }
 
                     if (!in_array($entry, $list, true)) {
@@ -95,6 +105,9 @@ class IpListController extends Controller
                 if ($invalid > 0) {
                     $msg .= " Ошибочных строк: {$invalid}.";
                 }
+                if ($protectedSkipped > 0) {
+                    $msg .= " Отклонено защищенных подсетей (Search/Ad): {$protectedSkipped}.";
+                }
                 Yii::$app->session->setFlash($added > 0 ? 'success' : 'info', $msg);
                 return $this->redirect(['index']);
             }
@@ -105,6 +118,23 @@ class IpListController extends Controller
             if (!IpMatcher::isValidIpOrCidr($entry)) {
                 Yii::$app->session->setFlash('error', "Некорректный IP или CIDR: '{$entry}'. Пример: 95.26.144.17 или 10.0.0.0/8.");
                 return $this->redirect(['index']);
+            }
+
+            // Blacklist protection guard: reject entries intersecting with search or ad crawlers
+            if ($type === 'blacklist') {
+                $intersect = IpMatcher::checkProtectedIntersection($entry);
+                if ($intersect['intersects']) {
+                    Yii::$app->session->setFlash(
+                        'error',
+                        sprintf(
+                            "Невозможно добавить '%s' в черный список: диапазон пересекается с защищенной инфраструктурой %s (%s)!",
+                            $entry,
+                            $intersect['system'] ?? 'Protected Bot',
+                            $intersect['range'] ?? ''
+                        )
+                    );
+                    return $this->redirect(['index']);
+                }
             }
 
             $list = (array) ($settings[$type] ?? []);
