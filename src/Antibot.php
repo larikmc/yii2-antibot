@@ -1899,7 +1899,44 @@ class Antibot extends Component implements BootstrapInterface
         $answer = (string) $request->post('answer', '');
         $secretKey = $this->getResolvedSecretKey();
 
-        if (TokenService::verifyJsChallenge($seed, $answer, $secretKey)) {
+        // 1. If visitor ALREADY has a valid token cookie:
+        // A re-sent challenge submission (caused by browser Back button, BFCache restoration,
+        // multiple open tabs, or client-side retry) is NOT a replay attack.
+        // Return 200 JSON success WITHOUT extending the trust window or re-issuing tokens.
+        $cookieToken = (string) $request->cookies->getValue(TokenService::COOKIE_NAME, '');
+        if ($cookieToken !== '' && TokenService::validateToken($cookieToken, $ip, $ua, $secretKey)) {
+            $this->finishInspection('challenge');
+            $response = Yii::$app->response;
+            $response->format = Response::FORMAT_JSON;
+            $response->data = ['success' => true, 'already_verified' => true];
+            $response->send();
+            exit(0);
+        }
+
+        // 2. If caller is an authentic search or ad crawler rendering JS (Googlebot, Applebot, etc.):
+        // Do not block verified crawlers on challenge verification.
+        if ($this->verifySearchBots && $ua !== '') {
+            $candBot = BotCatalog::identify($ua);
+            if ($candBot !== null) {
+                $candCat = $candBot['data']['category'] ?? '';
+                if ($candCat === BotCatalog::CATEGORY_SEARCH || $candCat === BotCatalog::CATEGORY_AD) {
+                    $candStatus = ReverseDnsVerifier::checkBot($ip, $candBot['data']);
+                    if ($candStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
+                        $this->finishInspection('allowed');
+                        $response = Yii::$app->response;
+                        $response->format = Response::FORMAT_JSON;
+                        $response->data = ['success' => true, 'crawler' => true];
+                        $response->send();
+                        exit(0);
+                    }
+                }
+            }
+        }
+
+        // 3. Verify Challenge with granular status diagnostics
+        $detailedStatus = TokenService::verifyJsChallengeDetailed($seed, $answer, $secretKey);
+
+        if ($detailedStatus === TokenService::CHALLENGE_VALID) {
             // Verify client telemetry for headless / automation indicators
             if ($this->headlessDetectionEnabled) {
                 $telemetry = [
@@ -1930,6 +1967,7 @@ class Antibot extends Component implements BootstrapInterface
                 'httpOnly' => true,
                 'secure' => $request->isSecureConnection,
                 'sameSite' => 'Lax',
+                'path' => '/',
             ]);
             Yii::$app->response->cookies->add($cookie);
 
@@ -1949,7 +1987,28 @@ class Antibot extends Component implements BootstrapInterface
             exit(0);
         }
 
-        $this->blockRequest('JS Challenge verification failed or replayed', $ip, $ua, $request->getAbsoluteUrl());
+        // 4. Handle expired seed (e.g. user was reading page for > 5 minutes before interacting)
+        // Return fresh challenge seed for safe retry WITHOUT Auto-Jail or behavior penalty
+        if ($detailedStatus === TokenService::CHALLENGE_EXPIRED) {
+            $freshChallenge = TokenService::generateJsChallenge($ip, $secretKey);
+            $this->finishInspection('challenge');
+            $response = Yii::$app->response;
+            $response->format = Response::FORMAT_JSON;
+            $response->data = [
+                'success' => false,
+                'expired' => true,
+                'seed' => $freshChallenge['seed'],
+                'target' => $freshChallenge['target'],
+            ];
+            $response->send();
+            exit(0);
+        }
+
+        // 5. Unauthenticated replay or invalid answer (actual attack attempt)
+        $blockReason = $detailedStatus === TokenService::CHALLENGE_REPLAYED
+            ? 'JS Challenge replay detected (unauthenticated)'
+            : 'JS Challenge verification failed (invalid answer)';
+        $this->blockRequest($blockReason, $ip, $ua, $request->getAbsoluteUrl());
     }
 
     /**
@@ -2182,6 +2241,11 @@ HTML;
         $seed = htmlspecialchars($challenge['seed'], ENT_QUOTES, 'UTF-8');
         $target = htmlspecialchars($challenge['target'], ENT_QUOTES, 'UTF-8');
 
+        if (headers_sent() === false) {
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+        }
+
         echo <<<HTML
 <!DOCTYPE html>
 <html lang="ru">
@@ -2206,49 +2270,64 @@ HTML;
         <p>Пожалуйста, подождите. Выполняется автоматическая проверка перед переходом на сайт.</p>
     </div>
     <script>
-        setTimeout(function() {
-            var form = new FormData();
-            form.append('antibot_challenge_verify', '1');
-            form.append('seed', '{$seed}');
-            form.append('answer', '{$target}');
+        (function() {
+            var retried = false;
+            function solveAndSubmit(currentSeed, currentTarget) {
+                var form = new FormData();
+                form.append('antibot_challenge_verify', '1');
+                form.append('seed', currentSeed || '{$seed}');
+                form.append('answer', currentTarget || '{$target}');
 
-            // Client Environment & Hardware Telemetry Probe
-            var webdriver = navigator.webdriver ? '1' : '0';
-            var gpu = '';
-            try {
-                var c = document.createElement('canvas');
-                var gl = c.getContext('webgl') || c.getContext('experimental-webgl');
-                if (gl) {
-                    var dbg = gl.getExtension('WEBGL_debug_renderer_info');
-                    if (dbg) {
-                        gpu = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '';
+                // Client Environment & Hardware Telemetry Probe
+                var webdriver = navigator.webdriver ? '1' : '0';
+                var gpu = '';
+                try {
+                    var c = document.createElement('canvas');
+                    var gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+                    if (gl) {
+                        var dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                        if (dbg) {
+                            gpu = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '';
+                        }
                     }
-                }
-            } catch (e) {}
-            var arts = [];
-            if (window._phantom || window.callPhantom) arts.push('PhantomJS');
-            if (window.__nightmare) arts.push('Nightmare');
-            if (window.__selenium_evaluate || window.__webdriver_evaluate || window.__driver_evaluate) arts.push('Selenium');
+                } catch (e) {}
+                var arts = [];
+                if (window._phantom || window.callPhantom) arts.push('PhantomJS');
+                if (window.__nightmare) arts.push('Nightmare');
+                if (window.__selenium_evaluate || window.__webdriver_evaluate || window.__driver_evaluate) arts.push('Selenium');
 
-            form.append('webdriver', webdriver);
-            form.append('gpu', gpu);
-            form.append('screen_w', screen.width || 0);
-            form.append('screen_h', screen.height || 0);
-            form.append('outer_w', window.outerWidth || 0);
-            form.append('outer_h', window.outerHeight || 0);
-            form.append('artifacts', arts.join(','));
+                form.append('webdriver', webdriver);
+                form.append('gpu', gpu);
+                form.append('screen_w', screen.width || 0);
+                form.append('screen_h', screen.height || 0);
+                form.append('outer_w', window.outerWidth || 0);
+                form.append('outer_h', window.outerHeight || 0);
+                form.append('artifacts', arts.join(','));
 
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', window.location.href, true);
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    window.location.reload();
-                } else {
-                    document.querySelector('h1').innerText = 'Ошибка верификации';
-                }
-            };
-            xhr.send(form);
-        }, 300);
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', window.location.href, true);
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        try {
+                            var data = JSON.parse(xhr.responseText);
+                            if (data && data.expired && data.seed && data.target && !retried) {
+                                retried = true;
+                                solveAndSubmit(data.seed, data.target);
+                                return;
+                            }
+                        } catch (e) {}
+                        window.location.replace(window.location.href);
+                    } else {
+                        document.querySelector('h1').innerText = 'Ошибка верификации';
+                    }
+                };
+                xhr.send(form);
+            }
+
+            setTimeout(function() {
+                solveAndSubmit();
+            }, 300);
+        })();
     </script>
 </body>
 </html>

@@ -119,39 +119,62 @@ class TokenService
         ];
     }
 
+    public const CHALLENGE_VALID = 0;
+    public const CHALLENGE_EXPIRED = 1;
+    public const CHALLENGE_REPLAYED = 2;
+    public const CHALLENGE_INVALID = 3;
+
     /**
-     * Verifies the answer to a JS challenge.
+     * Verifies the answer to a JS challenge with granular status diagnostics.
      *
      * @param string $seed
      * @param string $answer
      * @param string $secretKey
-     * @param int $maxAge Max age in seconds (default 120s).
-     * @return bool
+     * @param int $maxAge Max age in seconds (default 300s / 5 minutes).
+     * @return int One of self::CHALLENGE_* constants.
      */
-    public static function verifyJsChallenge(string $seed, string $answer, string $secretKey, int $maxAge = 120): bool
+    public static function verifyJsChallengeDetailed(string $seed, string $answer, string $secretKey, int $maxAge = 300): int
     {
         $parts = explode('|', $seed);
         if (count($parts) !== 3) {
-            return false;
+            return self::CHALLENGE_INVALID;
+        }
+
+        // Mathematical verification of HMAC integrity FIRST
+        $expectedTarget = hash_hmac('sha256', $seed, $secretKey);
+        if (!hash_equals($expectedTarget, $answer)) {
+            return self::CHALLENGE_INVALID;
         }
 
         $timestamp = (int) $parts[1];
         if (abs(time() - $timestamp) > $maxAge) {
-            return false;
+            return self::CHALLENGE_EXPIRED;
         }
 
         // Prevent token replay within validity window
         if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
             $replayKey = 'antibot_seed_' . md5($seed);
             if (Yii::$app->cache->get($replayKey) !== false) {
-                return false;
+                return self::CHALLENGE_REPLAYED;
             }
             Yii::$app->cache->set($replayKey, 1, $maxAge);
         }
 
-        $expectedTarget = hash_hmac('sha256', $seed, $secretKey);
+        return self::CHALLENGE_VALID;
+    }
 
-        return hash_equals($expectedTarget, $answer);
+    /**
+     * Verifies the answer to a JS challenge.
+     *
+     * @param string $seed
+     * @param string $answer
+     * @param string $secretKey
+     * @param int $maxAge Max age in seconds (default 300s / 5 minutes).
+     * @return bool
+     */
+    public static function verifyJsChallenge(string $seed, string $answer, string $secretKey, int $maxAge = 300): bool
+    {
+        return self::verifyJsChallengeDetailed($seed, $answer, $secretKey, $maxAge) === self::CHALLENGE_VALID;
     }
 
     /**
