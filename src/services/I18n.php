@@ -226,6 +226,16 @@ class I18n
             'settings_verify_search_desc' => 'Двусторонняя Reverse DNS (PTR + Forward) проверка ботов Яндекс, Google, Bing, Mail.ru. Легитимные поисковики никогда не блокируются.',
             'settings_block_fake' => 'Блокировать поддельных поисковых роботов (Fake Search Bots)',
             'settings_block_fake_desc' => 'Если бот маскируется под Googlebot или YandexBot с постороннего IP-адреса, он блокируется с 403 Forbidden. Ошибки DNS трактуются безопасно как unknown.',
+            'settings_skip_dns_blocked' => 'Пропускать DNS-проверку для роботов с политикой Block',
+            'settings_skip_dns_blocked_desc' => 'Исключает сетевые DNS-запросы и экономит DNS-бюджет для краулеров (AI, скраперов), доступ которых безусловно запрещён политикой.',
+            'settings_dns_cache_verified' => 'Срок кэширования подтверждённых роботов (VERIFIED)',
+            'settings_dns_cache_verified_desc' => 'Время хранения проверенных адресов легитимных роботов в постоянном кэше (по умолчанию 48 часов).',
+            'settings_dns_cache_fake' => 'Срок кэширования доказанных подделок (FAKE)',
+            'settings_dns_cache_fake_desc' => 'Время хранения доказанных подделок в негативном кэше без повторных FCrDNS-запросов (по умолчанию 24 часа).',
+            'btn_clear_verified_cache' => 'Очистить кэш VERIFIED',
+            'btn_clear_fake_cache' => 'Очистить негативный кэш FAKE',
+            'btn_clear_all_dns_cache' => 'Очистить весь DNS-кэш',
+            'status_not_checked' => 'Не проверялся (Block)',
             'settings_sec_3' => '3. Политики для ИИ-краулеров (AI Bots)',
             'settings_block_ai' => 'Глобальная блокировка скраперов для обучения ИИ',
             'settings_block_ai_desc' => 'Базовое правило для всех ненастроенных индивидуально скраперов.',
@@ -408,6 +418,17 @@ class I18n
             'export_csv_blocked_desc' => 'Только 403 Forbidden и 429 Rate Limit',
             'export_jsonl_all' => 'Сырой JSON Lines (.jsonl)',
             'export_jsonl_all_desc' => 'Полный журнал для SIEM, ELK, Python, Splunk',
+            // DNS Verification Diagnostics & Reasons
+            'dns_slots_busy' => 'DNS-слоты заняты (3/3)',
+            'dns_rate_limit' => 'Исчерпан минутный DNS-бюджет',
+            'dns_lock_timeout' => 'Таймаут блокировки DNS-бюджета',
+            'dns_lookup_in_progress' => 'Проверка DNS уже выполняется другим воркером',
+            'dns_ptr_timeout' => 'Таймаут обратного DNS (PTR)',
+            'dns_forward_failed' => 'Ошибка прямого DNS-резолвинга',
+            'dns_resolver_error' => 'Ошибка системного DNS-резолвера',
+            'verification_disabled' => 'Верификация DNS отключена',
+            'dns_stats_cache_hits' => 'Попаданий в кэш верификации',
+            'dns_stats_prevented' => 'Предотвращено повторных проверок',
         ],
         'en' => [
             'app_title' => 'AntiBot — Monitoring & Visual Analytics',
@@ -596,6 +617,16 @@ class I18n
             'settings_verify_search_desc' => 'Two-way Reverse DNS (PTR + Forward) verification for Yandex, Google, Bing, Mail.ru. Legitimate search engines are never blocked.',
             'settings_block_fake' => 'Block Fake Search Bots',
             'settings_block_fake_desc' => 'If a bot spoofs Googlebot or YandexBot from an unauthorized IP, it is blocked with 403 Forbidden. DNS errors safely fail open as unknown.',
+            'settings_skip_dns_blocked' => 'Skip DNS verification for crawlers with Block policy',
+            'settings_skip_dns_blocked_desc' => 'Eliminates redundant DNS lookups and saves DNS budget for crawlers (AI, scrapers) unconditionally blocked by policy.',
+            'settings_dns_cache_verified' => 'Verified bot cache TTL (VERIFIED)',
+            'settings_dns_cache_verified_desc' => 'Cache duration for verified legitimate search crawlers in persistent storage (default: 48 hours).',
+            'settings_dns_cache_fake' => 'Proven fake bot cache TTL (FAKE)',
+            'settings_dns_cache_fake_desc' => 'Cache duration for proven spoofed crawlers in negative cache without repeated FCrDNS checks (default: 24 hours).',
+            'btn_clear_verified_cache' => 'Clear Verified Cache',
+            'btn_clear_fake_cache' => 'Clear Fake Negative Cache',
+            'btn_clear_all_dns_cache' => 'Clear All DNS Cache',
+            'status_not_checked' => 'Not checked (Block)',
             'settings_sec_3' => '3. AI Crawler Policies (LLM Bots)',
             'settings_block_ai' => 'Global AI Training Scraper Block',
             'settings_block_ai_desc' => 'Default rule for all unconfigured AI crawlers.',
@@ -778,6 +809,17 @@ class I18n
             'export_csv_blocked_desc' => 'Only 403 Forbidden and 429 Rate Limit events',
             'export_jsonl_all' => 'Raw JSON Lines (.jsonl)',
             'export_jsonl_all_desc' => 'Full event log for SIEM, ELK, Python, Splunk',
+            // DNS Verification Diagnostics & Reasons
+            'dns_slots_busy' => 'DNS slots busy (3/3)',
+            'dns_rate_limit' => 'DNS minute rate limit exhausted',
+            'dns_lock_timeout' => 'DNS budget lock timeout',
+            'dns_lookup_in_progress' => 'DNS lookup in progress by another worker',
+            'dns_ptr_timeout' => 'Reverse DNS (PTR) timeout',
+            'dns_forward_failed' => 'Forward DNS lookup failed',
+            'dns_resolver_error' => 'System DNS resolver error',
+            'verification_disabled' => 'DNS verification disabled',
+            'dns_stats_cache_hits' => 'DNS verification cache hits',
+            'dns_stats_prevented' => 'Prevented redundant DNS lookups',
         ],
     ];
 
@@ -941,6 +983,24 @@ class I18n
             return [
                 'title' => $isRu ? "Подлинный {$catBadge}: {$botName}" : "Verified {$catType} Bot: {$botName}",
                 'badge' => $catBadge,
+                'raw' => $raw,
+            ];
+        }
+        if (preg_match('/^Auto-Jail quarantine lifted:\s*verified authentic\s*(.+)$/i', $raw, $m)) {
+            $botName = trim($m[1]);
+            return [
+                'title' => $isRu ? "Карантин Auto-Jail снят: подтверждён подлинный {$botName}" : "Auto-Jail quarantine lifted: verified authentic {$botName}",
+                'badge' => $isRu ? 'Восстановлен' : 'Recovered',
+                'raw' => $raw,
+            ];
+        }
+        if (preg_match('/^(?:Unverified|Cautious)\s+bot allowed by policy:\s*(.+?)(?:\s*\((.+?)\))?$/i', $raw, $m)) {
+            $botName = trim($m[1]);
+            $diagExtra = isset($m[2]) ? trim($m[2]) : '';
+            $subTitle = $diagExtra !== '' ? " ({$diagExtra})" : '';
+            return [
+                'title' => $isRu ? "Неверифицированный робот разрешён политикой: {$botName}{$subTitle}" : "Unverified bot allowed by policy: {$botName}{$subTitle}",
+                'badge' => $isRu ? 'Мониторинг' : 'Monitored',
                 'raw' => $raw,
             ];
         }

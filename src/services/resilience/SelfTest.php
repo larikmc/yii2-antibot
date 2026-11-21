@@ -281,18 +281,28 @@ class SelfTest
         $dnsBudgetOk = is_dir($dnsBudgetDir) && is_writable($dnsBudgetDir);
         $googleCidrs = count(\larikmc\antibot\services\ReverseDnsVerifier::GOOGLEBOT_CIDRS);
         $bingCidrs = count(\larikmc\antibot\services\ReverseDnsVerifier::BINGBOT_CIDRS);
+        $detailedStats = \larikmc\antibot\services\ReverseDnsVerifier::getDetailedStats();
 
         if ($dnsBudgetOk) {
             $checks[] = [
-                'name' => 'Атомарный DNS-бюджет, слоты и CIDR-предфильтр',
+                'name' => 'Атомарный DNS-бюджет, слоты и кэширование роботов (v1.6.2)',
                 'status' => self::STATUS_OK,
                 'message' => sprintf(
-                    'Бюджет: %d/мин, ОС-слотов блокировок: %d (antibot_dns_slot_*.lock). Предфильтр точных CIDR активен (Googlebot: %d подсетей, Bingbot: %d подсетей). Кэш-пространство: %s. Синхронизированная дедупликация активна.',
+                    'Бюджет: %d/мин, ОС-слотов: %d. Кэш: %d проверенных IP (TTL: %dч), %d доказанных подделок FAKE (TTL: %dч). Single Flight дедупликация: активна. Кэш-хитов: %d (VERIFIED: %d, FAKE: %d), пропущено по Block: %d, DNS выполнено: %d. Hit Ratio: %.1f%%. CIDR-предфильтр: Google (%d подсетей), Bing (%d подсетей).',
                     \larikmc\antibot\services\ReverseDnsVerifier::$maxDnsLookupsPerMinute,
                     \larikmc\antibot\services\ReverseDnsVerifier::$maxConcurrentDnsLookups,
+                    $detailedStats['verified_store_count'],
+                    (int) (\larikmc\antibot\services\ReverseDnsVerifier::$cacheVerified / 3600),
+                    $detailedStats['fake_store_count'],
+                    (int) (\larikmc\antibot\services\ReverseDnsVerifier::$cacheFake / 3600),
+                    $detailedStats['cache_hits'],
+                    $detailedStats['cache_hits_verified'],
+                    $detailedStats['cache_hits_fake'],
+                    $detailedStats['skipped_by_policy'],
+                    $detailedStats['dns_performed'],
+                    $detailedStats['hit_ratio_percent'],
                     $googleCidrs,
-                    $bingCidrs,
-                    \larikmc\antibot\services\ReverseDnsVerifier::CACHE_PREFIX
+                    $bingCidrs
                 ),
                 'recommendation' => null,
             ];

@@ -121,6 +121,9 @@ class SettingsController extends Controller
                 'autoJailDuration' => max(60, (int) ($post['autoJailDuration'] ?? 1800)),
                 'verifySearchBots' => !empty($post['verifySearchBots']),
                 'blockFakeSearchBots' => !empty($post['blockFakeSearchBots']),
+                'dnsCacheVerifiedTtl' => max(60, (int) ($post['dnsCacheVerifiedTtl'] ?? 172800)),
+                'dnsCacheFakeTtl' => max(60, (int) ($post['dnsCacheFakeTtl'] ?? 86400)),
+                'skipDnsForBlockedBots' => !empty($post['skipDnsForBlockedBots']),
                 'rateLimitEnabled' => !empty($post['rateLimitEnabled']),
                 'rateLimitMax' => max(1, (int) ($post['rateLimitMax'] ?? 60)),
                 'rateLimitWindow' => max(1, (int) ($post['rateLimitWindow'] ?? 60)),
@@ -196,6 +199,9 @@ class SettingsController extends Controller
             $settings['autoJailDuration'] = $antibot->autoJailDuration;
             $settings['verifySearchBots'] = $antibot->verifySearchBots;
             $settings['blockFakeSearchBots'] = $antibot->blockFakeSearchBots;
+            $settings['dnsCacheVerifiedTtl'] = $antibot->dnsCacheVerifiedTtl;
+            $settings['dnsCacheFakeTtl'] = $antibot->dnsCacheFakeTtl;
+            $settings['skipDnsForBlockedBots'] = $antibot->skipDnsForBlockedBots;
             $settings['rateLimitEnabled'] = $antibot->rateLimitEnabled;
             $settings['rateLimitMax'] = $antibot->rateLimitMax;
             $settings['rateLimitWindow'] = $antibot->rateLimitWindow;

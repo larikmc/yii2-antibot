@@ -145,10 +145,71 @@ $currentMode = (string) ($settings['mode'] ?? 'standard');
                         <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_verify_search_desc', $activeLang)) ?></div>
                     </div>
 
-                    <div class="form-check form-switch mb-0">
+                    <div class="form-check form-switch mb-3">
                         <input class="form-check-input" type="checkbox" name="AntibotSetting[blockFakeSearchBots]" value="1" id="fakeSearchSwitch" <?= !empty($settings['blockFakeSearchBots']) ? 'checked' : '' ?>>
                         <label class="form-check-label fw-bold text-danger" for="fakeSearchSwitch"><?= Html::encode(I18n::t('settings_block_fake', $activeLang)) ?></label>
                         <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_block_fake_desc', $activeLang)) ?></div>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" name="AntibotSetting[skipDnsForBlockedBots]" value="1" id="skipDnsBlockedSwitch" <?= !isset($settings['skipDnsForBlockedBots']) || !empty($settings['skipDnsForBlockedBots']) ? 'checked' : '' ?>>
+                        <label class="form-check-label fw-bold text-success" for="skipDnsBlockedSwitch"><?= Html::encode(I18n::t('settings_skip_dns_blocked', $activeLang)) ?></label>
+                        <div class="form-text text-muted"><?= Html::encode(I18n::t('settings_skip_dns_blocked_desc', $activeLang)) ?></div>
+                    </div>
+
+                    <div class="row g-3 mb-3 pt-2 border-top">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted" for="verifiedTtlSelect"><?= Html::encode(I18n::t('settings_dns_cache_verified', $activeLang)) ?></label>
+                            <select class="form-select form-select-sm" name="AntibotSetting[dnsCacheVerifiedTtl]" id="verifiedTtlSelect">
+                                <?php
+                                $curVerifiedTtl = (int) ($settings['dnsCacheVerifiedTtl'] ?? 172800);
+                                $verifiedOptions = [
+                                    86400 => '24 часа (86 400 сек)',
+                                    172800 => '48 часов (172 800 сек) — по умолчанию',
+                                    259200 => '72 часа (259 200 сек)',
+                                ];
+                                foreach ($verifiedOptions as $sec => $label): ?>
+                                    <option value="<?= $sec ?>" <?= $curVerifiedTtl === $sec ? 'selected' : '' ?>><?= Html::encode($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text small text-muted"><?= Html::encode(I18n::t('settings_dns_cache_verified_desc', $activeLang)) ?></div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted" for="fakeTtlSelect"><?= Html::encode(I18n::t('settings_dns_cache_fake', $activeLang)) ?></label>
+                            <select class="form-select form-select-sm" name="AntibotSetting[dnsCacheFakeTtl]" id="fakeTtlSelect">
+                                <?php
+                                $curFakeTtl = (int) ($settings['dnsCacheFakeTtl'] ?? 86400);
+                                $fakeOptions = [
+                                    900 => '15 минут (900 сек)',
+                                    3600 => '1 час (3 600 сек)',
+                                    21600 => '6 часов (21 600 сек)',
+                                    43200 => '12 часов (43 200 сек)',
+                                    86400 => '24 часа (86 400 сек) — по умолчанию',
+                                ];
+                                foreach ($fakeOptions as $sec => $label): ?>
+                                    <option value="<?= $sec ?>" <?= $curFakeTtl === $sec ? 'selected' : '' ?>><?= Html::encode($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text small text-muted"><?= Html::encode(I18n::t('settings_dns_cache_fake_desc', $activeLang)) ?></div>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 border-top d-flex gap-2 flex-wrap">
+                        <?= Html::beginForm(['/antibot/default/clear-dns-cache'], 'post', ['class' => 'd-inline']) ?>
+                            <?= Html::hiddenInput('type', 'verified') ?>
+                            <?= Html::submitButton(I18n::t('btn_clear_verified_cache', $activeLang), ['class' => 'btn btn-outline-success btn-sm']) ?>
+                        <?= Html::endForm() ?>
+
+                        <?= Html::beginForm(['/antibot/default/clear-dns-cache'], 'post', ['class' => 'd-inline']) ?>
+                            <?= Html::hiddenInput('type', 'fake') ?>
+                            <?= Html::submitButton(I18n::t('btn_clear_fake_cache', $activeLang), ['class' => 'btn btn-outline-danger btn-sm']) ?>
+                        <?= Html::endForm() ?>
+
+                        <?= Html::beginForm(['/antibot/default/clear-dns-cache'], 'post', ['class' => 'd-inline']) ?>
+                            <?= Html::hiddenInput('type', 'all') ?>
+                            <?= Html::submitButton(I18n::t('btn_clear_all_dns_cache', $activeLang), ['class' => 'btn btn-outline-secondary btn-sm']) ?>
+                        <?= Html::endForm() ?>
                     </div>
                 </div>
             </div>

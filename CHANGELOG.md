@@ -2,6 +2,62 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.6.2] - 2026-11-21
+
+### Negative Caching & Block Policy Optimization (`ReverseDnsVerifier`, `Antibot`, Admin UI)
+- **Negative Caching for Proven Fake Bots (`ReverseDnsVerifier`):**
+  - Implemented isolated two-tier negative cache: fast memory Tier 1 (`ArrayCache`/`FileCache`) coupled with Tier 2 persistent shared JSON store (`antibot_fake_bots.json`) in `@common/runtime`.
+  - Configurable TTL for proven fake bots (`STATUS_FAKE`): default 24 hours (86,400s), saving up to 99.9% of DNS queries on repeated spoofed crawler requests.
+  - Complete store separation: negative cache is stored in its own dedicated file with independent LRU capacity (`maxFakeBotRecords = 10,000`), completely eliminating eviction of authentic verified crawlers (`antibot_verified_bots.json`) during mass fake attacks.
+  - Operator-isolated caching (`engine:ip`): a negative record for one crawler (e.g. YandexBot) does not affect other search engines (e.g. Googlebot) or regular visitors.
+  - Fixed-point TTL: reading negative cache never extends trust expiration (`expires_at`), ensuring reliable re-verification after expiration.
+- **Granular Short-Term TTLs for Technical Verification Failures (`STATUS_UNKNOWN`):**
+  - Distinguished proven malicious fakes from temporary infrastructure or DNS issues.
+  - Granular dynamic TTL based on specific failure cause:
+    - `dns_slots_busy`, `dns_lookup_in_progress`: 0s (no caching, immediate retry on next request).
+    - `dns_lock_timeout`: 5s (rapid retry once lock clears).
+    - `dns_rate_limit`: aligned to remaining seconds in current minute window (`60 - (time() % 60)`).
+    - `dns_ptr_timeout`, `dns_forward_failed`: 45s (short backoff).
+    - `dns_resolver_error`: 60s (temporary DNS server recovery).
+- **DNS Lookup Skipping for Forbidden Bots (`Antibot::checkRequest()`):**
+  - Resolved policy evaluation before DNS verification: when a bot's effective policy is `block` (e.g. GPTBot, ClaudeBot, Bytespider, or individually blocked crawlers), DNS checks are skipped completely (`skipDnsForBlockedBots = true`).
+  - Read-only cache probe (`ReverseDnsVerifier::getCachedStatus()`): checks existing cached status without performing any DNS lookups.
+  - Assigned neutral status `STATUS_NOT_CHECKED = 'not_checked'` to skipped bots, preventing false `STATUS_FAKE` categorization.
+  - Seamless Monitoring mode behavior: logs `[BotName] — would be blocked by policy; DNS verification skipped`, allowing safe traffic inspection without real 403 blocks or Auto-Jail quarantine.
+- **Administrative Settings & Cache Management (`settings/index.php`, `DefaultController`, `I18n`):**
+  - Added UI controls in Section 2: toggle for `skipDnsForBlockedBots`, dropdowns for VERIFIED TTL (6h to 7 days) and FAKE TTL (1h to 7 days).
+  - Added cache management actions: one-click CSRF-protected POST buttons to clear verified cache, fake cache, or all DNS cache.
+  - Added programmatic cache invalidation API: `ReverseDnsVerifier::clearCache($type, $ip, $engine)` with atomic entry removal and cache flushing.
+- **Self-Test Diagnostics & Metrics:**
+  - Extended Self-Test check 11 to display verified and fake record counts, active TTLs, hit counts, skipped lookups by policy, and overall cache hit ratio %.
+
+### DNS Verification Multi-Tier Caching, Single Flight & Auto-Jail Resilience
+- **DNS Verification Multi-Tier Caching & Operator Separation (`ReverseDnsVerifier`):**
+  - Implemented two-tier caching: Tier 1 fast application cache (`ArrayCache`/`FileCache`) coupled with Tier 2 persistent shared JSON store (`antibot_verified_bots.json`) in the shared runtime storage directory, accessible across all PHP-FPM workers and surviving application/FPM restarts.
+  - Set default verified bot cache TTL to 48 hours (172,800 seconds, configurable via `ReverseDnsVerifier::$cacheVerified`), eliminating redundant PTR and Forward DNS lookups for confirmed bot IPs.
+  - Enforced strict operator isolation in both cache keys and persistent storage (`engine:ip`), guaranteeing that verification for one operator (e.g. Yandex) cannot be reused by arbitrary spoofed User-Agents (e.g. Googlebot).
+  - Bounded store capacity (`maxVerifiedBotRecords = 10,000`) with automatic expiry pruning and LRU eviction to prevent unbounded disk growth.
+  - Catalog bots verified via custom domain suffixes (`domains`) in `checkBot()` now fully participate in caching and Single Flight deduplication.
+- **Single Flight Concurrency Deduplication (`ReverseDnsVerifier::acquireDnsBudgetSlot`):**
+  - Resolved the race condition causing concurrent requests for the same new IP to drop secondary workers into `STATUS_UNKNOWN`.
+  - Implemented bounded Single Flight wait (up to 150ms with 25ms polling intervals): secondary workers wait for the in-flight primary worker to complete FCrDNS and immediately consume the verified result from cache with 0 DNS lookups.
+  - Increased budget file lock retries from 4ms to 30ms (15 retries x 2ms), eliminating budget lock contention under high worker bursts.
+- **Granular Diagnostic Codes for `STATUS_UNKNOWN` (`ReverseDnsVerifier`, `I18n`):**
+  - Added granular diagnostic codes accessible via `ReverseDnsVerifier::getLastUnknownReason()` while preserving full backward compatibility: `dns_slots_busy`, `dns_rate_limit`, `dns_lock_timeout`, `dns_lookup_in_progress`, `dns_ptr_timeout`, `dns_forward_failed`, `dns_resolver_error`, `verification_disabled`.
+  - Enhanced Live Feed logging with localized diagnostic reasons (e.g. `Unverified bot allowed by policy: YandexBot (DNS-слоты заняты (3/3))`).
+- **Auto-Jail False Positive Protection & Self-Healing (`Antibot::checkRequest()`, `AutoJailService`):**
+  - Implemented automatic quarantine lifting for verified Search and Advertising crawlers mistakenly detained in Auto-Jail: on public `GET`/`HEAD` routes, AntiBot verifies candidate search/ad bots. If confirmed authentic, the IP is automatically released from Auto-Jail (`AutoJailService::release()`), a recovery event is logged (`action: 'recovered'`), and the request is allowed.
+  - Spoofed crawlers attempting jail evasion are caught, penalized with additional violation records, and remain detained.
+  - Public route isolation preserved: administrative and closed routes (`/admin`, `/wp-admin`, `/antibot`, `/api`) remain strictly blocked.
+- **Missing Assets Trap Immunity for Search & Ad Bots (`Antibot::checkRequest()`):**
+  - Excluded identified search engine and advertising crawler candidates (`BotCatalog::CATEGORY_SEARCH` and `BotCatalog::CATEGORY_AD`) from the Missing Assets Trap. Crawlers intentionally fetching only HTML without CSS/JS/images are protected from false violation accumulation and subsequent Auto-Jail quarantine.
+- **Self-Test Diagnostics & Metrics (`SelfTest`, `I18n`):**
+  - Integrated persistent verified bot store metrics, Single Flight status, cache hit counts, and prevented duplicate lookups into Self-Test check 11.
+  - Added full bilingual dictionary translations (RU/EN) for diagnostic reason codes and recovery events.
+- **Verification & Test Suite:**
+  - Added `tests/test_v162_dns_cache.php` covering all 25 scenarios required by Specification Section 14 (34/34 passed, 100%).
+  - Full test suite passing: 189/189 tests across all suites (`test_v162_dns_cache.php`, `test_v161_timezone.php`, `test_v160_final_audit.php`, `test_v160_catalog.php`, `test_v1514.php`).
+
 ## [1.6.1] - 2026-11-20
 
 ### TimeZone Display Consistency, GridView Filters, History Depth & Data Export

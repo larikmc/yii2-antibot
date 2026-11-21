@@ -211,6 +211,14 @@ class AutoJailService
     }
 
     /**
+     * Alias for releaseIp().
+     */
+    public static function release(string $ip): bool
+    {
+        return self::releaseIp($ip);
+    }
+
+    /**
      * Releases all detained IPs immediately.
      */
     public static function clearAll(): void
@@ -227,6 +235,16 @@ class AutoJailService
      */
     private static function getStorageFilePath(): string
     {
+        if (class_exists('Yii', false) && Yii::getAlias('@common', false) !== false) {
+            $sharedDir = Yii::getAlias('@common/runtime/antibot');
+            if (!is_dir($sharedDir)) {
+                @mkdir($sharedDir, 0775, true);
+            }
+            if (is_dir($sharedDir) && is_writable($sharedDir)) {
+                return $sharedDir . DIRECTORY_SEPARATOR . 'autojail.json';
+            }
+        }
+
         $dir = Yii::getAlias('@runtime/antibot', false);
         if ($dir === false || $dir === '') {
             $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'antibot';

@@ -36,6 +36,7 @@ class DefaultController extends Controller
                 'toggle-panic' => ['POST'],
                 'release-jail' => ['POST'],
                 'clear-jail' => ['POST'],
+                'clear-dns-cache' => ['POST'],
             ],
         ];
         return $behaviors;
@@ -302,17 +303,24 @@ class DefaultController extends Controller
                 $ts = (int) ($event['timestamp'] ?? time());
                 $formattedDate = \larikmc\antibot\services\I18n::formatTimestamp($ts, $event['date'] ?? null);
 
+                $sanitize = static function (string $val): string {
+                    if ($val !== '' && in_array($val[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+                        return "'" . $val;
+                    }
+                    return $val;
+                };
+
                 fputcsv($out, [
                     $ts,
                     $formattedDate,
-                    (string) ($event['ip'] ?? ''),
-                    $action,
-                    (string) ($event['reason'] ?? ''),
-                    (string) ($event['bot_key'] ?? ''),
-                    (string) ($event['bot_category'] ?? ''),
-                    (string) ($event['verification_status'] ?? ''),
-                    (string) ($event['url'] ?? ($event['route'] ?? '')),
-                    (string) ($event['userAgent'] ?? ''),
+                    $sanitize((string) ($event['ip'] ?? '')),
+                    $sanitize($action),
+                    $sanitize((string) ($event['reason'] ?? '')),
+                    $sanitize((string) ($event['bot_key'] ?? '')),
+                    $sanitize((string) ($event['bot_category'] ?? '')),
+                    $sanitize((string) ($event['verification_status'] ?? '')),
+                    $sanitize((string) ($event['url'] ?? ($event['route'] ?? ''))),
+                    $sanitize((string) ($event['userAgent'] ?? '')),
                 ]);
 
                 if (ob_get_level() > 0) {
@@ -341,6 +349,19 @@ class DefaultController extends Controller
         if (str_starts_with($recId, 'block_scanner_')) {
             $ip = trim((string) $this->request->post('ip', ''));
             if ($ip !== '') {
+                // Safety guard: Check candidate IP for intersection with protected search & ad systems
+                $intersection = \larikmc\antibot\services\IpMatcher::checkProtectedIntersection($ip);
+                if ($intersection['intersects']) {
+                    $lang = \larikmc\antibot\services\I18n::getLanguage();
+                    $sysName = $intersection['system'] ?? 'Protected Bot';
+                    $matchedRange = $intersection['range'] ?? '';
+                    $msg = $lang === 'en'
+                        ? "Cannot block '{$ip}': IP intersects with protected {$sysName} ({$matchedRange})!"
+                        : "Невозможно заблокировать '{$ip}': IP пересекается с защищенной инфраструктурой {$sysName} ({$matchedRange})!";
+                    Yii::$app->session->setFlash('warning', $msg);
+                    return $this->redirect(['diagnostics']);
+                }
+
                 $blacklist = (array) ($settings['blacklist'] ?? []);
                 if (!in_array($ip, $blacklist, true)) {
                     $blacklist[] = $ip;
@@ -517,5 +538,29 @@ class DefaultController extends Controller
         \larikmc\antibot\services\resilience\AutoJailService::clearAll();
         Yii::$app->session->setFlash('success', 'Все адреса успешно освобождены из карантина Auto-Jail.');
         return $this->redirect(Yii::$app->request->referrer ?: ['index']);
+    }
+
+    /**
+     * Clears DNS verification caches (positive, negative, temporary, or specific IP).
+     *
+     * @return Response
+     */
+    public function actionClearDnsCache(): Response
+    {
+        $type = (string) $this->request->post('type', 'all');
+        $ip = trim((string) $this->request->post('ip', ''));
+        $engine = trim((string) $this->request->post('engine', ''));
+
+        \larikmc\antibot\services\ReverseDnsVerifier::clearCache($type, $ip, $engine);
+
+        $msg = match ($type) {
+            'verified' => 'Положительный кэш подтверждённых роботов (VERIFIED) успешно очищен.',
+            'fake' => 'Негативный кэш доказанных подделок (FAKE) успешно очищен.',
+            'single' => "Запись кэша верификации для {$ip} ({$engine}) успешно удалена.",
+            default => 'Кэш DNS-верификации роботов полностью очищен.',
+        };
+
+        Yii::$app->session->setFlash('success', $msg);
+        return $this->redirect(Yii::$app->request->referrer ?: ['settings/index']);
     }
 }

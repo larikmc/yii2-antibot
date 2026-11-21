@@ -38,7 +38,7 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
-    public const VERSION = '1.6.1';
+    public const VERSION = '1.6.2';
 
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;
@@ -95,6 +95,22 @@ class Antibot extends Component implements BootstrapInterface
      * Overrides category-level policies for specific bots.
      */
     public array $botPolicies = [];
+
+    /**
+     * @var int TTL in seconds for caching confirmed verified robots (default: 48 hours = 172800).
+     */
+    public int $dnsCacheVerifiedTtl = 172800;
+
+    /**
+     * @var int TTL in seconds for caching proven fake robots (default: 24 hours = 86400).
+     */
+    public int $dnsCacheFakeTtl = 86400;
+
+    /**
+     * @var bool Whether to skip expensive DNS lookups for crawlers whose effective policy is 'block'.
+     * Enabled by default to eliminate useless network I/O for forbidden AI and scraper bots.
+     */
+    public bool $skipDnsForBlockedBots = true;
 
     /**
      * @var array<string, array{max: int, window: int}> Custom throttling limits per bot or category.
@@ -404,10 +420,23 @@ class Antibot extends Component implements BootstrapInterface
             if (isset($savedSettings['maxLogSizeBytes'])) {
                 $this->_storage->maxLogSizeBytes = (int) $savedSettings['maxLogSizeBytes'];
             }
+            if (isset($savedSettings['dnsCacheVerifiedTtl'])) {
+                $this->dnsCacheVerifiedTtl = (int) $savedSettings['dnsCacheVerifiedTtl'];
+            }
+            if (isset($savedSettings['dnsCacheFakeTtl'])) {
+                $this->dnsCacheFakeTtl = (int) $savedSettings['dnsCacheFakeTtl'];
+            }
+            if (isset($savedSettings['skipDnsForBlockedBots'])) {
+                $this->skipDnsForBlockedBots = (bool) $savedSettings['skipDnsForBlockedBots'];
+            }
             if (!empty($savedSettings['secretKey']) && is_string($savedSettings['secretKey'])) {
                 $this->secretKey = $savedSettings['secretKey'];
             }
         }
+
+        // Synchronize DNS cache TTLs to verifier service
+        ReverseDnsVerifier::$cacheVerified = $this->dnsCacheVerifiedTtl;
+        ReverseDnsVerifier::$cacheFake = $this->dnsCacheFakeTtl;
 
         // Validate mode safety: never allow an unrecognized mode to secretly become strict
         $validModes = [
@@ -471,6 +500,15 @@ class Antibot extends Component implements BootstrapInterface
     public function isBootstrapped(): bool
     {
         return $this->_isBootstrapped;
+    }
+
+    /**
+     * Returns the latest inspection decision for the current request.
+     * Possible values: 'allowed', 'blocked', 'monitored', 'challenge', 'throttled', 'exception'.
+     */
+    public function getCurrentDecision(): string
+    {
+        return $this->_currentDecision;
     }
 
     /**
@@ -810,9 +848,50 @@ class Antibot extends Component implements BootstrapInterface
 
             // 2b. Auto-Jail Quarantine Check (Sub-millisecond fast reject for chronic attackers)
             if ($this->autoJailEnabled && AutoJailService::isJailed($ip)) {
-                $this->_currentDecision = 'blocked';
-                $this->blockRequest('IP detained in temporary Auto-Jail quarantine', $ip, $ua, $url);
-                return;
+                $isPublicRoute = !self::isClosedRoute($pathInfo) && $this->findMatchingUriRule($pathInfo, $request->getMethod()) === null;
+                $isSafeMethod = $request->isGet || $request->isHead;
+                $isVerifiedCrawler = false;
+
+                if ($isPublicRoute && $isSafeMethod && $this->verifySearchBots && $ua !== '') {
+                    $candBot = BotCatalog::identify($ua);
+                    if ($candBot !== null) {
+                        $candData = $candBot['data'];
+                        $candCat = $candData['category'] ?? '';
+                        $candVType = $candData['verification'] ?? BotCatalog::VERIFY_NONE;
+
+                        if (($candCat === BotCatalog::CATEGORY_SEARCH || $candCat === BotCatalog::CATEGORY_AD) && $candVType !== BotCatalog::VERIFY_NONE) {
+                            $candStatus = ReverseDnsVerifier::checkBot($ip, $candData);
+                            if ($candStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
+                                // Proven authentic search or ad crawler detained mistakenly: release from quarantine
+                                AutoJailService::release($ip);
+                                $this->_storage->logEvent([
+                                    'ip' => $ip,
+                                    'userAgent' => $ua,
+                                    'action' => 'recovered',
+                                    'reason' => 'Auto-Jail quarantine lifted: verified authentic ' . ($candData['name'] ?? 'Crawler'),
+                                    'url' => $url,
+                                    'bot_key' => $candBot['key'] ?? '',
+                                    'bot_category' => $candCat,
+                                    'verification_status' => ReverseDnsVerifier::STATUS_VERIFIED,
+                                ]);
+                                $isVerifiedCrawler = true;
+                            } elseif ($candStatus === ReverseDnsVerifier::STATUS_FAKE) {
+                                // Attacker attempting jail evasion by spoofing crawler User-Agent: penalize
+                                $threshold = PanicModeService::isActive() ? 1 : $this->autoJailThreshold;
+                                AutoJailService::recordViolation($ip, 'Spoofed crawler attempting jail evasion: ' . ($candData['name'] ?? 'Crawler'), 1, $this->autoJailDuration);
+                                $this->_currentDecision = 'blocked';
+                                $this->blockRequest('IP detained in temporary Auto-Jail quarantine (spoofed crawler)', $ip, $ua, $url);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                if (!$isVerifiedCrawler) {
+                    $this->_currentDecision = 'blocked';
+                    $this->blockRequest('IP detained in temporary Auto-Jail quarantine', $ip, $ua, $url);
+                    return;
+                }
             }
 
             // 3. Blacklist Check
@@ -863,7 +942,49 @@ class Antibot extends Component implements BootstrapInterface
                     return;
                 }
 
-                // Verification check
+                // Resolve effective policy
+                $effectivePolicy = $this->resolveBotPolicy($bKey, $bData);
+                $engineKey = (string) ($bData['engine_key'] ?? ($bData['name'] ?? $bKey));
+
+                // Optimization: If effective policy is 'block', skip expensive DNS lookups
+                if ($effectivePolicy === 'block' && $this->skipDnsForBlockedBots) {
+                    $cachedStatus = ReverseDnsVerifier::getCachedStatus($ip, $engineKey);
+                    $vStatus = $cachedStatus ?? ReverseDnsVerifier::STATUS_NOT_CHECKED;
+                    if ($cachedStatus === null) {
+                        ReverseDnsVerifier::$stats['skipped_by_policy']++;
+                    }
+
+                    $this->_currentDecision = 'blocked';
+                    if ($this->isMonitoringMode()) {
+                        $this->_storage->logEvent([
+                            'ip' => $ip,
+                            'userAgent' => $ua,
+                            'action' => 'monitored',
+                            'reason' => $bName . ' — would be blocked by policy; DNS verification skipped',
+                            'url' => $url,
+                            'bot_key' => $bKey,
+                            'bot_category' => $bCat,
+                            'verification_status' => $vStatus,
+                        ]);
+                        return;
+                    }
+
+                    $this->_currentDecision = 'blocked';
+                    $this->_storage->logEvent([
+                        'ip' => $ip,
+                        'userAgent' => $ua,
+                        'action' => 'blocked',
+                        'reason' => 'Bot blocked by policy: ' . $bName,
+                        'url' => $url,
+                        'bot_key' => $bKey,
+                        'bot_category' => $bCat,
+                        'verification_status' => $vStatus,
+                    ]);
+                    $this->blockRequest('Bot blocked by policy: ' . $bName, $ip, $ua, $url);
+                    return;
+                }
+
+                // Verification check (when policy is allow, monitor, throttle, or skipDns is disabled)
                 $vStatus = ReverseDnsVerifier::STATUS_UNKNOWN;
                 if ($this->verifySearchBots && $vType !== BotCatalog::VERIFY_NONE) {
                     $vStatus = ReverseDnsVerifier::checkBot($ip, $bData);
@@ -873,15 +994,11 @@ class Antibot extends Component implements BootstrapInterface
                 if ($vStatus === ReverseDnsVerifier::STATUS_FAKE && $this->blockFakeSearchBots) {
                     $this->_currentDecision = 'blocked';
                     if ($this->autoJailEnabled) {
-                        $threshold = PanicModeService::isActive() ? 1 : $this->autoJailThreshold;
-                        AutoJailService::recordViolation($ip, 'Fake bot spoofing ' . $bName, $threshold, $this->autoJailDuration);
+                        AutoJailService::recordViolation($ip, 'Fake bot spoofing ' . $bName, 1, $this->autoJailDuration);
                     }
                     $this->blockRequest('Fake bot spoofing ' . $bName, $ip, $ua, $url);
                     return;
                 }
-
-                // Resolve effective policy
-                $effectivePolicy = $this->resolveBotPolicy($bKey, $bData);
 
                 // Mark social preview read requests allowed by policy for safe public HTML parsing
                 $isPublicRoute = !self::isClosedRoute($pathInfo) && $this->findMatchingUriRule($pathInfo, $request->getMethod()) === null;
@@ -889,7 +1006,7 @@ class Antibot extends Component implements BootstrapInterface
                     $isSocialPreviewGet = true;
                 }
 
-                // If policy is 'block'
+                // If policy is 'block' (fallback when skipDnsForBlockedBots is disabled)
                 if ($effectivePolicy === 'block') {
                     $this->_currentDecision = 'blocked';
                     $this->blockRequest('Bot blocked by policy: ' . $bName, $ip, $ua, $url);
@@ -958,15 +1075,26 @@ class Antibot extends Component implements BootstrapInterface
 
                 // 2. If policy is 'allow' but identity is unverified or in Cautious mode (VERIFY_NONE)
                 if ($effectivePolicy === 'allow') {
+                    $unknownReason = null;
+                    $reasonExtra = '';
+                    if ($vStatus === ReverseDnsVerifier::STATUS_UNKNOWN) {
+                        $unknownReason = ReverseDnsVerifier::getLastUnknownReason();
+                        if ($unknownReason !== null) {
+                            $translatedReason = I18n::t($unknownReason);
+                            $reasonExtra = ' (' . $translatedReason . ')';
+                        }
+                    }
+
                     $this->_storage->logEvent([
                         'ip' => $ip,
                         'userAgent' => $ua,
                         'action' => 'monitored',
-                        'reason' => ($vType === BotCatalog::VERIFY_NONE ? 'Cautious' : 'Unverified') . ' bot allowed by policy: ' . $bName,
+                        'reason' => ($vType === BotCatalog::VERIFY_NONE ? 'Cautious' : 'Unverified') . ' bot allowed by policy: ' . $bName . $reasonExtra,
                         'url' => $url,
                         'bot_key' => $bKey,
                         'bot_category' => $bCat,
                         'verification_status' => $vStatus,
+                        'unknown_reason' => $unknownReason,
                     ]);
                     // Security Guarantee: Unverified or unauthenticated User-Agents NEVER bypass the inspection pipeline!
                     // Request proceeds through standard filters (Traps, Datacenter, Rate Limits, Anomaly detection).
@@ -1053,7 +1181,8 @@ class Antibot extends Component implements BootstrapInterface
             }
 
             // 9b. Missing Assets Trap (Detects console scrapers loading purely HTML)
-            if ($this->missingAssetsTrapEnabled && $request->isGet && !$request->isAjax && !$this->isMachineOrApiRequest() && !$isVerifiedVisitor && !$isSocialPreviewGet) {
+            $isSearchOrAdCandidate = ($identifiedBot !== null && in_array($identifiedBot['data']['category'] ?? '', [BotCatalog::CATEGORY_SEARCH, BotCatalog::CATEGORY_AD], true));
+            if ($this->missingAssetsTrapEnabled && !$isSearchOrAdCandidate && $request->isGet && !$request->isAjax && !$this->isMachineOrApiRequest() && !$isVerifiedVisitor && !$isSocialPreviewGet) {
                 $htmlCount = \larikmc\antibot\services\trap\MissingAssetsTrap::recordHtmlRequest($ip, $this->missingAssetsWindow);
                 if ($htmlCount >= $this->missingAssetsThreshold) {
                     $trapReason = sprintf('Missing static assets anomaly (%d consecutive HTML requests without assets)', $htmlCount);

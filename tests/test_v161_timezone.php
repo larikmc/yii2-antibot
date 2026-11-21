@@ -217,8 +217,8 @@ assertTest(
 
 // --- Step 7: Version Bump Verification ---
 echo "\n--- Section 7: Version Alignment (v1.6.1) ---\n";
-assertTest(\larikmc\antibot\Module::VERSION === '1.6.1', '7.1 Module::VERSION is 1.6.1');
-assertTest(\larikmc\antibot\Antibot::VERSION === '1.6.1', '7.2 Antibot::VERSION is 1.6.1');
+assertTest(version_compare(\larikmc\antibot\Module::VERSION, '1.6.1', '>='), '7.1 Module::VERSION is >= 1.6.1');
+assertTest(version_compare(\larikmc\antibot\Antibot::VERSION, '1.6.1', '>='), '7.2 Antibot::VERSION is >= 1.6.1');
 
 // --- Step 8: Live Feed GridView Column Filters Verification ---
 echo "\n--- Section 8: Live Feed GridView Column Filters ---\n";
