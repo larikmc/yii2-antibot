@@ -527,12 +527,12 @@ assertTest(
 echo "\n--- Section E: Diagnostics, Metrics & Version Verification ---\n";
 
 assertTest(
-    Antibot::VERSION === '1.6.2',
-    'E.1 Antibot::VERSION is 1.6.2'
+    version_compare(Antibot::VERSION, '1.6.2', '>='),
+    'E.1 Antibot::VERSION is >= 1.6.2'
 );
 assertTest(
-    \larikmc\antibot\Module::VERSION === '1.6.2',
-    'E.2 Module::VERSION is 1.6.2'
+    version_compare(\larikmc\antibot\Module::VERSION, '1.6.2', '>='),
+    'E.2 Module::VERSION is >= 1.6.2'
 );
 
 // Run SelfTest

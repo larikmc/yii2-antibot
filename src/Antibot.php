@@ -38,7 +38,7 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
-    public const VERSION = '1.6.2';
+    public const VERSION = '1.6.3';
 
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;
@@ -1914,20 +1914,23 @@ class Antibot extends Component implements BootstrapInterface
         }
 
         // 2. If caller is an authentic search or ad crawler rendering JS (Googlebot, Applebot, etc.):
-        // Do not block verified crawlers on challenge verification.
+        // Do not block verified crawlers on challenge verification UNLESS their effective policy is 'block'.
         if ($this->verifySearchBots && $ua !== '') {
             $candBot = BotCatalog::identify($ua);
             if ($candBot !== null) {
                 $candCat = $candBot['data']['category'] ?? '';
                 if ($candCat === BotCatalog::CATEGORY_SEARCH || $candCat === BotCatalog::CATEGORY_AD) {
-                    $candStatus = ReverseDnsVerifier::checkBot($ip, $candBot['data']);
-                    if ($candStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
-                        $this->finishInspection('allowed');
-                        $response = Yii::$app->response;
-                        $response->format = Response::FORMAT_JSON;
-                        $response->data = ['success' => true, 'crawler' => true];
-                        $response->send();
-                        exit(0);
+                    $botPolicy = $this->resolveBotPolicy($candBot['key'], $candBot['data']);
+                    if ($botPolicy !== 'block') {
+                        $candStatus = ReverseDnsVerifier::checkBot($ip, $candBot['data']);
+                        if ($candStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
+                            $this->finishInspection('allowed');
+                            $response = Yii::$app->response;
+                            $response->format = Response::FORMAT_JSON;
+                            $response->data = ['success' => true, 'crawler' => true];
+                            $response->send();
+                            exit(0);
+                        }
                     }
                 }
             }

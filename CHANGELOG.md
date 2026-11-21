@@ -2,6 +2,37 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.6.3] - 2026-11-21
+
+### JS Challenge BFCache, Replay Resilience & Browser Navigation Fixes (`TokenService`, `Antibot`, `AntibotWidget`)
+- **Resolved False 403 Blocks on Browser Back/Forward Navigation & BFCache (`TokenService`, `Antibot`):**
+  - Eliminated false HTTP 403 blocks and Auto-Jail quarantining caused when mobile Android Chrome and desktop users navigate backwards through browser history or restore tabs from Back-Forward Cache (BFCache).
+  - Implemented granular status codes in `TokenService`:
+    - `CHALLENGE_VALID (0)`: Solution is fresh, valid, and cryptographically verified.
+    - `CHALLENGE_EXPIRED (1)`: Mathematical HMAC is valid, but the timestamp exceeds seed TTL (e.g. slow reader reading the page).
+    - `CHALLENGE_REPLAYED (2)`: Seed was previously used and recorded in the nonce registry.
+    - `CHALLENGE_INVALID (3)`: Forged answer or corrupted seed format.
+  - Added backward-compatible `TokenService::verifyJsChallengeDetailed()` alongside existing `verifyJsChallenge()`.
+- **Cryptographic Cookie Authentication on Challenge Replay (`Antibot::handleChallengeSubmission`):**
+  - Re-sent challenge submissions carrying an already valid `antibot_token` cookie are recognized as authenticated browser re-navigations rather than hostile replays.
+  - Server immediately returns HTTP 200 JSON with `['success' => true, 'already_verified' => true]`.
+  - Strictly prevents uncontrolled trust extension: the existing token expiration (`expires_at`) is preserved untouched and never artificially prolonged.
+- **Extended Reading Time & Idle Tab Resilience (`TokenService`, `AntibotWidget`):**
+  - Increased default JS Challenge seed TTL from 120s to 300s (5 minutes) to accommodate normal user article reading without session expiration.
+  - When a seed expires (`CHALLENGE_EXPIRED`), the server returns HTTP 200 with fresh challenge data `['expired' => true, 'seed' => ..., 'target' => ...]`.
+  - The client widget automatically performs a single safe retry with the fresh payload without showing an error, without user interruption, and without penalizing behavioral risk scores or jailing the IP.
+- **Malicious Replay & Forgery Defense Preserved:**
+  - Requests attempting to reuse seeds without a valid cookie or submitting forged HMAC answers return `CHALLENGE_INVALID` / `CHALLENGE_REPLAYED`, resulting in immediate HTTP 403 rejection and Auto-Jail quarantine.
+- **Client Cache Control & Navigation Replacement (`Antibot::renderChallengeScreen`):**
+  - Added strict anti-caching HTTP headers to challenge screens: `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` and `Pragma: no-cache`.
+  - Client-side navigation upon challenge solve uses `window.location.replace()` so intermediate challenge verification screens never linger in browser session history.
+- **HttpOnly Token Hardening & State Isolation (`AntibotWidget`, `TokenService`):**
+  - Removed all client JavaScript reads of `document.cookie` (since `antibot_token` is strictly `HttpOnly`).
+  - Isolated client `sessionStorage` (`__ab_v`): client-side flags only throttle redundant background fetch requests within the tab; server-side resource protection strictly enforces cryptographic HMAC token validation on every incoming request.
+- **Strict Policy Compliance for Verified Crawler Exemptions (`Antibot`, `AntibotWidget`):**
+  - Search engine and advertising crawler exemption from JS Challenge verification is strictly gated by FCrDNS verification (`ReverseDnsVerifier::STATUS_VERIFIED`) AND effective access policy (`resolveBotPolicy() !== 'block'`).
+  - Spoofed crawlers or verified crawlers with policy `block` are never exempted from challenge requirements.
+
 ## [1.6.2] - 2026-11-21
 
 ### Negative Caching & Block Policy Optimization (`ReverseDnsVerifier`, `Antibot`, Admin UI)

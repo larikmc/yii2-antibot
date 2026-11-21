@@ -64,15 +64,21 @@ class AntibotWidget extends Widget
             return '<!-- antibot: verified -->';
         }
 
-        // Exempt authentic search and ad crawlers ONLY IF verified via ReverseDnsVerifier
+        // Exempt authentic search and ad crawlers ONLY IF verified via ReverseDnsVerifier AND policy is not block
         if ($ua !== '') {
             $candBot = \larikmc\antibot\services\BotCatalog::identify($ua);
             if ($candBot !== null) {
                 $candCat = $candBot['data']['category'] ?? '';
                 if ($candCat === \larikmc\antibot\services\BotCatalog::CATEGORY_SEARCH || $candCat === \larikmc\antibot\services\BotCatalog::CATEGORY_AD) {
-                    $vStatus = \larikmc\antibot\services\ReverseDnsVerifier::checkBot($ip, $candBot['data']);
-                    if ($vStatus === \larikmc\antibot\services\ReverseDnsVerifier::STATUS_VERIFIED) {
-                        return '<!-- antibot: crawler (verified) -->';
+                    $isBlocked = false;
+                    if ($antibot !== null && $antibot->resolveBotPolicy($candBot['key'], $candBot['data']) === 'block') {
+                        $isBlocked = true;
+                    }
+                    if (!$isBlocked) {
+                        $vStatus = \larikmc\antibot\services\ReverseDnsVerifier::checkBot($ip, $candBot['data']);
+                        if ($vStatus === \larikmc\antibot\services\ReverseDnsVerifier::STATUS_VERIFIED) {
+                            return '<!-- antibot: crawler (verified) -->';
+                        }
                     }
                 }
             }

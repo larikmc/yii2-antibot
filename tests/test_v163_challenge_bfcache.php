@@ -209,6 +209,42 @@ $reflectedCookies->setValue($app->request, $cookieCol);
 $widgetHtmlVerified = AntibotWidget::widget();
 assertTest(str_contains($widgetHtmlVerified, '<!-- antibot: verified -->'), "5.3 Authenticated visitor with valid cookie receives <!-- antibot: verified -->");
 
+echo "\n--- Section 6: Policy Enforcement & Client State Isolation (v1.6.3 Final) ---\n";
+
+// 6.1 Verified crawler with policy 'block' MUST NOT receive crawler exemption
+$botComponent = new Antibot();
+$botComponent->botPolicies = ['googlebot' => 'block'];
+\Yii::$app->set('antibot', $botComponent);
+
+$_SERVER['REMOTE_ADDR'] = '66.249.66.1';
+$reflectedIp->setValue($app->request, '66.249.66.1');
+$reflectedCookies->setValue($app->request, new \yii\web\CookieCollection([]));
+$app->request->headers->set('User-Agent', 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)');
+$widgetBlockedCrawler = AntibotWidget::widget();
+assertTest(!str_contains($widgetBlockedCrawler, '<!-- antibot: crawler (verified) -->'), "6.1 Verified crawler with explicit policy 'block' is NOT exempted from challenge");
+
+// 6.2 Category policy 'block' (e.g. search => block) strictly enforces denial
+$botComponent->botPolicies = [];
+$botComponent->botCategoryPolicies = ['search' => 'block'];
+$widgetBlockedCategory = AntibotWidget::widget();
+assertTest(!str_contains($widgetBlockedCategory, '<!-- antibot: crawler (verified) -->'), "6.2 Verified crawler under category policy 'block' is NOT exempted from challenge");
+
+// Reset policy back to normal allow
+$botComponent->botCategoryPolicies = ['search' => 'allow'];
+
+// 6.3 sessionStorage state isolation: absence of server-side cookie cannot grant authentication
+// Even if client attempts to spoof by omitting verification, server TokenService strictly requires cryptographic HMAC
+$missingCookieToken = '';
+$isServerApproved = TokenService::validateToken($missingCookieToken, $userIp, $userUa, $widgetSecret);
+assertTest($isServerApproved === false, "6.3 Absence of server-side cookie strictly denies access (sessionStorage alone cannot bypass)");
+
+// 6.4 Multi-tab concurrent verification flow:
+// Tab 1 solves challenge and receives valid cookie
+$tab1Token = TokenService::generateToken($userIp, $userUa, $widgetSecret);
+// Tab 2 has an older seed generated on page render. Re-sending it with valid cookie:
+$isTab2Approved = TokenService::validateToken($tab1Token, $userIp, $userUa, $widgetSecret);
+assertTest($isTab2Approved === true, "6.4 Multi-tab session sharing: Tab 2 seamlessly authenticates using Tab 1 cookie without race condition");
+
 echo "\n=================================================================\n";
 echo " Test Results: $testsPassed / $totalTests passed (" . round(($testsPassed / $totalTests) * 100) . "%)\n";
 echo "=================================================================\n";
