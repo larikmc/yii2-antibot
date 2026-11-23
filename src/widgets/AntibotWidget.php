@@ -52,7 +52,7 @@ class AntibotWidget extends Widget
 
         /** @var Antibot|null $antibot */
         $antibot = Yii::$app->has($this->componentId) ? Yii::$app->get($this->componentId) : null;
-        if ($antibot !== null && !$antibot->enabled) {
+        if ($antibot !== null && (!$antibot->enabled || !$antibot->jsChallengeEnabled)) {
             return '';
         }
 
@@ -107,7 +107,10 @@ class AntibotWidget extends Widget
         if (window.outerWidth === 0 && window.outerHeight === 0) { return; }
 
         var verified = false;
+        var inFlight = false;
         var retried = false;
+        var idleId = null;
+        var timerId = null;
 
         try {
             if (sessionStorage.getItem('__ab_v') === '1') {
@@ -115,8 +118,24 @@ class AntibotWidget extends Widget
             }
         } catch(e) {}
 
+        var events = ['pointerdown', 'touchstart', 'scroll', 'keydown'];
+
+        function clearScheduled() {
+            if (timerId !== null) {
+                clearTimeout(timerId);
+                timerId = null;
+            }
+            if (idleId !== null && 'cancelIdleCallback' in window) {
+                cancelIdleCallback(idleId);
+                idleId = null;
+            }
+            events.forEach(function(e) { window.removeEventListener(e, onInteract); });
+        }
+
         function sendVerify(currentSeed, currentTarget) {
-            if (verified) return;
+            if (verified || inFlight) return;
+            inFlight = true;
+            clearScheduled();
 
             var fd = new FormData();
             fd.append('antibot_challenge_verify', '1');
@@ -124,6 +143,7 @@ class AntibotWidget extends Widget
             fd.append('answer', currentTarget || opt.target);
 
             function handleResponse(data) {
+                inFlight = false;
                 if (!data) return;
                 if (data.success) {
                     verified = true;
@@ -141,15 +161,20 @@ class AntibotWidget extends Widget
                 fetch(opt.verifyUrl, {
                     method: 'POST',
                     body: fd,
+                    credentials: 'same-origin',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                }).then(function(r) { return r.json(); }).then(handleResponse).catch(function() {});
+                }).then(function(r) { return r.json(); }).then(handleResponse).catch(function() {
+                    inFlight = false;
+                });
             } else {
                 var xhr = new XMLHttpRequest();
                 xhr.open('POST', opt.verifyUrl, true);
+                xhr.withCredentials = true;
                 xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
                 xhr.onload = function() {
-                    try { handleResponse(JSON.parse(xhr.responseText)); } catch(e) {}
+                    try { handleResponse(JSON.parse(xhr.responseText)); } catch(e) { inFlight = false; }
                 };
+                xhr.onerror = function() { inFlight = false; };
                 xhr.send(fd);
             }
         }
@@ -164,17 +189,18 @@ class AntibotWidget extends Widget
         });
 
         // Verify after first human interaction or brief idle
-        var events = ['pointerdown', 'touchstart', 'scroll', 'keydown'];
         function onInteract() {
-            events.forEach(function(e) { window.removeEventListener(e, onInteract); });
+            clearScheduled();
             sendVerify();
         }
         events.forEach(function(e) { window.addEventListener(e, onInteract, { passive: true, once: true }); });
 
         if ('requestIdleCallback' in window) {
-            requestIdleCallback(function() { setTimeout(sendVerify, 800); });
+            idleId = requestIdleCallback(function() {
+                timerId = setTimeout(sendVerify, 800);
+            });
         } else {
-            setTimeout(sendVerify, 1500);
+            timerId = setTimeout(sendVerify, 1500);
         }
     } catch(e) {}
 })();

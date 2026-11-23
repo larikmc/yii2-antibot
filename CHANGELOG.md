@@ -2,6 +2,33 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.6.4] - 2026-11-23
+
+### SEO Crawlers, Meta AS32934 Verification, JS Challenge Race Hardening, Universal Route Exclusions & Export Fixes (`Antibot`, `BotCatalog`, `AntibotWidget`, `DefaultController`)
+- **SEO Crawler Throttling & Scraper Trap Isolation (`Antibot::checkRequest`):**
+  - Resolved policy fallthrough bug where authentic commercial/SEO crawlers (`AhrefsBot`, `SemrushBot`, etc.) with `throttle` policy fell through to human-only scraper anomaly traps.
+  - Verified crawlers within rate limits receive `allowed_seo_bot` (`$this->_currentDecision = 'allowed'`) and safely complete inspection.
+  - Strict security privilege isolation verified: fake crawlers failing FCrDNS trigger immediate HTTP 403 block and Auto-Jail violation, never reaching throttle or allow blocks; unverified crawlers proceed through standard inspection filters and never bypass security checks.
+- **Meta / Facebook AS32934 Verification & Category Separation (`BotCatalog`, `Antibot`):**
+  - Added authentic Meta AS32934 CIDR ranges (`57.141.0.0/16`, `57.144.0.0/14`, `31.13.24.0/21`, `31.13.64.0/18`, `157.240.0.0/16`, `173.252.64.0/18`, `69.63.176.0/20`, `69.171.224.0/19`, `66.220.144.0/20`) sourced from official ARIN/RADB routing records.
+  - Registered `meta_webindexer` in `BotCatalog` under `CATEGORY_AI_SEARCH` with CIDR verification against AS32934, distinct from training scrapers.
+  - Enforced 3-way policy separation: `meta_webindexer` (`ai_search`, allow), `meta_facebook` (`social`, allow for previews), and `meta_external_agent` (`ai_training`, blocked by policy).
+  - Scoped CIDR ranges strictly inside `BotCatalog::$meta_cidrs` without modifying global whitelists or granting blind trust to unverified User-Agents.
+- **JS Challenge Concurrent In-Flight Replay Race Hardening (`AntibotWidget`, `Antibot`):**
+  - Added client-side in-flight guard (`inFlight = true`, `clearScheduled()`) in `AntibotWidget.php` to prevent duplicate concurrent solve POST submissions caused by rapid page loads or asynchronous timer triggers.
+  - Hardened server-side duplicate handling in `Antibot.php`: for concurrent requests within a 10-second window, strictly verified exact IP (`$solvedInfo['ip'] === $ip`) and exact User-Agent hash (`$solvedInfo['uaHash'] === md5($ua)`).
+  - Issued NO new authorization cookie on replayed duplicate attempts: server acknowledges duplicate safely (`['success' => true, 'duplicate' => true]`) without opening token issuance to third parties.
+  - Retained strict Auto-Jail penalties and 403 blocks for unauthorized replays across different IPs or mismatched User-Agents.
+- **Universal Route Exclusion for Missing Assets Trap (`Antibot`):**
+  - Introduced configurable property `$missingAssetsExcludedRoutes` and helper method `isMissingAssetsExcluded(string $pathInfo): bool`.
+  - Excludes standard static/media/binary extensions (`.png`, `.jpg`, `.pdf`, `.zip`, `.webp`, `.css`, `.js`, `.woff2`, `.avif`, etc.) by default.
+  - Supports application-level route exclusion patterns (exact, wildcards `downloads/*`, `fnmatch`), completely removing any hardcoded site-specific paths from the core package.
+  - Fully backward-compatible; configurable via Yii2 component configuration and runtime `antibot.json`.
+- **Streaming JSONL/CSV Log Export Fix (`DefaultController`):**
+  - Fixed uncaught `TypeError` in PHP 8 / Yii2 where stream closure returned `null` instead of an iterable.
+  - Changed stream closure return to `return []`, ensuring clean termination without trailing `An internal server error occurred.` in exported log files.
+  - Validated streaming with $O(1)$ constant memory (< 4 MB peak) across datasets exceeding 116,000 events.
+
 ## [1.6.3] - 2026-11-21
 
 ### JS Challenge BFCache, Replay Resilience & Browser Navigation Fixes (`TokenService`, `Antibot`, `AntibotWidget`)

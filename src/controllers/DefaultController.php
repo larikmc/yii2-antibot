@@ -245,21 +245,30 @@ class DefaultController extends Controller
             $response->headers->set('Content-Disposition', 'attachment; filename="' . $filename . '"');
             $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate');
 
-            $response->stream = function () use ($storage, $filter, $includeRotated): void {
-                $storage->streamEvents(function (array $event, string $rawLine) use ($filter): bool {
+            $response->stream = function () use ($storage, $filter, $includeRotated): array {
+                @set_time_limit(0);
+                $out = fopen('php://output', 'wb');
+                if (!$out) {
+                    return [];
+                }
+
+                $storage->streamEvents(function (array $event, string $rawLine) use ($filter, $out): bool {
+                    if (connection_aborted()) {
+                        return false;
+                    }
                     if ($filter === 'blocked') {
                         $action = (string) ($event['action'] ?? '');
                         if ($action !== 'blocked' && $action !== 'throttled') {
                             return true;
                         }
                     }
-                    echo $rawLine . "\n";
-                    if (ob_get_level() > 0) {
-                        ob_flush();
-                    }
-                    flush();
+                    fwrite($out, $rawLine . "\n");
+                    fflush($out);
                     return true;
                 }, $includeRotated);
+
+                fclose($out);
+                return [];
             };
 
             return $response;
@@ -271,10 +280,11 @@ class DefaultController extends Controller
         $response->headers->set('Content-Disposition', 'attachment; filename="' . $filename . '"');
         $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate');
 
-        $response->stream = function () use ($storage, $filter, $includeRotated): void {
+        $response->stream = function () use ($storage, $filter, $includeRotated): array {
+            @set_time_limit(0);
             $out = fopen('php://output', 'wb');
             if (!$out) {
-                return;
+                return [];
             }
 
             // UTF-8 BOM for Microsoft Excel compatibility
@@ -295,6 +305,9 @@ class DefaultController extends Controller
             ]);
 
             $storage->streamEvents(function (array $event) use ($out, $filter): bool {
+                if (connection_aborted()) {
+                    return false;
+                }
                 $action = (string) ($event['action'] ?? '');
                 if ($filter === 'blocked' && $action !== 'blocked' && $action !== 'throttled') {
                     return true;
@@ -323,14 +336,12 @@ class DefaultController extends Controller
                     $sanitize((string) ($event['userAgent'] ?? '')),
                 ]);
 
-                if (ob_get_level() > 0) {
-                    ob_flush();
-                }
-                flush();
+                fflush($out);
                 return true;
             }, $includeRotated);
 
             fclose($out);
+            return [];
         };
 
         return $response;

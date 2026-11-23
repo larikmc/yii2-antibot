@@ -233,6 +233,12 @@ class Antibot extends Component implements BootstrapInterface
     public string $beaconRoute = '/antibot-beacon.png';
 
     /**
+     * @var array Custom route patterns or prefixes excluded from Missing Assets Trap (e.g. binary download/print endpoints).
+     * Patterns can be exact matches ('api/download'), prefix patterns ('download/*'), or wildcards.
+     */
+    public array $missingAssetsExcludedRoutes = [];
+
+    /**
      * @var bool Whether WebGL and headless browser detection is enabled in challenges.
      */
     public bool $headlessDetectionEnabled = true;
@@ -410,6 +416,9 @@ class Antibot extends Component implements BootstrapInterface
             }
             if (isset($savedSettings['beaconRoute']) && is_string($savedSettings['beaconRoute'])) {
                 $this->beaconRoute = $savedSettings['beaconRoute'];
+            }
+            if (isset($savedSettings['missingAssetsExcludedRoutes']) && is_array($savedSettings['missingAssetsExcludedRoutes'])) {
+                $this->missingAssetsExcludedRoutes = $savedSettings['missingAssetsExcludedRoutes'];
             }
             if (isset($savedSettings['headlessDetectionEnabled'])) {
                 $this->headlessDetectionEnabled = (bool) $savedSettings['headlessDetectionEnabled'];
@@ -859,10 +868,10 @@ class Antibot extends Component implements BootstrapInterface
                         $candCat = $candData['category'] ?? '';
                         $candVType = $candData['verification'] ?? BotCatalog::VERIFY_NONE;
 
-                        if (($candCat === BotCatalog::CATEGORY_SEARCH || $candCat === BotCatalog::CATEGORY_AD) && $candVType !== BotCatalog::VERIFY_NONE) {
+                        if (in_array($candCat, [BotCatalog::CATEGORY_SEARCH, BotCatalog::CATEGORY_AD, BotCatalog::CATEGORY_SOCIAL, BotCatalog::CATEGORY_AI_SEARCH], true) && $candVType !== BotCatalog::VERIFY_NONE) {
                             $candStatus = ReverseDnsVerifier::checkBot($ip, $candData);
                             if ($candStatus === ReverseDnsVerifier::STATUS_VERIFIED) {
-                                // Proven authentic search or ad crawler detained mistakenly: release from quarantine
+                                // Proven authentic crawler detained mistakenly: release from quarantine
                                 AutoJailService::release($ip);
                                 $this->_storage->logEvent([
                                     'ip' => $ip,
@@ -1047,8 +1056,8 @@ class Antibot extends Component implements BootstrapInterface
                     }
                 }
 
-                // 1. If confirmed authentic crawler with 'allow' policy
-                if ($vStatus === ReverseDnsVerifier::STATUS_VERIFIED && $effectivePolicy === 'allow') {
+                // 1. If confirmed authentic crawler with 'allow' or 'throttle' policy (within rate limit)
+                if ($vStatus === ReverseDnsVerifier::STATUS_VERIFIED && ($effectivePolicy === 'allow' || $effectivePolicy === 'throttle')) {
                     $actionCode = match ($bCat) {
                         BotCatalog::CATEGORY_SEARCH => 'allowed_search_bot',
                         BotCatalog::CATEGORY_AD => 'allowed_ad_bot',
@@ -1073,8 +1082,8 @@ class Antibot extends Component implements BootstrapInterface
                     return;
                 }
 
-                // 2. If policy is 'allow' but identity is unverified or in Cautious mode (VERIFY_NONE)
-                if ($effectivePolicy === 'allow') {
+                // 2. If policy is 'allow' or 'throttle' but identity is unverified or in Cautious mode (VERIFY_NONE)
+                if ($effectivePolicy === 'allow' || $effectivePolicy === 'throttle') {
                     $unknownReason = null;
                     $reasonExtra = '';
                     if ($vStatus === ReverseDnsVerifier::STATUS_UNKNOWN) {
@@ -1181,8 +1190,16 @@ class Antibot extends Component implements BootstrapInterface
             }
 
             // 9b. Missing Assets Trap (Detects console scrapers loading purely HTML)
-            $isSearchOrAdCandidate = ($identifiedBot !== null && in_array($identifiedBot['data']['category'] ?? '', [BotCatalog::CATEGORY_SEARCH, BotCatalog::CATEGORY_AD], true));
-            if ($this->missingAssetsTrapEnabled && !$isSearchOrAdCandidate && $request->isGet && !$request->isAjax && !$this->isMachineOrApiRequest() && !$isVerifiedVisitor && !$isSocialPreviewGet) {
+            $isKnownBotCandidate = ($identifiedBot !== null && in_array($identifiedBot['data']['category'] ?? '', [
+                BotCatalog::CATEGORY_SEARCH,
+                BotCatalog::CATEGORY_AD,
+                BotCatalog::CATEGORY_AI_SEARCH,
+                BotCatalog::CATEGORY_SOCIAL,
+            ], true));
+
+            // Exclude static files and custom excluded binary/download routes from HTML trap counting.
+            // Note: Does NOT call recordAssetHit() on downloads so scrapers cannot evade the trap by probing random URLs.
+            if ($this->missingAssetsTrapEnabled && !$this->isMissingAssetsExcluded($pathInfo) && !$isKnownBotCandidate && $request->isGet && !$request->isAjax && !$this->isMachineOrApiRequest() && !$isVerifiedVisitor && !$isSocialPreviewGet) {
                 $htmlCount = \larikmc\antibot\services\trap\MissingAssetsTrap::recordHtmlRequest($ip, $this->missingAssetsWindow);
                 if ($htmlCount >= $this->missingAssetsThreshold) {
                     $trapReason = sprintf('Missing static assets anomaly (%d consecutive HTML requests without assets)', $htmlCount);
@@ -1982,6 +1999,16 @@ class Antibot extends Component implements BootstrapInterface
                 'url' => $request->getAbsoluteUrl(),
             ]);
 
+            // Track recent solve for concurrent in-flight duplicates (tight race window: 10 seconds)
+            if (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null) {
+                $solvedInfoKey = 'antibot_seed_solved_' . md5($seed);
+                Yii::$app->cache->set($solvedInfoKey, [
+                    'ip' => $ip,
+                    'uaHash' => md5($ua),
+                    'time' => time(),
+                ], 10);
+            }
+
             $this->finishInspection('challenge');
             $response = Yii::$app->response;
             $response->format = Response::FORMAT_JSON;
@@ -2007,7 +2034,30 @@ class Antibot extends Component implements BootstrapInterface
             exit(0);
         }
 
-        // 5. Unauthenticated replay or invalid answer (actual attack attempt)
+        // 5. Handle concurrent in-flight duplicate submission from the exact same visitor
+        if ($detailedStatus === TokenService::CHALLENGE_REPLAYED) {
+            $solvedInfoKey = 'antibot_seed_solved_' . md5($seed);
+            $solvedInfo = (Yii::$app !== null && Yii::$app->has('cache') && Yii::$app->cache !== null)
+                ? Yii::$app->cache->get($solvedInfoKey)
+                : false;
+
+            if (is_array($solvedInfo)
+                && ($solvedInfo['ip'] ?? '') === $ip
+                && ($solvedInfo['uaHash'] ?? '') === md5($ua)
+            ) {
+                // Legitimate visitor in-flight duplicate (concurrent request race).
+                // DO NOT issue a new cookie on replayed seed: original solve already received the cookie.
+                // Simply acknowledge duplicate safely without penalizing the client in Auto-Jail or blocking.
+                $this->finishInspection('challenge');
+                $response = Yii::$app->response;
+                $response->format = Response::FORMAT_JSON;
+                $response->data = ['success' => true, 'duplicate' => true];
+                $response->send();
+                exit(0);
+            }
+        }
+
+        // 6. Unauthenticated replay or invalid answer (actual attack attempt)
         $blockReason = $detailedStatus === TokenService::CHALLENGE_REPLAYED
             ? 'JS Challenge replay detected (unauthenticated)'
             : 'JS Challenge verification failed (invalid answer)';
@@ -2086,6 +2136,28 @@ class Antibot extends Component implements BootstrapInterface
         $response->content = '<!DOCTYPE html><html><head><meta name="robots" content="noindex,nofollow"><title>Archive</title></head><body></body></html>';
         $response->send();
         exit(0);
+    }
+
+    /**
+     * Checks whether the request path is excluded from Missing Assets Trap counting.
+     * Excludes static binary extensions and custom configured routes.
+     * Note: Does NOT call recordAssetHit() on downloads so scrapers cannot evade the trap by probing random URLs.
+     */
+    public function isMissingAssetsExcluded(string $pathInfo): bool
+    {
+        // 1. Universal static/media/document file extensions
+        if (preg_match('/\.(png|jpe?g|gif|webp|svg|pdf|zip|ico|css|js|woff2?|ttf|eot|otf|avif)$/i', $pathInfo)) {
+            return true;
+        }
+
+        // 2. Custom configured excluded routes/patterns
+        foreach ($this->missingAssetsExcludedRoutes as $pattern) {
+            if (is_string($pattern) && self::matchRoutePattern($pathInfo, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function matchRoutePattern(string $path, string $pattern): bool
