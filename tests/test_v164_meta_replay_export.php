@@ -87,6 +87,13 @@ echo " Yii2 AntiBot v1.6.4: Meta Crawlers, Replay Protection & Export\n";
 echo "=================================================================\n\n";
 
 // =====================================================================
+// PART 0: Version Identification
+// =====================================================================
+echo "--- Part 0: Package Version Constants ---\n";
+assertCondition(Antibot::VERSION === '1.6.4', 'Antibot::VERSION is exactly 1.6.4 (actual: ' . Antibot::VERSION . ')');
+assertCondition(\larikmc\antibot\Module::VERSION === '1.6.4', 'Module::VERSION is exactly 1.6.4 (actual: ' . \larikmc\antibot\Module::VERSION . ')');
+
+// =====================================================================
 // PART 1: Meta-WebIndexer Bot Identification & Category
 // =====================================================================
 echo "--- Part 1: Meta-WebIndexer Identification & Metadata ---\n";
