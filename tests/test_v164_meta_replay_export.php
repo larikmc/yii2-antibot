@@ -39,6 +39,8 @@ $loader->setPsr4('larikmc\\antibot\\', [dirname(__DIR__) . '/src']);
 
 if (!class_exists('Yii')) {
     $yiiCandidates = [
+        __DIR__ . '/../../yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
+        'D:/OSPanel6.5.1/home/yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
         __DIR__ . '/../../strb64.loc/vendor/yiisoft/yii2/Yii.php',
         dirname(__DIR__, 3) . '/yiisoft/yii2/Yii.php',
         dirname(__DIR__, 4) . '/yiisoft/yii2/Yii.php',
@@ -90,8 +92,8 @@ echo "=================================================================\n\n";
 // PART 0: Version Identification
 // =====================================================================
 echo "--- Part 0: Package Version Constants ---\n";
-assertCondition(Antibot::VERSION === '1.6.4', 'Antibot::VERSION is exactly 1.6.4 (actual: ' . Antibot::VERSION . ')');
-assertCondition(\larikmc\antibot\Module::VERSION === '1.6.4', 'Module::VERSION is exactly 1.6.4 (actual: ' . \larikmc\antibot\Module::VERSION . ')');
+assertCondition(version_compare(Antibot::VERSION, '1.6.4', '>='), 'Antibot::VERSION is >= 1.6.4 (actual: ' . Antibot::VERSION . ')');
+assertCondition(version_compare(\larikmc\antibot\Module::VERSION, '1.6.4', '>='), 'Module::VERSION is >= 1.6.4 (actual: ' . \larikmc\antibot\Module::VERSION . ')');
 
 // =====================================================================
 // PART 1: Meta-WebIndexer Bot Identification & Category

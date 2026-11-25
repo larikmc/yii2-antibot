@@ -18,7 +18,7 @@ echo "=================================================================\n";
 echo " Yii2 AntiBot: Master Test Suite Runner for v1.6.4 Release\n";
 echo "=================================================================\n\n";
 
-$phpCli = 'F:\\OSPanel\\modules\\PHP-8.4\\php.exe';
+$phpCli = defined('PHP_BINARY') && file_exists(PHP_BINARY) ? PHP_BINARY : 'D:\\OSPanel6.5.1\\modules\\PHP-8.3\\PHP.exe';
 $allPassed = true;
 $totalAsserts = 0;
 

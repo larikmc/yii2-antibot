@@ -38,7 +38,7 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
-    public const VERSION = '1.6.4';
+    public const VERSION = '1.6.5';
 
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;

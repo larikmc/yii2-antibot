@@ -176,7 +176,7 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                     <span class="fs-4">✅</span>
                     <div>
                         <div class="fw-bold"><?= Html::encode(I18n::t('diag_advisor_optimal_title', $activeLang)) ?></div>
-                        <div class="small text-muted"><?= Html::encode(I18n::t('diag_advisor_optimal_desc', $activeLang)) ?></div>
+                        <div class="small antibot-alert-desc"><?= Html::encode(I18n::t('diag_advisor_optimal_desc', $activeLang)) ?></div>
                     </div>
                 </div>
             <?php else: ?>
@@ -194,7 +194,7 @@ $perfP95 = ($perf['p95_ms'] ?? null) !== null ? number_format((float) $perf['p95
                                 <div>
                                     <div class="fw-bold fs-6 mb-1"><?= Html::encode($rec['title']) ?></div>
                                     <div class="small mb-1"><?= Html::encode($rec['description']) ?></div>
-                                    <div class="small text-muted font-monospace">Основание: <?= Html::encode($rec['reason']) ?></div>
+                                    <div class="small antibot-alert-desc font-monospace">Основание: <?= Html::encode($rec['reason']) ?></div>
                                 </div>
                                 <div>
                                     <?= Html::beginForm(['/antibot/default/apply-recommendation'], 'post', ['class' => 'd-inline']) ?>

@@ -2,6 +2,20 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.6.5] - 2026-11-25
+
+### Fixed & Improved
+- **Dashboard Alert Contrast & High-Contrast Styling (`dashboard.css`, `index.php`, `diagnostics.php`):**
+  - Resolved low-contrast and faint alert text in the admin dashboard: introduced dedicated `.antibot-alert-desc` with crisp, accessible text color (`#475569` on light surfaces and `#cbd5e1` on dark surfaces) that complies with WCAG AA guidelines (>5:1 contrast ratio).
+  - Aligned `--ab-muted` fallback token to `#546c96` to match the Laricum C Admin design system tokens.
+  - Added `.antibot-status-label` with high-contrast muted color for navigation status badges.
+- **Alert Banner Flex Wrap Prevention (`index.php`):**
+  - Replaced unconstrained flex wrapping on dashboard alert cards (`alert-warning`, `alert-info`, `alert-danger`, `alert-secret`) with `flex-wrap flex-md-nowrap`.
+  - Added `flex-shrink-0` to action button wrappers and `text-nowrap` to action buttons (`Change Mode`, `Enable Protection`).
+  - Added `flex-grow-1 min-w-0` to the message text container, preventing action buttons from awkwardly breaking into a new line and leaving large empty white space on desktop screens.
+- **Diagnostics & Advisor Recommendations:**
+  - Applied high-contrast `.antibot-alert-desc` to diagnostic recommendations and advisor optimal state descriptions.
+
 ## [1.6.4] - 2026-11-23
 
 ### SEO Crawlers, Meta AS32934 Verification, JS Challenge Race Hardening, Universal Route Exclusions & Export Fixes (`Antibot`, `BotCatalog`, `AntibotWidget`, `DefaultController`)

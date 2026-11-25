@@ -21,6 +21,8 @@ $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
 
 $autoloadCandidates = [
     'D:/OpenServer6.5.0/home/yii2-fresh-install.loc/vendor/autoload.php',
+    __DIR__ . '/../../yii2-advanced.loc/vendor/autoload.php',
+    'D:/OSPanel6.5.1/home/yii2-advanced.loc/vendor/autoload.php',
     __DIR__ . '/../vendor/autoload.php',
     dirname(__DIR__, 2) . '/vendor/autoload.php',
     'D:/OpenServer6.5.0/home/yii2-admin/vendor/autoload.php',
@@ -56,6 +58,8 @@ spl_autoload_register(function ($class) {
 // Require Yii core
 $yiiCandidates = [
     'D:/OpenServer6.5.0/home/yii2-fresh-install.loc/vendor/yiisoft/yii2/Yii.php',
+    __DIR__ . '/../../yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
+    'D:/OSPanel6.5.1/home/yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
     dirname(__DIR__, 2) . '/vendor/yiisoft/yii2/Yii.php',
 ];
 foreach ($yiiCandidates as $cand) {

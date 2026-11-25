@@ -183,7 +183,7 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                 </li>
             </ul>
             <div class="d-flex align-items-center gap-2 small">
-                <span class="text-muted d-none d-md-inline"><?= Html::encode(I18n::t('status_module', $activeLang)) ?></span>
+                <span class="antibot-status-label d-none d-md-inline"><?= Html::encode(I18n::t('status_module', $activeLang)) ?></span>
                 <span class="badge <?= $antibot->enabled ? 'badge-soft-success' : 'badge-soft-secondary' ?> rounded-pill px-3 py-1 fw-semibold">
                     <?= Html::encode($antibot->enabled ? I18n::t('status_active', $activeLang) : I18n::t('status_disabled', $activeLang)) ?>
                 </span>
@@ -194,23 +194,23 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
     <!-- Active Mode & System Status Alerts -->
     <?php if (!empty($panicModeActive)): ?>
         <div class="antibot-alert-card alert-warning mb-4 shadow-sm" style="border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.08);">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap flex-md-nowrap">
+                <div class="d-flex align-items-center gap-3 flex-grow-1 min-w-0">
                     <div style="font-size: 1.6rem; flex-shrink: 0;">🛡️</div>
                     <div>
                         <div class="fw-bold text-dark fs-6 d-flex align-items-center gap-2">
                             <?= Html::encode(I18n::t('panic_mode_title', $activeLang)) ?>
                             <span class="badge bg-danger rounded-pill px-2 py-1 small"><?= Html::encode(I18n::t('panic_mode_active_badge', $activeLang)) ?></span>
                         </div>
-                        <div class="text-muted small mt-1">
+                        <div class="antibot-alert-desc small mt-1">
                             <?= Html::encode(I18n::t('panic_mode_desc', $activeLang)) ?>.
                             <strong><?= Html::encode(I18n::t('panic_mode_remaining', $activeLang)) ?> <?= sprintf('%02d:%02d', floor(($panicRemaining ?? 0) / 60), ($panicRemaining ?? 0) % 60) ?></strong>
                         </div>
                     </div>
                 </div>
-                <div>
+                <div class="flex-shrink-0">
                     <?= Html::beginForm(['/antibot/default/toggle-panic'], 'post') ?>
-                        <?= Html::submitButton(I18n::t('panic_mode_btn_deactivate', $activeLang), ['class' => 'btn btn-outline-danger btn-sm rounded-pill px-3 py-2 fw-semibold']) ?>
+                        <?= Html::submitButton(I18n::t('panic_mode_btn_deactivate', $activeLang), ['class' => 'btn btn-outline-danger btn-sm rounded-pill px-3 py-2 fw-semibold text-nowrap']) ?>
                     <?= Html::endForm() ?>
                 </div>
             </div>
@@ -282,7 +282,7 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                 <div style="font-size: 1.35rem; flex-shrink: 0;">⚠️</div>
                 <div>
                     <strong><?= Html::encode(I18n::t('alert_sec_warning_title', $activeLang)) ?></strong>
-                    <div class="small text-muted mt-1"><?= Html::encode(I18n::t('alert_sec_warning_text', $activeLang)) ?></div>
+                    <div class="small antibot-alert-desc mt-1"><?= Html::encode(I18n::t('alert_sec_warning_text', $activeLang)) ?></div>
                 </div>
             </div>
         </div>
@@ -294,7 +294,7 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
                 <div style="font-size: 1.35rem; flex-shrink: 0;">🔑</div>
                 <div>
                     <strong><?= Html::encode(I18n::t('alert_secret_warning_title', $activeLang)) ?></strong>
-                    <div class="small text-muted mt-1"><?= Html::encode(I18n::t('alert_secret_warning_text', $activeLang)) ?></div>
+                    <div class="small antibot-alert-desc mt-1"><?= Html::encode(I18n::t('alert_secret_warning_text', $activeLang)) ?></div>
                 </div>
             </div>
         </div>
@@ -302,16 +302,16 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
 
     <?php if (!$antibot->enabled): ?>
         <div class="antibot-alert-card alert-warning">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap flex-md-nowrap">
+                <div class="d-flex align-items-center gap-3 flex-grow-1 min-w-0">
                     <div style="font-size: 1.35rem; flex-shrink: 0;">⚠️</div>
                     <div>
                         <strong><?= Html::encode(I18n::t('alert_disabled_title', $activeLang)) ?></strong>
-                        <span class="text-muted ms-1"><?= Html::encode(I18n::t('alert_disabled_text', $activeLang)) ?></span>
+                        <span class="antibot-alert-desc ms-1"><?= Html::encode(I18n::t('alert_disabled_text', $activeLang)) ?></span>
                     </div>
                 </div>
-                <div>
-                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-warning rounded-pill px-3 py-1 fw-semibold text-dark shadow-sm">
+                <div class="flex-shrink-0">
+                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-warning rounded-pill px-3 py-1 fw-semibold text-dark shadow-sm text-nowrap">
                         <?= Html::encode(I18n::t('btn_enable_protection', $activeLang)) ?>
                     </a>
                 </div>
@@ -319,16 +319,16 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
         </div>
     <?php elseif ($antibot->mode === 'monitoring'): ?>
         <div class="antibot-alert-card alert-info">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap flex-md-nowrap">
+                <div class="d-flex align-items-center gap-3 flex-grow-1 min-w-0">
                     <div style="font-size: 1.35rem; flex-shrink: 0;">ℹ️</div>
                     <div>
                         <strong><?= Html::encode(I18n::t('alert_monitoring_title', $activeLang)) ?></strong>
-                        <span class="text-muted ms-1"><?= Html::encode(I18n::t('alert_monitoring_text', $activeLang)) ?></span>
+                        <span class="antibot-alert-desc ms-1"><?= Html::encode(I18n::t('alert_monitoring_text', $activeLang)) ?></span>
                     </div>
                 </div>
-                <div>
-                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-semibold shadow-sm">
+                <div class="flex-shrink-0">
+                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-semibold shadow-sm text-nowrap">
                         <?= Html::encode(I18n::t('btn_change_mode', $activeLang)) ?>
                     </a>
                 </div>
@@ -336,16 +336,16 @@ $perfTotal = (int) ($perf['total_checks'] ?? 0);
         </div>
     <?php elseif ($antibot->mode === 'strict'): ?>
         <div class="antibot-alert-card alert-danger">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap flex-md-nowrap">
+                <div class="d-flex align-items-center gap-3 flex-grow-1 min-w-0">
                     <div style="font-size: 1.35rem; flex-shrink: 0;">🚨</div>
                     <div>
                         <strong><?= Html::encode(I18n::t('alert_strict_title', $activeLang)) ?></strong>
-                        <span class="text-muted ms-1"><?= Html::encode(I18n::t('alert_strict_text', $activeLang)) ?></span>
+                        <span class="antibot-alert-desc ms-1"><?= Html::encode(I18n::t('alert_strict_text', $activeLang)) ?></span>
                     </div>
                 </div>
-                <div>
-                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-1 fw-semibold shadow-sm">
+                <div class="flex-shrink-0">
+                    <a href="<?= Url::to(['/antibot/settings/index']) ?>" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-1 fw-semibold shadow-sm text-nowrap">
                         <?= Html::encode(I18n::t('btn_change_mode', $activeLang)) ?>
                     </a>
                 </div>

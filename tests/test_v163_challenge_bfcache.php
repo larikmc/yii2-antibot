@@ -11,6 +11,8 @@ defined('YII_ENV') or define('YII_ENV', 'test');
 
 $autoloadCandidates = [
     'D:/OpenServer6.5.0/home/yii2-fresh-install.loc/vendor/autoload.php',
+    __DIR__ . '/../../yii2-advanced.loc/vendor/autoload.php',
+    'D:/OSPanel6.5.1/home/yii2-advanced.loc/vendor/autoload.php',
     __DIR__ . '/../vendor/autoload.php',
     dirname(__DIR__, 2) . '/vendor/autoload.php',
 ];
@@ -23,7 +25,19 @@ foreach ($autoloadCandidates as $cand) {
     }
 }
 $loader->setPsr4('larikmc\\antibot\\', [dirname(__DIR__) . '/src']);
-require_once 'D:/OpenServer6.5.0/home/yii2-fresh-install.loc/vendor/yiisoft/yii2/Yii.php';
+$yiiLoaded = false;
+$yiiCandidates = [
+    'D:/OSPanel6.5.1/home/yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
+    __DIR__ . '/../../yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
+    'D:/OpenServer6.5.0/home/yii2-fresh-install.loc/vendor/yiisoft/yii2/Yii.php',
+];
+foreach ($yiiCandidates as $cand) {
+    if (file_exists($cand)) {
+        require_once $cand;
+        $yiiLoaded = true;
+        break;
+    }
+}
 
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 $_SERVER['SCRIPT_FILENAME'] = __DIR__ . '/index.php';

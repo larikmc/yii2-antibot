@@ -21,7 +21,7 @@
     --ab-line: var(--sz-line, rgba(40, 52, 82, 0.12));
     --ab-line-strong: var(--sz-line-strong, rgba(40, 52, 82, 0.18));
     --ab-text: var(--sz-text, #14294d);
-    --ab-muted: var(--sz-muted, #7b93be);
+    --ab-muted: var(--sz-muted, #546c96);
     --ab-radius-lg: 22px;
     --ab-radius-md: 18px;
     --ab-radius-sm: 12px;
@@ -719,16 +719,18 @@ body.dark .antibot-code-badge {
     border: 1px solid var(--ab-line);
     background: var(--ab-surface);
     box-shadow: var(--ab-shadow-sm);
-    padding: 1rem 1.25rem;
+    padding: 0.95rem 1.25rem;
     margin-bottom: 1.25rem;
     border-left-width: 5px;
+    color: var(--ab-text);
 }
 
 html.dark .antibot-alert-card,
 body.dark .antibot-alert-card {
     background: #1d2c46 !important;
     border-color: #354660 !important;
-    color: #dce8ff !important;
+    color: #eff4ff !important;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22) !important;
 }
 
 .antibot-alert-card.alert-danger {
@@ -745,6 +747,29 @@ body.dark .antibot-alert-card {
 
 .antibot-alert-card.alert-success {
     border-left-color: #079b70 !important;
+}
+
+/* Explicit high-contrast text styling for alert descriptions */
+.antibot-alert-desc {
+    color: #475569;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+html.dark .antibot-alert-desc,
+body.dark .antibot-alert-desc {
+    color: #cbd5e1 !important;
+}
+
+/* Status label in navigation bar */
+.antibot-status-label {
+    color: var(--ab-muted);
+    font-weight: 500;
+}
+
+html.dark .antibot-status-label,
+body.dark .antibot-status-label {
+    color: #a0b2d6 !important;
 }
 
 /* ==========================================================================
