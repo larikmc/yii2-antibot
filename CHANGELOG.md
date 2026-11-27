@@ -2,6 +2,11 @@
 
 All notable changes to `larikmc/yii2-antibot` will be documented in this file.
 
+## [1.6.6] - 2026-11-27
+
+### Fixed
+- **Missing `I18n` import in `Antibot.php`**: Added `use larikmc\antibot\services\I18n;` to prevent fatal `Error: Class "larikmc\antibot\I18n" not found` at `Antibot::checkRequest()` when logging `ReverseDnsVerifier::STATUS_UNKNOWN` reasons for bots allowed/throttled by policy.
+
 ## [1.6.5] - 2026-11-25
 
 ### Fixed & Improved

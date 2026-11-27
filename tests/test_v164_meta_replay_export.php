@@ -94,6 +94,7 @@ echo "=================================================================\n\n";
 echo "--- Part 0: Package Version Constants ---\n";
 assertCondition(version_compare(Antibot::VERSION, '1.6.4', '>='), 'Antibot::VERSION is >= 1.6.4 (actual: ' . Antibot::VERSION . ')');
 assertCondition(version_compare(\larikmc\antibot\Module::VERSION, '1.6.4', '>='), 'Module::VERSION is >= 1.6.4 (actual: ' . \larikmc\antibot\Module::VERSION . ')');
+assertCondition(strpos(file_get_contents(__DIR__ . '/../src/Antibot.php'), 'use larikmc\\antibot\\services\\I18n;') !== false, 'Antibot.php imports larikmc\\antibot\\services\\I18n');
 
 // =====================================================================
 // PART 1: Meta-WebIndexer Bot Identification & Category

@@ -6,6 +6,7 @@ namespace larikmc\antibot;
 
 use larikmc\antibot\services\BotCatalog;
 use larikmc\antibot\services\BotDetector;
+use larikmc\antibot\services\I18n;
 use larikmc\antibot\services\IpMatcher;
 use larikmc\antibot\services\RateLimiter;
 use larikmc\antibot\services\ReverseDnsVerifier;
@@ -38,7 +39,7 @@ use yii\web\Response;
  */
 class Antibot extends Component implements BootstrapInterface
 {
-    public const VERSION = '1.6.5';
+    public const VERSION = '1.6.6';
 
     public bool $enabled = true;
     public string $mode = StorageService::MODE_STANDARD;

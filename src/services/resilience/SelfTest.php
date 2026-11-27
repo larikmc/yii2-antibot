@@ -285,7 +285,7 @@ class SelfTest
 
         if ($dnsBudgetOk) {
             $checks[] = [
-                'name' => 'Атомарный DNS-бюджет, слоты и кэширование роботов (v1.6.5)',
+                'name' => 'Атомарный DNS-бюджет, слоты и кэширование роботов (v1.6.6)',
                 'status' => self::STATUS_OK,
                 'message' => sprintf(
                     'Бюджет: %d/мин, ОС-слотов: %d. Кэш: %d проверенных IP (TTL: %dч), %d доказанных подделок FAKE (TTL: %dч). Single Flight дедупликация: активна. Кэш-хитов: %d (VERIFIED: %d, FAKE: %d), пропущено по Block: %d, DNS выполнено: %d. Hit Ratio: %.1f%%. CIDR-предфильтр: Google (%d подсетей), Bing (%d подсетей).',
